@@ -51,5 +51,7 @@ describe("encodeShellSnapshotForCache", () => {
       expect(projects.length).toBeGreaterThan(0);
       expect(yield* encodeShellSnapshotForCache(snapshot)).toEqual(yield* encodeSnapshot(snapshot));
     }),
+    // Generating 2000 samples outlasts the default 5s on 4-vCPU CI runners.
+    30_000,
   );
 });
