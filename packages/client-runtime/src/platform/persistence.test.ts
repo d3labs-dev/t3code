@@ -51,5 +51,7 @@ describe("encodeShellSnapshotForCache", () => {
       expect(projects.length).toBeGreaterThan(0);
       expect(yield* encodeShellSnapshotForCache(snapshot)).toEqual(yield* encodeSnapshot(snapshot));
     }),
+    // Generating 2000 samples takes over 5s on GitHub-hosted runners.
+    30_000,
   );
 });
