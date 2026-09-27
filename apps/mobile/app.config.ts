@@ -422,6 +422,7 @@ const config: ExpoConfig = {
     "./plugins/withIosSceneLifecycle.cjs",
     "./plugins/withAndroidCleartextTraffic.cjs",
     "./plugins/withAndroidGradleHeap.cjs",
+    // Fork-only stopgap: delete once an upstream merge fixes pingdotgg/t3code#13710.
     "./plugins/withAndroidFbjniPin.cjs",
     "./plugins/withAndroidInputBackground.cjs",
     "./plugins/withAndroidModernPopupMenu.cjs",

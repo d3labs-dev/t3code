@@ -5,6 +5,11 @@ const { withProjectBuildGradle } = require("expo/config-plugins");
 // libc++_shared.so, so the app dies loading libfbjni.so before any JS runs.
 // Keep this at the fbjni version React Native's libs.versions.toml pins, and
 // move it whenever React Native bumps fbjni.
+//
+// FORK-ONLY STOPGAP for pingdotgg/t3code#13710. When merging an upstream
+// branch that fixes that issue (its own fbjni pin, a shiki-engine patch, or a
+// shiki-engine release without `fbjni:+`), delete this file and its entry in
+// app.config.ts so the two fixes do not fight.
 const FBJNI_VERSION = "0.7.0";
 const MARKER = "// withAndroidFbjniPin";
 
