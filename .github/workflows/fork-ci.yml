@@ -106,8 +106,11 @@ jobs:
       - name: Test nightly release checks
         run: node --test .github/scripts/check-nightly-release.test.cjs
 
+      # GitHub-hosted runners are slower than upstream's Blacksmith runners, so
+      # tests upstream fits in Vitest's 5 second default can time out here. 60
+      # seconds is the root config's budget; the server shards keep their 120.
       - name: Test
-        run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' test
+        run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' test --testTimeout 60000
 
   # apps/server sets `fileParallelism: false`, so shards split its files across
   # runners rather than workers and no two server test files share a machine.
