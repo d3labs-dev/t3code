@@ -152,7 +152,7 @@ jobs:
 
           ## Task
 
-          Do not run the repository's checks, builds, or test suites locally: GitHub CI runs them on the pull request.
+          Do not run the repository's checks, builds, or test suites locally: GitHub CI runs them on the pull request. The one exception is the formatter: before committing the merge, run \`pnpm exec vp fmt <file>...\` on the files you resolved, because GitHub CI fails on unformatted files.
 
           1. Start \`${job_branch}\` from \`origin/${GITHUB_REF_NAME}\`, or continue it if an earlier attempt pushed it. Fetch the tag with \`git fetch --no-tags https://github.com/pingdotgg/t3code.git tag ${upstream_tag}\` and merge it with \`git merge --no-ff ${upstream_tag}\`. Never rebase, squash, or cherry-pick: the nightly decides what is new with \`git merge-base --is-ancestor ${upstream_tag} HEAD\`, so only a merge commit keeps the tag an ancestor.
           2. Resolve each conflicted hunk:
