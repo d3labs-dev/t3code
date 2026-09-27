@@ -13,6 +13,31 @@ import {
 
 import { shortcutKeyFromEvent } from "../../keybindings";
 import { isMacPlatform } from "../../lib/utils";
+import { METRIC_OPTIONS, WINDOW_OPTIONS } from "../usage/usageShortcuts";
+
+const usageCommandOrder = new Map<KeybindingCommand, number>(
+  [...METRIC_OPTIONS, ...WINDOW_OPTIONS].map((option, index) => [option.command, index]),
+);
+
+const usageCommandAnchor = METRIC_OPTIONS[0].command;
+
+/**
+ * Sorts commands by `name`, except the Usage page's commands, which sort as one
+ * block in page order where the first of them would. Keeping this transitive
+ * makes the order independent of the input order.
+ */
+function compareCommands(
+  left: KeybindingCommand,
+  right: KeybindingCommand,
+  name: (command: KeybindingCommand) => string,
+): number {
+  const leftIndex = usageCommandOrder.get(left);
+  const rightIndex = usageCommandOrder.get(right);
+  const nameCompare = name(leftIndex === undefined ? left : usageCommandAnchor).localeCompare(
+    name(rightIndex === undefined ? right : usageCommandAnchor),
+  );
+  return nameCompare !== 0 ? nameCompare : (leftIndex ?? -1) - (rightIndex ?? -1);
+}
 
 export type KeybindingSource = "Default" | "Custom" | "Project";
 
@@ -204,7 +229,7 @@ export function buildKeybindingRows(
   });
 
   rowsWithConflicts.sort((left, right) => {
-    const commandCompare = left.command.localeCompare(right.command);
+    const commandCompare = compareCommands(left.command, right.command, String);
     if (commandCompare !== 0) return commandCompare;
     return left.key.localeCompare(right.key);
   });
@@ -277,13 +302,15 @@ export function buildKeybindingCommandOptions(
   for (const binding of keybindings) {
     commands.add(binding.command);
   }
-  return [...commands].toSorted((left, right) =>
-    commandLabel(left).localeCompare(commandLabel(right)),
-  );
+  return [...commands].toSorted((left, right) => compareCommands(left, right, commandLabel));
 }
 
 export function commandLabel(command: KeybindingCommand): string {
   if (command === "thread.copyReference") return "Pull Request: Copy Link or Thread ID";
+  const usageMetric = METRIC_OPTIONS.find((option) => option.command === command);
+  if (usageMetric) return `Usage: ${usageMetric.label}`;
+  const usagePeriod = WINDOW_OPTIONS.find((option) => option.command === command);
+  if (usagePeriod) return `Usage: Period: ${usagePeriod.label}`;
   const raw = String(command);
   if (raw.startsWith("script.") && raw.endsWith(".run")) {
     return `Run Script: ${titleCaseCommandSegment(raw.slice("script.".length, -".run".length))}`;
