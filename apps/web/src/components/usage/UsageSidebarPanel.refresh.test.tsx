@@ -85,7 +85,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("refreshes spending on every opening and limits only after the two minute cooldown", async () => {
+it("reopening within the two minute cooldown does not refresh", async () => {
   for (let opening = 1; opening <= 3; opening += 1) {
     vi.mocked(Date.now).mockReturnValue(
       Date.parse("2026-09-11T12:00:00Z") + (opening - 1) * 60_000,
@@ -98,7 +98,7 @@ it("refreshes spending on every opening and limits only after the two minute coo
       );
     });
     expect(state.refreshProviders).toHaveBeenCalledTimes(opening === 3 ? 2 : 1);
-    expect(state.refreshUsage).toHaveBeenCalledTimes(opening);
+    expect(state.refreshUsage).toHaveBeenCalledTimes(opening === 3 ? 2 : 1);
     await act(() => renderer.unmount());
   }
 });

@@ -5,7 +5,7 @@
  * the chart button keeps the breakdowns this has no room for.
  */
 import { useAtomValue } from "@effect/atom-react";
-import type { UsageProviderKind } from "@t3tools/contracts";
+import type { EnvironmentId, UsageProviderKind } from "@t3tools/contracts";
 import { refreshUsageLimits } from "@t3tools/client-runtime/state/usage";
 import {
   collectLimitAccounts,
@@ -44,6 +44,8 @@ import { PROVIDER_ORDER, PROVIDER_PRESENTATION, usageKindForDriver } from "./usa
 import { useSidebarPanelStore } from "../sidebar/sidebarPanelStore";
 
 const COST_WINDOW_DAYS = 30;
+const OPEN_REFRESH_COOLDOWN_MS = 2 * 60_000;
+const spendingRefreshAfter = new Map<EnvironmentId, number>();
 
 interface Spend {
   readonly costUsd: number;
@@ -128,6 +130,19 @@ export function UsageSidebarPanel() {
     .join(",");
   const handleRefresh = ({ automatic = false }: { automatic?: boolean } = {}) => {
     if (refreshingRef.current) return;
+    const environmentIds = connectedEnvironments.split(",").filter(Boolean) as EnvironmentId[];
+    const refreshedAt = Date.now();
+    if (
+      automatic &&
+      environmentIds.every(
+        (environmentId) => refreshedAt < (spendingRefreshAfter.get(environmentId) ?? 0),
+      )
+    ) {
+      return;
+    }
+    for (const environmentId of environmentIds) {
+      spendingRefreshAfter.set(environmentId, refreshedAt + OPEN_REFRESH_COOLDOWN_MS);
+    }
     refreshingRef.current = true;
     startRefresh(async () => {
       const nextWindow = makeWindow(COST_WINDOW_DAYS);
