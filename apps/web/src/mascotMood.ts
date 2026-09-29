@@ -17,17 +17,13 @@ const CELEBRATE_AT_THREADS_FINISHED_TODAY = 10;
 const BORED_AFTER_MS = 2 * HOUR_MS;
 const GRUMPY_AFTER_MS = 6 * HOUR_MS;
 
-export interface MascotThread extends SidebarThreadSummary {
+export interface MascotThread extends Omit<SidebarThreadSummary, "lastVisitedAt"> {
   readonly lastVisitedAt: string | undefined;
 }
 
 function hasUnseenFailure(thread: MascotThread, status: string): boolean {
   const failedAt =
-    status === "failed"
-      ? firstValidTimestampMs(thread.session?.updatedAt)
-      : status === "ready" && thread.latestTurn?.state === "error"
-        ? firstValidTimestampMs(thread.latestTurn.completedAt)
-        : null;
+    status === "failed" ? firstValidTimestampMs(thread.latestRun?.completedAt) : null;
   if (failedAt === null) return false;
   if (thread.lastVisitedAt === undefined) return true;
   return failedAt > firstValidTimestampMs(thread.lastVisitedAt);
@@ -35,9 +31,9 @@ function hasUnseenFailure(thread: MascotThread, status: string): boolean {
 
 function lastActivityMs(thread: MascotThread): number {
   return Math.max(
-    firstValidTimestampMs(thread.latestTurn?.completedAt),
-    firstValidTimestampMs(thread.latestTurn?.startedAt),
-    firstValidTimestampMs(thread.latestTurn?.requestedAt),
+    firstValidTimestampMs(thread.latestRun?.completedAt),
+    firstValidTimestampMs(thread.latestRun?.startedAt),
+    firstValidTimestampMs(thread.latestRun?.requestedAt),
     firstValidTimestampMs(thread.latestUserMessageAt),
   );
 }
@@ -79,7 +75,7 @@ export function resolveMascotMood(input: {
   if (active.some((thread) => hasUnseenCompletion(thread))) return "excited";
 
   const finishedToday = threads.filter((thread) => {
-    const completedAt = firstValidTimestampMs(thread.latestTurn?.completedAt);
+    const completedAt = firstValidTimestampMs(thread.latestRun?.completedAt);
     return completedAt > 0 && isSameLocalDay(completedAt, input.nowMs);
   }).length;
   if (finishedToday >= CELEBRATE_AT_THREADS_FINISHED_TODAY) return "celebrating";

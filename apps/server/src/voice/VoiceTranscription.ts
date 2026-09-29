@@ -6,7 +6,6 @@ import * as Layer from "effect/Layer";
 
 import type { ThreadId, VoiceCorrection } from "@t3tools/contracts";
 
-import { ProjectionThreadMessageRepository } from "../persistence/Services/ProjectionThreadMessages.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import {
   makeGroqDictationProvider,
@@ -27,6 +26,7 @@ import {
   mergeLearnedVocabulary,
   parseReviewedTerms,
 } from "./dictationLearning.ts";
+import { RecentThreadMessages } from "./RecentThreadMessages.ts";
 
 export type VoiceTranscriptionFailureReason =
   | "not-configured"
@@ -127,7 +127,7 @@ const generateWithProvider = (input: {
 export const make = (makeProvider: MakeDictationProvider) =>
   Effect.gen(function* () {
     const serverSettings = yield* ServerSettings.ServerSettingsService;
-    const messages = yield* ProjectionThreadMessageRepository;
+    const recentMessages = yield* RecentThreadMessages;
     const readDictationSettings = serverSettings.getSettings.pipe(
       Effect.map((settings) => settings.dictation),
       Effect.orDie,
@@ -141,7 +141,7 @@ export const make = (makeProvider: MakeDictationProvider) =>
     const readConversation = (threadId: ThreadId | undefined) =>
       threadId === undefined
         ? Effect.succeed([])
-        : messages.listRecentByThreadId({ threadId, limit: CONVERSATION_MESSAGES }).pipe(
+        : recentMessages.list({ threadId, limit: CONVERSATION_MESSAGES }).pipe(
             Effect.tapError((cause) =>
               Effect.logWarning("Could not read thread context for dictation.", { cause }),
             ),

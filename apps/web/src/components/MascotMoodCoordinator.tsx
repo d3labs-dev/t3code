@@ -2,6 +2,7 @@ import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environ
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveMascotMood } from "../mascotMood";
+import { resolveThreadLastVisitedAt } from "./Sidebar.logic";
 import { useAllEnvironmentShellsBootstrapped, useThreadShells } from "../state/entities";
 import { useUiStateStore } from "../uiStateStore";
 
@@ -31,8 +32,10 @@ function DockMood() {
       resolveMascotMood({
         threads: shells.map((shell) => ({
           ...shell,
-          lastVisitedAt:
+          lastVisitedAt: resolveThreadLastVisitedAt(
+            shell.lastVisitedAt,
             lastVisitedAtById[scopedThreadKey(scopeThreadRef(shell.environmentId, shell.id))],
+          ),
         })),
         nowMs,
       }),

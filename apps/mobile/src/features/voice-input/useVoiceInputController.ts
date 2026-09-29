@@ -79,8 +79,8 @@ export function useVoiceInputController(input: {
   readonly disabled?: boolean;
   readonly onChangeDraftMessage: (value: string) => void;
   readonly onChangeSelection: (selection: ComposerEditorSelection) => void;
-  /** Sends the draft once a stop-and-send transcript has landed in it. */
-  readonly onSend: () => void;
+  /** Sends the draft once a stop-and-send transcript has landed in it; absent where there is nothing to send. */
+  readonly onSend?: () => void;
 }) {
   const [state, setState] = useState<VoiceInputState>(INITIAL_STATE);
   const [sendRequestCount, setSendRequestCount] = useState(0);
@@ -270,7 +270,7 @@ export function useVoiceInputController(input: {
   }, [controller]);
   // Sends after the render that carries the transcript, so the host sends the new draft.
   useEffect(() => {
-    if (sendRequestCount > 0) latestInputRef.current.onSend();
+    if (sendRequestCount > 0) latestInputRef.current.onSend?.();
   }, [sendRequestCount]);
   /** Call once a message leaves this draft so fixes to dictated words are learned. */
   const messageSent = useCallback((sent: string) => {

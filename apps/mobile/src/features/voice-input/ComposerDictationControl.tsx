@@ -371,11 +371,24 @@ export function ComposerDictationPrimaryAction(props: {
   readonly disabled?: boolean;
   readonly onStart: () => void;
   readonly onConfirm: () => void;
-  readonly onConfirmAndSend: () => void;
+  readonly onConfirmAndSend?: () => void;
   readonly onCancel: () => void;
 }) {
   if (props.presentation.trailingAction === "confirm") {
     const confirmationEnabled = props.presentation.confirmationEnabled;
+    const pendingLabel = props.presentation.statusLabel ?? "Preparing voice input";
+    if (!props.onConfirmAndSend) {
+      return (
+        <VoiceActionButton
+          accessibilityLabel={confirmationEnabled ? "Finish dictation" : pendingLabel}
+          disabled={!confirmationEnabled}
+          icon="checkmark"
+          loading={!confirmationEnabled}
+          onPress={props.onConfirm}
+          variant="primary"
+        />
+      );
+    }
     return (
       <>
         <VoiceActionButton
@@ -386,11 +399,7 @@ export function ComposerDictationPrimaryAction(props: {
           onPress={props.onConfirm}
         />
         <VoiceActionButton
-          accessibilityLabel={
-            confirmationEnabled
-              ? "Finish dictation and send"
-              : (props.presentation.statusLabel ?? "Preparing voice input")
-          }
+          accessibilityLabel={confirmationEnabled ? "Finish dictation and send" : pendingLabel}
           disabled={!confirmationEnabled}
           icon="arrow.up"
           loading={!confirmationEnabled}

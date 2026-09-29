@@ -7,9 +7,9 @@ import * as Layer from "effect/Layer";
 
 import { ThreadId } from "@t3tools/contracts";
 
-import { ProjectionThreadMessageRepository } from "../persistence/Services/ProjectionThreadMessages.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import type { DictationProvider } from "./DictationProvider.ts";
+import { RecentThreadMessages } from "./RecentThreadMessages.ts";
 import * as VoiceTranscription from "./VoiceTranscription.ts";
 
 const transcriptionResult = (text: string) => ({
@@ -65,8 +65,8 @@ function makeTestProvider(input: {
 }
 
 const recentMessages = [
-  { role: "user" as const, text: "Wire dictation into the composer." },
-  { role: "assistant" as const, text: "I added `useComposerVoiceInput` to ChatComposer.tsx." },
+  { text: "Wire dictation into the composer." },
+  { text: "I added `useComposerVoiceInput` to ChatComposer.tsx." },
 ];
 
 const testLayer = (input: {
@@ -84,8 +84,8 @@ const testLayer = (input: {
         forgottenVocabulary: [...(input.forgottenVocabulary ?? [])],
       },
     }),
-    Layer.mock(ProjectionThreadMessageRepository)({
-      listRecentByThreadId: () => Effect.succeed(recentMessages),
+    Layer.mock(RecentThreadMessages)({
+      list: () => Effect.succeed(recentMessages),
     }),
   );
 

@@ -208,26 +208,14 @@ html[data-theme-id]:not([data-theme-id=""]) {
     & [data-timeline-divider] {
       border-color: color-mix(in srgb, var(--color-white) 7%, transparent);
     }
-
-    & [data-queued-message-bubble] {
-      border-color: color-mix(in srgb, var(--color-white) 20%, transparent);
-    }
   }
 }
 
-/* Queued messages have no fill of their own, which leaves their text on bare
-   picture; give them the glass of a sent message. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-queued-message-bubble] {
-  background: color-mix(in srgb, var(--message-surface) var(--glass-opacity), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-}
-
-/* Your messages, sent and queued, share the reply bubbles' opacity and blur.
-   Unlayered so it beats the surface-glass utility; set on the bubble alone so
-   the glass tiles inside it keep their own look. */
+/* Your messages share the reply bubbles' opacity and blur. Unlayered so it
+   beats the surface-glass utility; set on the bubble alone so the glass tiles
+   inside it keep their own look. */
 [data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-agent-bubbles])
-  :is([data-user-message-bubble], [data-queued-message-bubble]) {
+  [data-user-message-bubble] {
   background: color-mix(
     in srgb,
     var(--message-surface) var(--agent-bubble-opacity, 82%),

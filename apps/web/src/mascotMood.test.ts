@@ -1,53 +1,37 @@
 import { describe, expect, it } from "vite-plus/test";
-import {
-  EnvironmentId,
-  ProjectId,
-  ProviderInstanceId,
-  ThreadId,
-  TurnId,
-  type OrchestrationLatestTurn,
-} from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
 
 import { type MascotThread, resolveMascotMood } from "./mascotMood";
-import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE } from "./types";
+import { makeThreadFixture, type ThreadFixtureOverrides } from "./test-fixtures";
+import type { ThreadRunSummary, ThreadRuntimeSummary } from "@t3tools/client-runtime/state/shell";
 
 const NOW = Date.parse("2026-09-24T15:00:00.000Z");
 const minutesAgo = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
 
 let nextId = 0;
-function makeThread(overrides: Partial<MascotThread> = {}): MascotThread {
+function makeThread({
+  lastVisitedAt = minutesAgo(1),
+  ...overrides
+}: Omit<ThreadFixtureOverrides, "lastVisitedAt"> & {
+  readonly lastVisitedAt?: string;
+} = {}): MascotThread {
   nextId += 1;
   return {
-    id: ThreadId.make(`thread-${nextId}`),
-    environmentId: EnvironmentId.make("environment-local"),
-    projectId: ProjectId.make("project-1"),
-    title: "Thread",
-    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
-    runtimeMode: DEFAULT_RUNTIME_MODE,
-    interactionMode: DEFAULT_INTERACTION_MODE,
-    branch: null,
-    worktreePath: null,
-    pullRequests: [],
-    latestTurn: null,
-    createdAt: minutesAgo(600),
-    updatedAt: minutesAgo(600),
-    archivedAt: null,
-    settledOverride: null,
-    settledAt: null,
-    session: null,
-    latestUserMessageAt: minutesAgo(30),
-    hasPendingApprovals: false,
-    hasPendingUserInput: false,
-    hasActionableProposedPlan: false,
-    lastVisitedAt: minutesAgo(1),
-    ...overrides,
+    ...makeThreadFixture({
+      id: ThreadId.make(`thread-${nextId}`),
+      environmentId: EnvironmentId.make("environment-local"),
+      projectId: ProjectId.make("project-1"),
+      latestUserMessageAt: minutesAgo(30),
+      ...overrides,
+    }),
+    lastVisitedAt,
   };
 }
 
-function turn(overrides: Partial<OrchestrationLatestTurn>): OrchestrationLatestTurn {
+function run(overrides: Partial<ThreadRunSummary>): ThreadRunSummary {
   return {
-    turnId: TurnId.make("turn-1"),
-    state: "completed",
+    runId: RunId.make("run-1"),
+    status: "completed",
     requestedAt: minutesAgo(30),
     startedAt: minutesAgo(30),
     completedAt: minutesAgo(20),
@@ -56,41 +40,46 @@ function turn(overrides: Partial<OrchestrationLatestTurn>): OrchestrationLatestT
   };
 }
 
+function runtime(status: ThreadRuntimeSummary["status"], minutes: number): ThreadRuntimeSummary {
+  const active = status === "running";
+  return {
+    status,
+    activeRunId: active ? RunId.make("run-1") : null,
+    activityStartedAt: active ? minutesAgo(minutes) : null,
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    providerName: null,
+    lastError: null,
+    updatedAt: minutesAgo(minutes),
+  };
+}
+
 const running = (startedMinutesAgo: number) =>
   makeThread({
-    session: {
-      threadId: ThreadId.make("thread-running"),
+    runtime: runtime("running", startedMinutesAgo),
+    latestRun: run({
       status: "running",
-      providerName: null,
-      runtimeMode: DEFAULT_RUNTIME_MODE,
-      activeTurnId: TurnId.make("turn-1"),
-      lastError: null,
-      updatedAt: minutesAgo(startedMinutesAgo),
-    },
-    latestTurn: turn({
-      state: "running",
       startedAt: minutesAgo(startedMinutesAgo),
       completedAt: null,
     }),
+  });
+
+const failed = (input: { readonly failedMinutesAgo: number; readonly visitedMinutesAgo: number }) =>
+  makeThread({
+    runtime: runtime("failed", input.failedMinutesAgo),
+    latestRun: run({ status: "failed", completedAt: minutesAgo(input.failedMinutesAgo) }),
+    lastVisitedAt: minutesAgo(input.visitedMinutesAgo),
   });
 
 const mood = (...threads: MascotThread[]) => resolveMascotMood({ threads, nowMs: NOW });
 
 describe("resolveMascotMood", () => {
   it("treats an unseen failure as urgent, above everything else", () => {
-    const failed = makeThread({
-      latestTurn: turn({ state: "error", completedAt: minutesAgo(5) }),
-      lastVisitedAt: minutesAgo(10),
-    });
-    expect(mood(failed, makeThread({ hasPendingUserInput: true }), running(1))).toBe("urgent");
+    const unseen = failed({ failedMinutesAgo: 5, visitedMinutesAgo: 10 });
+    expect(mood(unseen, makeThread({ hasPendingUserInput: true }), running(1))).toBe("urgent");
   });
 
   it("forgets a failure once the thread was visited after it", () => {
-    const seen = makeThread({
-      latestTurn: turn({ state: "error", completedAt: minutesAgo(5) }),
-      lastVisitedAt: minutesAgo(1),
-    });
-    expect(mood(seen)).toBe("default");
+    expect(mood(failed({ failedMinutesAgo: 5, visitedMinutesAgo: 1 }))).toBe("default");
   });
 
   it("waits on one question and turns urgent at three", () => {
@@ -106,13 +95,11 @@ describe("resolveMascotMood", () => {
   });
 
   it("gets excited about a finished turn the user has not opened", () => {
-    expect(mood(makeThread({ latestTurn: turn({}), lastVisitedAt: minutesAgo(25) }))).toBe(
-      "excited",
-    );
+    expect(mood(makeThread({ latestRun: run({}), lastVisitedAt: minutesAgo(25) }))).toBe("excited");
   });
 
   it("celebrates ten threads finished today only while nothing is working", () => {
-    const done = Array.from({ length: 10 }, () => makeThread({ latestTurn: turn({}) }));
+    const done = Array.from({ length: 10 }, () => makeThread({ latestRun: run({}) }));
     expect(mood(...done)).toBe("celebrating");
     expect(mood(...done, running(5))).toBe("thinking");
     expect(mood(...done.slice(1))).toBe("default");
@@ -122,7 +109,7 @@ describe("resolveMascotMood", () => {
     const idleFor = (minutes: number) =>
       makeThread({
         latestUserMessageAt: minutesAgo(minutes),
-        latestTurn: turn({
+        latestRun: run({
           requestedAt: minutesAgo(minutes),
           startedAt: minutesAgo(minutes),
           completedAt: minutesAgo(minutes),
