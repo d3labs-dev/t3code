@@ -63,6 +63,14 @@ describe("shouldBundleCliDependency", () => {
   it("treats prefix-matched siblings as external", () => {
     assert.strictEqual(shouldBundleCliDependency("node-gyp-build-optional-packages"), false);
   });
+
+  it("inlines Cursor's pure-JS closure when bundled code imports it", () => {
+    assert.strictEqual(shouldBundleCliDependency("@cursor/sdk"), false);
+    for (const id of ["zod/v4", "zod/v4/core", "undici"]) {
+      assert.strictEqual(shouldBundleCliDependency(id), true, id);
+      assert.strictEqual(isRuntimeExternalCliDependency(id), true, id);
+    }
+  });
 });
 
 describe("selectCliRuntimeExternalDependencies", () => {
