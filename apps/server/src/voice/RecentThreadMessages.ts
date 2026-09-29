@@ -24,7 +24,7 @@ export class RecentThreadMessages extends Context.Service<
   }
 >()("t3/voice/RecentThreadMessages") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const list = SqlSchema.findAll({
     Request: RecentThreadMessagesRequest,
