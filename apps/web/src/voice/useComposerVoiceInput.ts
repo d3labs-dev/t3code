@@ -180,7 +180,7 @@ export function useComposerVoiceInput(options: ComposerVoiceInputOptions) {
     }),
   );
 
-  useEffect(() => () => session.controller.dispose(), [session]);
+  useEffect(() => () => void session.controller.dispose(), [session]);
 
   const { ownerKey } = options;
   useEffect(() => {

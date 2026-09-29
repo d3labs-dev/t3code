@@ -250,7 +250,7 @@ export class VoiceInputController {
       if (!this.isCurrent(operationToken)) return;
       await this.dependencies.recorder.prepareToRecordAsync();
       if (!this.isCurrent(operationToken)) return;
-      this.recordingUri = this.dependencies.recorder.uri;
+      this.recordingUri = this.readRecorderUri();
       this.rememberRecordingUri(this.recordingUri);
 
       const capturedDraft = this.dependencies.readDraft();
@@ -340,11 +340,8 @@ export class VoiceInputController {
     this.cancel();
   }
 
-  dispose(): void {
-    if (this.state.phase === "recording") {
-      this.discardRecording(null);
-      return;
-    }
+  dispose(): Promise<void> | void {
+    if (this.state.phase === "recording") return this.discardRecording(null);
     if (this.state.phase === "preparing" || this.state.phase === "transcribing") {
       this.invalidateOperation();
       this.setState(IDLE_STATE);
@@ -363,7 +360,7 @@ export class VoiceInputController {
     try {
       if (!alreadyStopped) await this.dependencies.recorder.stop();
       await this.releaseAudioSession();
-      this.recordingUri = completedUri ?? this.dependencies.recorder.uri ?? this.recordingUri;
+      this.recordingUri = completedUri ?? this.readRecorderUri() ?? this.recordingUri;
       this.rememberRecordingUri(this.recordingUri);
       if (!this.isCurrent(operationToken)) return false;
       if (
@@ -435,9 +432,8 @@ export class VoiceInputController {
     );
     try {
       await this.dependencies.recorder.stop();
-      this.rememberRecordingUri(this.dependencies.recorder.uri);
     } catch {
-      this.rememberRecordingUri(this.dependencies.recorder.uri);
+      // A recorder released with its owner has already stopped natively.
     } finally {
       await this.releaseResources();
     }
@@ -445,7 +441,7 @@ export class VoiceInputController {
 
   private async releaseResources(): Promise<void> {
     this.rememberRecordingUri(this.recordingUri);
-    this.rememberRecordingUri(this.dependencies.recorder.uri);
+    this.rememberRecordingUri(this.readRecorderUri());
     this.recordingUri = null;
     for (const uri of this.ownedRecordingUris) {
       try {
@@ -465,6 +461,15 @@ export class VoiceInputController {
 
   private rememberRecordingUri(uri: string | null): void {
     if (uri) this.ownedRecordingUris.add(uri);
+  }
+
+  /** Native recorders throw once their owner released them, e.g. on screen unmount. */
+  private readRecorderUri(): string | null {
+    try {
+      return this.dependencies.recorder.uri;
+    } catch {
+      return null;
+    }
   }
 
   private async releaseAudioSession(): Promise<void> {

@@ -204,7 +204,7 @@ export function useVoiceInputController(input: {
     return () => subscription.remove();
   }, [controller]);
 
-  useEffect(() => () => controller.dispose(), [controller]);
+  useEffect(() => () => void controller.dispose(), [controller]);
 
   useEffect(() => {
     if (state.phase !== "recording") return;

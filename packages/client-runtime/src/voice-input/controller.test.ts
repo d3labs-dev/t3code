@@ -408,6 +408,28 @@ describe("VoiceInputController", () => {
     expect(harness.controller.currentState.error).toContain("finish voice recording");
   });
 
+  it("frees the session when disposed after its owner released the recorder", async () => {
+    const releaseRecording = vi.fn(async () => undefined);
+    const harness = createHarness({ releaseRecording });
+    await harness.controller.start();
+    Object.defineProperty(harness.recorder, "uri", {
+      get: () => {
+        throw new Error("native shared object released");
+      },
+    });
+    harness.recorder.stop.mockRejectedValueOnce(new Error("native shared object released"));
+
+    await harness.controller.dispose();
+
+    expect(harness.controller.currentState.phase).toBe("idle");
+    expect(harness.deleted).toEqual(["file:///voice.m4a"]);
+    expect(releaseRecording).toHaveBeenCalledOnce();
+    const next = createHarness();
+    await next.controller.start();
+    expect(next.controller.currentState.phase).toBe("recording");
+    await next.controller.interruptRecording();
+  });
+
   it("ignores a late transcript after the draft owner changes", async () => {
     const transcription = deferred<string>();
     const transcriptionEntered = deferred<void>();
