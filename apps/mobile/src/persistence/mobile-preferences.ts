@@ -60,6 +60,20 @@ export interface Preferences {
   readonly phoneBackgroundEnabled?: boolean;
   /** Shows a button on home and threads that opens the background's look controls. */
   readonly phoneBackgroundQuickAdjust?: boolean;
+  /** Where the user dragged that button, as fractions of the screen's width and height. */
+  readonly phoneBackgroundQuickAdjustPosition?: PhoneBackgroundQuickAdjustPosition;
+}
+
+export interface PhoneBackgroundQuickAdjustPosition {
+  readonly x: number;
+  readonly y: number;
+}
+
+function decodeQuickAdjustPosition(value: unknown): PhoneBackgroundQuickAdjustPosition | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { x, y } = value as { readonly x?: unknown; readonly y?: unknown };
+  const isFraction = (n: unknown): n is number => typeof n === "number" && n >= 0 && n <= 1;
+  return isFraction(x) && isFraction(y) ? { x, y } : null;
 }
 
 export class MobilePreferencesLoadError extends Schema.TaggedError<MobilePreferencesLoadError>()(
@@ -124,6 +138,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     phoneBackground?: PhoneBackground;
     phoneBackgroundEnabled?: boolean;
     phoneBackgroundQuickAdjust?: boolean;
+    phoneBackgroundQuickAdjustPosition?: PhoneBackgroundQuickAdjustPosition;
   } = {};
 
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
@@ -220,6 +235,10 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.phoneBackgroundQuickAdjust === "boolean") {
     preferences.phoneBackgroundQuickAdjust = parsed.phoneBackgroundQuickAdjust;
+  }
+  const quickAdjustPosition = decodeQuickAdjustPosition(parsed.phoneBackgroundQuickAdjustPosition);
+  if (quickAdjustPosition) {
+    preferences.phoneBackgroundQuickAdjustPosition = quickAdjustPosition;
   }
   return preferences;
 }

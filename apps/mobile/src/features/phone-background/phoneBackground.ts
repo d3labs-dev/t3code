@@ -15,8 +15,11 @@ import * as Equal from "effect/Equal";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useState } from "react";
 
+import type { PhoneBackgroundQuickAdjustPosition } from "../../persistence/mobile-preferences";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { measurePhonePictureTone } from "./phonePictures";
+
+const DEFAULT_QUICK_ADJUST_POSITION: PhoneBackgroundQuickAdjustPosition = { x: 0, y: 0.45 };
 
 let previousBackground: PhoneBackground | null = null;
 
@@ -46,6 +49,14 @@ export function usePhoneBackgroundQuickAdjust(): boolean {
   const preferences = useAtomValue(mobilePreferencesAtom);
   return (
     AsyncResult.isSuccess(preferences) && preferences.value.phoneBackgroundQuickAdjust === true
+  );
+}
+
+export function usePhoneBackgroundQuickAdjustPosition(): PhoneBackgroundQuickAdjustPosition {
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  return (
+    (AsyncResult.isSuccess(preferences) && preferences.value.phoneBackgroundQuickAdjustPosition) ||
+    DEFAULT_QUICK_ADJUST_POSITION
   );
 }
 
