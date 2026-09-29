@@ -114,7 +114,7 @@ latest_release_tag() {
   local gh_bin
   gh_bin="$(resolve_gh)"
   "$gh_bin" api "repos/$repository/releases?per_page=30" \
-    --jq '[.[] | select(.draft == false and .prerelease == true and ((.body // "") | contains("<!-- upstream-nightly:")))][0].tag_name // ""'
+    --jq '[.[] | select(.draft == false and .prerelease == true and ((.body // "") | contains("<!-- upstream-release:")))][0].tag_name // ""'
 }
 
 installed_version() {
