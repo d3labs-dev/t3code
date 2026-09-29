@@ -20,6 +20,7 @@ import { useWorkspaceEnvironments } from "../../state/workspace";
 import { relayEnvironmentDiscovery } from "../../state/relay";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { relayManagedEnvironmentIds } from "./environmentSections";
+import { unregisterServerPushDevice } from "../server-push/serverPushRegistration";
 
 export interface RelayEnvironmentView {
   readonly environment: RelayClientEnvironmentRecord;
@@ -85,7 +86,10 @@ export function useConnectionController() {
     [registerEnvironment],
   );
   const removeEnvironment = useCallback(
-    (environmentId: EnvironmentId) => removeEnvironmentMutation(environmentId),
+    (environmentId: EnvironmentId) =>
+      unregisterServerPushDevice(environmentId).then(() =>
+        removeEnvironmentMutation(environmentId),
+      ),
     [removeEnvironmentMutation],
   );
   const retryEnvironment = useCallback(

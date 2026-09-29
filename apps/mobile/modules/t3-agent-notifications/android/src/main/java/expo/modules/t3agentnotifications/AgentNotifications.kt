@@ -23,7 +23,8 @@ class AgentMessagingService : ExpoFirebaseMessagingService() {
     if (remoteMessage.data["t3_kind"] == "agent_activity") {
       AgentNotifications.receive(this, remoteMessage.data)
     } else {
-      super.onMessageReceived(remoteMessage)
+      val expoData = expoPushAgentActivity(remoteMessage.data)
+      if (expoData != null) AgentNotifications.receive(this, expoData) else super.onMessageReceived(remoteMessage)
     }
   }
 }

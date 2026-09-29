@@ -330,6 +330,11 @@ import {
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
+import {
+  SERVER_PUSH_WS_METHODS,
+  WsServerPushRegisterDeviceRpc,
+  WsServerPushUnregisterDeviceRpc,
+} from "./serverPush.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -524,6 +529,7 @@ export const WS_METHODS = {
   subscribeAuthAccess: "subscribeAuthAccess",
   subscribeBackgroundPolicy: "subscribeBackgroundPolicy",
   subscribeResourceTelemetry: "subscribeResourceTelemetry",
+  ...SERVER_PUSH_WS_METHODS,
 } as const;
 
 const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -1820,4 +1826,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeArchivedShellRpc,
   WsOrchestrationV2SubscribeShellRpc,
   WsOrchestrationV2SubscribeThreadRpc,
+  WsServerPushRegisterDeviceRpc,
+  WsServerPushUnregisterDeviceRpc,
 );

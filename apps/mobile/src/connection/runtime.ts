@@ -16,6 +16,7 @@ import {
   mobileBackgroundActivityReporterLayer,
 } from "./background-activity";
 import { connectionPlatformLayer } from "./platform";
+import { serverPushRegistrationLayer } from "../features/server-push/serverPushRegistration";
 
 declare const module: { readonly hot?: FoundationHotModule } | undefined;
 
@@ -50,9 +51,10 @@ const providedClientConnectionLayer = snapshotLoaderLayer.pipe(
   ),
 );
 
-const connectionLayer = mobileBackgroundActivityReporterLayer.pipe(
-  Layer.provideMerge(providedClientConnectionLayer),
-);
+const connectionLayer = Layer.merge(
+  mobileBackgroundActivityReporterLayer,
+  serverPushRegistrationLayer,
+).pipe(Layer.provideMerge(providedClientConnectionLayer));
 
 export const connectionAtomRuntime: Atom.AtomRuntime<
   Layer.Success<ConnectionLayerSource>,

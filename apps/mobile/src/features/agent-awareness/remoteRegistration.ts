@@ -40,6 +40,7 @@ import { getAgentLiveActivities, startAgentLiveActivity } from "./agentLiveActiv
 import { resolveCloudPublicConfig } from "../cloud/publicConfig";
 import { supportsAgentAwarenessPush } from "./capabilities";
 import { makeRelayDeviceRegistrationRequest, resolveApsEnvironment } from "./registrationPayload";
+import { isServerPushEnabled } from "../server-push/serverPushConfig";
 
 const REMOTE_ACTIVITY_REGISTRATION_RETRY_MS = 15_000;
 
@@ -181,7 +182,7 @@ export function setAgentAwarenessRelayTokenProvider(
     // Native configure compares the persisted account on cold start. An
     // unset JS identity is a remount, not evidence of a different account.
     if (relayTokenProviderIdentity && identity !== relayTokenProviderIdentity) {
-      clearAndroidAgentNotifications();
+      if (!isServerPushEnabled()) clearAndroidAgentNotifications();
     }
     androidDeviceReplayedAt = null;
     deviceRegistrationGeneration++;
@@ -192,7 +193,7 @@ export function setAgentAwarenessRelayTokenProvider(
   relayTokenProvider = provider;
   relayTokenProviderIdentity = provider ? (identity ?? null) : null;
   if (!provider) {
-    clearAndroidAgentNotifications();
+    if (!isServerPushEnabled()) clearAndroidAgentNotifications();
     pushTokenSubscription?.remove();
     pushTokenSubscription = null;
     appStateSubscription?.remove();
@@ -752,7 +753,7 @@ function registerDevice(
       input.preferencesOverride,
     );
     if (expectedGeneration !== deviceRegistrationGeneration) return;
-    if (relayTokenProvider && relayTokenProviderIdentity) {
+    if (relayTokenProvider && relayTokenProviderIdentity && !isServerPushEnabled()) {
       configureAndroidAgentNotifications(
         deviceId,
         relayTokenProviderIdentity,

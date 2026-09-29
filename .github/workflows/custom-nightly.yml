@@ -557,6 +557,9 @@ jobs:
           CUSTOM_ANDROID_KEYSTORE: ${{ secrets.CUSTOM_ANDROID_KEYSTORE }}
           T3CODE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CUSTOM_ANDROID_KEYSTORE_PASSWORD }}
           T3CODE_ANDROID_UPDATE_RELEASES_URL: https://api.github.com/repos/${{ github.repository }}/releases
+          # Server push stays off until both are set; see docs/operations/custom-nightly.md.
+          CUSTOM_ANDROID_GOOGLE_SERVICES_JSON: ${{ secrets.CUSTOM_ANDROID_GOOGLE_SERVICES_JSON }}
+          T3CODE_EXPO_PROJECT_ID: ${{ vars.T3CODE_EXPO_PROJECT_ID }}
         run: |
           set -euo pipefail
           if [[ -z "$CUSTOM_ANDROID_KEYSTORE" || -z "$T3CODE_ANDROID_KEYSTORE_PASSWORD" ]]; then
@@ -565,6 +568,10 @@ jobs:
           fi
           export T3CODE_ANDROID_KEYSTORE="$RUNNER_TEMP/custom-android-signing.p12"
           printf '%s' "$CUSTOM_ANDROID_KEYSTORE" | base64 -d > "$T3CODE_ANDROID_KEYSTORE"
+          if [[ -n "$CUSTOM_ANDROID_GOOGLE_SERVICES_JSON" ]]; then
+            export T3CODE_ANDROID_GOOGLE_SERVICES_FILE="$RUNNER_TEMP/google-services.json"
+            printf '%s' "$CUSTOM_ANDROID_GOOGLE_SERVICES_JSON" > "$T3CODE_ANDROID_GOOGLE_SERVICES_FILE"
+          fi
           mkdir -p release
           scripts/build-custom-android-apk.sh \
             "${{ needs.prepare.outputs.version }}" \
