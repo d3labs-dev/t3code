@@ -109,6 +109,7 @@ import { SettingsNotificationsRouteScreen } from "./features/settings/SettingsNo
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
 import { SettingsThreadsRouteScreen } from "./features/settings/SettingsThreadsRouteScreen";
 import { SettingsEnvironmentFilterProvider } from "./features/settings/settings-environment-filter";
+import { LauncherMoodCoordinator } from "./features/launcher-mood/LauncherMoodCoordinator";
 import { ShowcaseCaptureCoordinator } from "./features/showcase/ShowcaseCaptureCoordinator";
 import {
   SettingsLegalDocumentCloseHeaderButton,
@@ -616,6 +617,7 @@ function RootStackLayout(props: {
     <HardwareKeyboardCommandProvider pathname={pathname}>
       <ThreadOutboxDrainWorker />
       <ShowcaseCaptureCoordinator pathname={pathname} />
+      <LauncherMoodCoordinator navigationState={props.state} />
       <ExistingThreadSettingsRouteProvider>
         <AdaptiveWorkspaceLayout
           pathname={workspaceLocation.pathname}

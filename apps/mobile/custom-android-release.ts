@@ -4,14 +4,22 @@ import type { ExpoConfig } from "expo/config";
 const MAX_ANDROID_VERSION_CODE = 2_100_000_000;
 
 /**
- * Turns the build into this fork's sideloaded Android release when
+ * Gives the D3 Code (preview) build its mood launcher icons, and turns the
+ * build into this fork's sideloaded Android release when
  * `T3CODE_ANDROID_UPDATE_RELEASES_URL` points at the GitHub releases API
  * listing its APKs. Lives outside app.config.ts so upstream merges stay clean.
  */
-export function withCustomAndroidRelease(
-  config: ExpoConfig,
+function withSideloadedRelease(
+  baseConfig: ExpoConfig,
   env: Readonly<Record<string, string | undefined>>,
 ): ExpoConfig {
+  const config: ExpoConfig =
+    baseConfig.extra?.appVariant === "preview"
+      ? {
+          ...baseConfig,
+          plugins: [...(baseConfig.plugins ?? []), "./plugins/withAndroidLauncherMoods.cjs"],
+        }
+      : baseConfig;
   const releasesUrl = env.T3CODE_ANDROID_UPDATE_RELEASES_URL?.trim();
   if (!releasesUrl) return config;
 
@@ -48,4 +56,22 @@ export function withCustomAndroidRelease(
     },
     extra: { ...config.extra, apkUpdates: { releasesUrl } },
   };
+}
+
+/** Lets the app register for server push once `T3CODE_EXPO_PROJECT_ID` names its Expo project. */
+function withServerPush(
+  config: ExpoConfig,
+  env: Readonly<Record<string, string | undefined>>,
+): ExpoConfig {
+  const expoProjectId = env.T3CODE_EXPO_PROJECT_ID?.trim();
+  return expoProjectId
+    ? { ...config, extra: { ...config.extra, serverPush: { expoProjectId } } }
+    : config;
+}
+
+export function withCustomAndroidRelease(
+  config: ExpoConfig,
+  env: Readonly<Record<string, string | undefined>>,
+): ExpoConfig {
+  return withServerPush(withSideloadedRelease(config, env), env);
 }

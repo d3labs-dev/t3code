@@ -295,6 +295,10 @@
       "types": "./src/state/threadSettled.ts",
       "default": "./src/state/threadSettled.ts"
     },
+    "./state/mascot-mood": {
+      "types": "./src/state/mascotMood.ts",
+      "default": "./src/state/mascotMood.ts"
+    },
     "./state/thread-search": {
       "types": "./src/state/threadSearch.ts",
       "default": "./src/state/threadSearch.ts"

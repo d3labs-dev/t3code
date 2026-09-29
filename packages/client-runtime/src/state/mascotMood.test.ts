@@ -1,30 +1,26 @@
+// @effect-diagnostics globalDate:off -- Fixtures build ISO timestamps relative to a fixed now.
 import { describe, expect, it } from "vite-plus/test";
-import { EnvironmentId, ProjectId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
+import { ProviderInstanceId, RunId } from "@t3tools/contracts";
 
-import { type MascotThread, resolveMascotMood } from "./mascotMood";
-import { makeThreadFixture, type ThreadFixtureOverrides } from "./test-fixtures";
-import type { ThreadRunSummary, ThreadRuntimeSummary } from "@t3tools/client-runtime/state/shell";
+import { type MascotThread, resolveMascotMood } from "./mascotMood.ts";
+import type { ThreadRunSummary, ThreadRuntimeSummary } from "./models.ts";
 
 const NOW = Date.parse("2026-09-24T15:00:00.000Z");
 const minutesAgo = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
 
-let nextId = 0;
-function makeThread({
-  lastVisitedAt = minutesAgo(1),
-  ...overrides
-}: Omit<ThreadFixtureOverrides, "lastVisitedAt"> & {
-  readonly lastVisitedAt?: string;
-} = {}): MascotThread {
-  nextId += 1;
+function makeThread(overrides: Partial<MascotThread> = {}): MascotThread {
   return {
-    ...makeThreadFixture({
-      id: ThreadId.make(`thread-${nextId}`),
-      environmentId: EnvironmentId.make("environment-local"),
-      projectId: ProjectId.make("project-1"),
-      latestUserMessageAt: minutesAgo(30),
-      ...overrides,
-    }),
-    lastVisitedAt,
+    archivedAt: null,
+    settledOverride: null,
+    snoozedUntil: null,
+    snoozedAt: null,
+    latestUserMessageAt: minutesAgo(30),
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    latestRun: null,
+    runtime: null,
+    lastVisitedAt: minutesAgo(1),
+    ...overrides,
   };
 }
 
@@ -82,30 +78,31 @@ describe("resolveMascotMood", () => {
     expect(mood(failed({ failedMinutesAgo: 5, visitedMinutesAgo: 1 }))).toBe("default");
   });
 
-  it("waits on one question and turns urgent at three", () => {
+  it("waits on one question and turns urgent at two", () => {
     const asking = () => makeThread({ hasPendingApprovals: true });
     expect(mood(asking(), running(1))).toBe("waiting");
-    expect(mood(asking(), asking(), asking())).toBe("urgent");
+    expect(mood(asking(), asking())).toBe("urgent");
   });
 
-  it("thinks while agents work, juggles three at once, and looks confused once one runs long", () => {
-    expect(mood(running(5), running(5))).toBe("thinking");
-    expect(mood(running(5), running(5), running(5))).toBe("juggling");
-    expect(mood(running(5), running(5), running(60))).toBe("confused");
+  it("thinks while an agent works, juggles two at once, and looks confused once one runs long", () => {
+    expect(mood(running(5))).toBe("thinking");
+    expect(mood(running(5), running(5))).toBe("juggling");
+    expect(mood(running(5), running(25))).toBe("confused");
+    expect(mood(makeThread({ runtime: runtime("queued", 1) }))).toBe("thinking");
   });
 
-  it("gets excited about a finished turn the user has not opened", () => {
+  it("gets excited about a finished run the user has not opened", () => {
     expect(mood(makeThread({ latestRun: run({}), lastVisitedAt: minutesAgo(25) }))).toBe("excited");
   });
 
-  it("celebrates ten threads finished today only while nothing is working", () => {
-    const done = Array.from({ length: 10 }, () => makeThread({ latestRun: run({}) }));
+  it("celebrates five threads finished today only while nothing is working", () => {
+    const done = Array.from({ length: 5 }, () => makeThread({ latestRun: run({}) }));
     expect(mood(...done)).toBe("celebrating");
     expect(mood(...done, running(5))).toBe("thinking");
     expect(mood(...done.slice(1))).toBe("default");
   });
 
-  it("gets bored after two idle hours and grumpy after six", () => {
+  it("gets bored after half an idle hour and grumpy after two hours", () => {
     const idleFor = (minutes: number) =>
       makeThread({
         latestUserMessageAt: minutesAgo(minutes),
@@ -115,9 +112,9 @@ describe("resolveMascotMood", () => {
           completedAt: minutesAgo(minutes),
         }),
       });
-    expect(mood(idleFor(90))).toBe("default");
-    expect(mood(idleFor(3 * 60))).toBe("bored");
-    expect(mood(idleFor(7 * 60))).toBe("grumpy");
+    expect(mood(idleFor(20))).toBe("default");
+    expect(mood(idleFor(45))).toBe("bored");
+    expect(mood(idleFor(3 * 60))).toBe("grumpy");
   });
 
   it("sleeps when every thread is settled or snoozed", () => {

@@ -1,7 +1,7 @@
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { resolveMascotMood } from "@t3tools/client-runtime/state/mascot-mood";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { resolveMascotMood } from "../mascotMood";
 import { resolveThreadLastVisitedAt } from "./Sidebar.logic";
 import { useAllEnvironmentShellsBootstrapped, useThreadShells } from "../state/entities";
 import { useUiStateStore } from "../uiStateStore";

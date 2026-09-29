@@ -51,7 +51,7 @@ Remove the hourly job without deleting the application, data, or signing identit
 ./scripts/custom-nightly-macos.sh uninstall
 ```
 
-While D3 Code runs, its Dock icon shows the cat in a mood that follows your threads: questions waiting on you or an unseen failure, agents at work (sweating when three or more run at once), finished work you have not opened, a big day, nothing new for two hours or more, or everything settled. The pictures live in `apps/desktop/resources/mascot/`, and `apps/web/src/mascotMood.ts` picks one.
+While D3 Code runs, its Dock icon shows the cat in a mood that follows your threads: questions waiting on you or an unseen failure, agents at work (sweating when two or more run at once), finished work you have not opened, a big day, nothing new for half an hour or more, or everything settled. The pictures live in `apps/desktop/resources/mascot/`, and `packages/client-runtime/src/state/mascotMood.ts` picks one.
 
 ## Windows app
 
@@ -61,7 +61,26 @@ Install the `-x64.exe` from a release and accept the SmartScreen prompt; the ins
 
 Install the `-android-arm64.apk` from a release. It installs as `com.t3tools.t3code.preview` under the name D3 Code, next to the Play Store app and local development builds. Its Clerk sign-in callback is already allowlisted, so T3 Connect works. It never takes Expo over-the-air updates.
 
+Its launcher icon shows the same cat mood as the Mac Dock, counting a thread as seen once you open it on the phone. The icon changes only when you leave the app, and the launcher can take several seconds to redraw it.
+
 The app checks the fork's releases at launch and after 15 minutes in the background, and offers newer APKs. **Settings > About > Check for updates** checks on demand. Android asks to confirm every install; the first update also asks to allow D3 Code to install unknown apps.
+
+### Agent notifications
+
+The APK cannot use T3 Connect's relay for notifications, so each T3 Code server the phone connects to pushes them itself through Expo's push service: questions and approvals waiting on you, finished and failed work, and the ongoing activity card. The phone registers with every server it connects to, and a server only notifies about its own threads. After that, pushes arrive while the app is closed, as long as the server is running and can reach `exp.host` on the internet. Removing a server in the app unregisters the phone only while that server is connected.
+
+Notifications stay off until the build has both an Expo project and a Firebase app:
+
+1. In Firebase, add an Android app for `com.t3tools.t3code.preview` and download its `google-services.json`.
+2. Create a service account key with the Firebase Cloud Messaging API (V1) and upload it to the Expo project under **Credentials > Android > FCM V1 service account key**.
+3. Give both to GitHub Actions:
+
+   ```bash
+   gh secret set CUSTOM_ANDROID_GOOGLE_SERVICES_JSON < google-services.json
+   gh variable set T3CODE_EXPO_PROJECT_ID --body <expo-project-id>
+   ```
+
+For a local build, set `T3CODE_ANDROID_GOOGLE_SERVICES_FILE` to the JSON's path and `T3CODE_EXPO_PROJECT_ID`. Servers keep their registered phones in `server-push-devices.json` in their state directory.
 
 ### Signing key
 
