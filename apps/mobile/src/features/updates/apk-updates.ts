@@ -143,6 +143,7 @@ export async function installApkUpdate(release: ApkRelease): Promise<void> {
     const flushed = await settlePromise(defaultFlushPendingWrites);
     // The user asked for this install, so a failed flush is reported but does not block it.
     reportFailure(flushed, undefined);
+    await waitUntilForeground();
     await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
       data: apk.contentUri,
       flags: FLAG_GRANT_READ_URI_PERMISSION,
@@ -153,6 +154,21 @@ export async function installApkUpdate(release: ApkRelease): Promise<void> {
   // Reaching this point means the installer was dismissed or failed; offer the update again.
   setState({ status: "available", release });
   reportFailure(result, "Update failed");
+}
+
+/**
+ * Android blocks background apps from opening the installer and reports the
+ * blocked launch as a dismissal, so the installer opens once the user is back.
+ */
+function waitUntilForeground(): Promise<void> {
+  if (AppState.currentState === "active") return Promise.resolve();
+  return new Promise((resolve) => {
+    const subscription = AppState.addEventListener("change", (appState) => {
+      if (appState !== "active") return;
+      subscription.remove();
+      resolve();
+    });
+  });
 }
 
 async function downloadApk(release: ApkRelease): Promise<File> {
