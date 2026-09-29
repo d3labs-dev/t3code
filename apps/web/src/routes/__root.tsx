@@ -34,6 +34,7 @@ import { MascotMoodCoordinator } from "../components/MascotMoodCoordinator";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
 import { BackgroundStudioHost } from "../components/background/BackgroundStudioHost";
+import { BackgroundFolderSync } from "../components/background/BackgroundFolderSync";
 import { BackgroundThemeSync } from "../components/background/BackgroundThemeSync";
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
@@ -218,6 +219,7 @@ function RootRouteView() {
         <ContrastAppearanceSync />
         <EnvironmentThemeSync />
         <BackgroundThemeSync />
+        <BackgroundFolderSync />
         <GlassAppearanceSync />
         <FontAppearanceSync />
         <FirstRunGate

@@ -201,6 +201,12 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   pickProjectFavicon: (initialPath) =>
     ipcRenderer.invoke(IpcChannels.PICK_PROJECT_FAVICON_CHANNEL, initialPath),
   pickThemeFiles: () => ipcRenderer.invoke(IpcChannels.PICK_THEME_FILES_CHANNEL, undefined),
+  pickBackgroundFolder: () =>
+    ipcRenderer.invoke(IpcChannels.PICK_BACKGROUND_FOLDER_CHANNEL, undefined),
+  listBackgroundFolder: (folderPath) =>
+    ipcRenderer.invoke(IpcChannels.LIST_BACKGROUND_FOLDER_CHANNEL, folderPath),
+  readBackgroundFolderImage: (filePath) =>
+    ipcRenderer.invoke(IpcChannels.READ_BACKGROUND_FOLDER_IMAGE_CHANNEL, filePath),
   setTheme: (theme) => ipcRenderer.invoke(IpcChannels.SET_THEME_CHANNEL, theme),
   showContextMenu: (items, position) =>
     ipcRenderer.invoke(IpcChannels.CONTEXT_MENU_CHANNEL, {

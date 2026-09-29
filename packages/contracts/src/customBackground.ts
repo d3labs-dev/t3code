@@ -416,6 +416,17 @@ const RetiredCustomBackgroundFilter = Schema.Struct({
   ),
 );
 
+/**
+ * A folder on the desktop whose pictures the playlist follows. `imageIds` is
+ * what the folder held at its last sync, so a picture the user deselected is
+ * told apart from one newly added to the folder.
+ */
+export const CustomBackgroundFolder = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  imageIds: Schema.Array(CustomBackgroundImageId),
+});
+export type CustomBackgroundFolder = typeof CustomBackgroundFolder.Type;
+
 const CustomBackgroundRecordFilter = Schema.Union([
   CustomBackgroundFilter,
   RetiredCustomBackgroundFilter,
@@ -425,6 +436,9 @@ export const CustomBackgroundRecord = Schema.Struct({
   id: CustomBackgroundId,
   name: CustomBackgroundName,
   source: CustomBackgroundSource,
+  folders: Schema.Array(CustomBackgroundFolder).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   filter: CustomBackgroundRecordFilter,
   fade: CustomBackgroundFade.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_CUSTOM_BACKGROUND_FADE)),

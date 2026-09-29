@@ -10,6 +10,7 @@ import {
   subscribeBackgroundImages,
   useBackgroundImageUrl,
 } from "~/customBackground/imageStore";
+import { canSyncBackgroundFolders, pickBackgroundFolder } from "~/customBackground/folderSync";
 import { imagesFromDrop, imagesFromFiles } from "~/customBackground/importFiles";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
@@ -109,6 +110,7 @@ export function BackgroundImagePicker({
   referencedImageIds,
   onToggle,
   onUpload,
+  onLinkFolders,
   busy,
   busyLabel,
 }: {
@@ -116,6 +118,7 @@ export function BackgroundImagePicker({
   referencedImageIds: ReadonlySet<string>;
   onToggle: (imageId: CustomBackgroundImageId) => void;
   onUpload: (files: ReadonlyArray<File>) => void;
+  onLinkFolders: (paths: ReadonlyArray<string>) => void;
   busy: boolean;
   busyLabel: string | null;
 }) {
@@ -132,6 +135,7 @@ export function BackgroundImagePicker({
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [dragTarget, setDragTarget] = useState<DropTarget | null>(null);
+  const syncsFolders = canSyncBackgroundFolders();
 
   function uploadFiles(files: ReadonlyArray<File>) {
     if (busy) return;
@@ -159,12 +163,40 @@ export function BackgroundImagePicker({
     setDragTarget(null);
   }
 
+  function linkFolders(paths: ReadonlyArray<string>) {
+    if (busy || paths.length === 0) return;
+    setOpen(false);
+    onLinkFolders(paths);
+  }
+
+  function pickFolder() {
+    if (!syncsFolders) {
+      folderInputRef.current?.click();
+      return;
+    }
+    void pickBackgroundFolder().then((path) => {
+      if (path !== null) linkFolders([path]);
+    });
+  }
+
   function handleDrop(event: DragEvent<HTMLButtonElement>) {
     if (!event.dataTransfer.types.includes("Files")) return;
     event.preventDefault();
     event.stopPropagation();
     setDragTarget(null);
-    void imagesFromDrop(event.dataTransfer.items)
+    const getPathForFile = window.desktopBridge?.getPathForFile;
+    const folderPaths: Array<string> = [];
+    const fileItems = Array.from(event.dataTransfer.items).filter((item) => {
+      if (!syncsFolders || !getPathForFile || !item.webkitGetAsEntry()?.isDirectory) return true;
+      const folder = item.getAsFile();
+      const path = folder ? getPathForFile(folder) : "";
+      if (path.length === 0) return true;
+      folderPaths.push(path);
+      return false;
+    });
+    linkFolders(folderPaths);
+    if (fileItems.length === 0) return;
+    void imagesFromDrop(fileItems)
       .catch(() => [])
       .then(uploadFiles);
   }
@@ -239,13 +271,13 @@ export function BackgroundImagePicker({
                 {...dropHandlers}
                 data-drop-target="folder"
                 data-dragging={dragTarget === "folder"}
-                onClick={() => folderInputRef.current?.click()}
+                onClick={pickFolder}
                 className={uploadTileClass}
               >
                 <FolderPlusIcon className="size-4" />
                 <span>Add or drop a folder</span>
                 <span className="text-2xs leading-(--text-xs--line-height)">
-                  Only new images import
+                  {syncsFolders ? "Stays in sync each launch" : "Only new images import"}
                 </span>
               </button>
             </div>

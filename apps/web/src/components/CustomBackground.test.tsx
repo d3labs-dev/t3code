@@ -50,6 +50,7 @@ it("draws nothing while the photo is missing, whatever the filter", async () => 
     opacity: 100,
     blur: 0,
     brightnessAdapt: 0,
+    folders: [],
     source: {
       kind: "image",
       imageIds: ["a".repeat(64)],

@@ -62,7 +62,7 @@ export interface StoredBackgroundImage {
 
 export type StoreBackgroundImageResult =
   | { ok: true; image: StoredBackgroundImage; existed: boolean }
-  | { ok: false; reason: ImageCompressionFailureReason | "quota" | "unavailable" };
+  | { ok: false; reason: ImageCompressionFailureReason | "quota" | "unavailable" | "unreadable" };
 
 function hasIndexedDb(): boolean {
   return typeof indexedDB !== "undefined";
@@ -169,6 +169,15 @@ export async function listBackgroundImages(): Promise<ReadonlyArray<StoredBackgr
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
 }
 
+export async function listBackgroundImageIds(): Promise<ReadonlySet<string>> {
+  if (!hasIndexedDb()) return new Set();
+  const database = await openDatabase();
+  const keys = await requestToPromise(
+    database.transaction(IMAGES_STORE, "readonly").objectStore(IMAGES_STORE).getAllKeys(),
+  );
+  return new Set(keys.filter((key) => typeof key === "string"));
+}
+
 export async function deleteBackgroundImage(id: CustomBackgroundImageId): Promise<void> {
   const database = await openDatabase();
   const transaction = database.transaction(IMAGES_STORE, "readwrite");
@@ -236,6 +245,34 @@ export async function storeBackgroundImage(file: File): Promise<StoreBackgroundI
   refreshImageUrls(image);
   emitStoreChange();
   return { ok: true, image, existed: false };
+}
+
+const STORE_CONCURRENCY = 4;
+
+/**
+ * Stores pictures a few at a time; each decode holds a full bitmap in memory,
+ * so the pool stays small. Pictures load only when their turn comes, and
+ * results keep the input order.
+ */
+export async function storeBackgroundImages(
+  loads: ReadonlyArray<() => Promise<File>>,
+  onSettled: () => void,
+): Promise<Array<StoreBackgroundImageResult>> {
+  const results: Array<StoreBackgroundImageResult> = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < loads.length) {
+      const index = next;
+      next += 1;
+      results[index] = await loads[index]!().then(storeBackgroundImage, () => ({
+        ok: false as const,
+        reason: "unreadable" as const,
+      }));
+      onSettled();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(STORE_CONCURRENCY, loads.length) }, worker));
+  return results;
 }
 
 type UrlVariant = keyof typeof IMAGE_RENDITIONS;

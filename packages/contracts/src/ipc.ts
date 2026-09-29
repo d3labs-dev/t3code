@@ -12,6 +12,7 @@ import {
 } from "./previewAutomation.ts";
 import { SnapShotSource } from "./chatAttachment.ts";
 import { EnvironmentId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { CustomBackgroundImageId } from "./customBackground.ts";
 import { BrowserProfileId } from "./browserProfile.ts";
 import type {
   BrowserImportResult,
@@ -553,6 +554,14 @@ export const PickedThemeFileSchema = Schema.Struct({
   size: Schema.Number,
   text: Schema.String,
 });
+
+/** A supported picture found under a synced background folder, hashed the way the renderer ids uploads. */
+export const DesktopBackgroundFolderImage = Schema.Struct({
+  path: Schema.String,
+  id: CustomBackgroundImageId,
+  type: Schema.String,
+});
+export type DesktopBackgroundFolderImage = typeof DesktopBackgroundFolderImage.Type;
 
 export interface DesktopWslDistro {
   name: string;
@@ -1227,6 +1236,12 @@ export interface DesktopBridge {
    * web callers fall back to a plain file input.
    */
   pickThemeFiles?: () => Promise<readonly PickedThemeFile[] | null>;
+  pickBackgroundFolder?: () => Promise<string | null>;
+  /** Pictures under the folder in file-name order; null when the folder is missing or unreadable. */
+  listBackgroundFolder?: (
+    folderPath: string,
+  ) => Promise<readonly DesktopBackgroundFolderImage[] | null>;
+  readBackgroundFolderImage?: (filePath: string) => Promise<Uint8Array>;
   setTheme: (theme: DesktopTheme) => Promise<void>;
   showContextMenu: <T extends string>(
     items: readonly ContextMenuItem<T>[],

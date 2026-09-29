@@ -3,6 +3,7 @@ import {
   type CustomBackgroundSource,
   type CustomBackgroundFilter,
   type CustomBackgroundFilterKind,
+  type CustomBackgroundFolder,
   type CustomBackgroundImageId,
   type CustomBackgroundRecord,
   DEFAULT_CUSTOM_BACKGROUND_FADE,
@@ -35,6 +36,7 @@ export function createEmptyBackground(input: {
     id: input.id,
     name: input.name,
     source: { kind: "none" },
+    folders: [],
     filter: input.filter,
     fade: DEFAULT_CUSTOM_BACKGROUND_FADE,
     fadeHeight: DEFAULT_CUSTOM_BACKGROUND_FADE_HEIGHT,
@@ -110,6 +112,15 @@ function singleImageSource(imageId: CustomBackgroundImageId): CustomBackgroundIm
   };
 }
 
+function withImageIds(
+  source: CustomBackgroundSource,
+  imageIds: ReadonlyArray<CustomBackgroundImageId>,
+): CustomBackgroundSource {
+  const [first] = imageIds;
+  if (first === undefined) return { kind: "none" };
+  return { ...(source.kind === "image" ? source : singleImageSource(first)), imageIds };
+}
+
 export function toggleBackgroundImage(
   source: CustomBackgroundSource,
   imageId: CustomBackgroundImageId,
@@ -130,6 +141,39 @@ export function appendBackgroundImage(
   return source.imageIds.includes(imageId)
     ? source
     : { ...source, imageIds: [...source.imageIds, imageId] };
+}
+
+/**
+ * Follows a synced folder's current pictures: ones new to the folder join the
+ * playlist, ones gone from it leave, and ones the user deselected stay out.
+ */
+export function syncBackgroundFolder(
+  record: CustomBackgroundRecord,
+  folder: CustomBackgroundFolder,
+): CustomBackgroundRecord {
+  const previous = new Set(
+    record.folders.find((candidate) => candidate.path === folder.path)?.imageIds,
+  );
+  const current = new Set(folder.imageIds);
+  const selected = record.source.kind === "image" ? record.source.imageIds : [];
+  const kept = selected.filter((id) => current.has(id) || !previous.has(id));
+  const keptIds = new Set(kept);
+  const added = folder.imageIds.filter((id) => !previous.has(id) && !keptIds.has(id));
+  const linked = record.folders.some((candidate) => candidate.path === folder.path);
+  return {
+    ...record,
+    source: withImageIds(record.source, [...kept, ...added]),
+    folders: linked
+      ? record.folders.map((candidate) => (candidate.path === folder.path ? folder : candidate))
+      : [...record.folders, folder],
+  };
+}
+
+export function unlinkBackgroundFolder(
+  record: CustomBackgroundRecord,
+  path: string,
+): CustomBackgroundRecord {
+  return { ...record, folders: record.folders.filter((folder) => folder.path !== path) };
 }
 
 export function sourcesEqual(a: CustomBackgroundSource, b: CustomBackgroundSource): boolean {

@@ -29,6 +29,7 @@ const background: PhoneBackground = {
     opacity: 75,
     blur: 0,
     brightnessAdapt: 0,
+    folders: [],
     createdAt: "2026-09-22T00:00:00.000Z",
   },
   dynamicTheme: true,

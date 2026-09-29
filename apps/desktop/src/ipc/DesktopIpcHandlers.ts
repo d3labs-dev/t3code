@@ -71,6 +71,11 @@ import {
 import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
 import { setDockMood } from "./methods/dockMood.ts";
+import {
+  listBackgroundFolder,
+  pickBackgroundFolder,
+  readBackgroundFolderImage,
+} from "./methods/backgroundFolder.ts";
 import { getWslState, setWslBackendEnabled, setWslDistro, setWslOnly } from "./methods/wsl.ts";
 
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
@@ -131,6 +136,9 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(pickFolder);
   yield* ipc.handle(pickProjectFavicon);
   yield* ipc.handle(pickThemeFiles);
+  yield* ipc.handle(pickBackgroundFolder);
+  yield* ipc.handle(listBackgroundFolder);
+  yield* ipc.handle(readBackgroundFolderImage);
   yield* ipc.handle(setTheme);
   yield* ipc.handle(showContextMenu);
   yield* ipc.handle(openExternal);

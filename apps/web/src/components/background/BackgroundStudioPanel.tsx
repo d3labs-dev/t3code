@@ -4,7 +4,6 @@ import {
   CUSTOM_BACKGROUND_ROTATION_MINUTE_OPTIONS,
   CUSTOM_BACKGROUND_ROTATION_ORDERS,
   CUSTOM_BACKGROUND_TRANSITIONS,
-  type CustomBackgroundImageId,
   type CustomBackgroundImageSource,
   type CustomBackgroundSource,
   IMAGE_DITHERING_PRESETS,
@@ -22,23 +21,30 @@ import {
   BanIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  FolderSyncIcon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
   Undo2Icon,
+  XIcon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useBackgroundStudioStore } from "~/customBackground/backgroundStudioStore";
-import { storeBackgroundImage, useBackgroundImageTone } from "~/customBackground/imageStore";
+import {
+  type BackgroundFolderSyncResult,
+  backgroundFolderName,
+  linkBackgroundFolder,
+} from "~/customBackground/folderSync";
+import { storeBackgroundImages, useBackgroundImageTone } from "~/customBackground/imageStore";
 import { stepBackgroundImage, useRotatingBackgroundImage } from "~/customBackground/rotation";
 import { isWebGlAvailable } from "~/customBackground/webgl";
 import {
   type CustomBackgroundLibrary,
   appendBackgroundImage,
   createEmptyBackground,
-  sourcesEqual,
   toggleBackgroundImage,
+  unlinkBackgroundFolder,
   filtersEqual,
   nextActiveAfterRemove,
   nextNewBackgroundName,
@@ -84,6 +90,7 @@ type UploadState =
 
 function uploadLabel(upload: UploadState): string | null {
   if (upload.status !== "busy") return null;
+  if (upload.total === 0) return "Reading folder…";
   if (upload.total < 2) return "Preparing image…";
   return `Preparing ${Math.min(upload.done + 1, upload.total)} of ${upload.total}…`;
 }
@@ -93,7 +100,6 @@ function isFilterKind(value: unknown): value is CustomBackgroundFilterKind {
 }
 
 const PERSIST_DEBOUNCE_MS = 150;
-const UPLOAD_CONCURRENCY = 4;
 
 const FADE_CONTROLS = [
   { key: "fade", label: "Bottom fade" },
@@ -113,6 +119,21 @@ function describeUploadFailure(reason: string): string {
     default:
       return "Could not read this image.";
   }
+}
+
+function describeFolderSync(path: string, result: BackgroundFolderSyncResult): UploadState {
+  const name = backgroundFolderName(path);
+  if (result.status === "missing") {
+    return { status: "settled", notice: null, error: `Could not read the folder ${name}.` };
+  }
+  return {
+    status: "settled",
+    notice: `${name}: ${result.pictures} pictures, ${result.imported} new.`,
+    error:
+      result.failed === 0
+        ? null
+        : `${result.failed} ${result.failed === 1 ? "picture" : "pictures"} in ${name} could not be imported.`,
+  };
 }
 
 function NameField({
@@ -619,49 +640,49 @@ export function BackgroundStudioPanel() {
     persistLibrary(upsertBackground(getClientSettings().customBackgrounds, next), next.id);
   };
 
-  // A few files encode at once; each decode holds a full bitmap in memory, so
-  // the pool stays small. Results keep the order the files were picked in.
   // Files already in the store match by content hash and skip decoding, so
-  // adding a folder again only encodes its new images.
+  // adding a folder again only encodes its new images. The import finishes
+  // and lands in the playlist even if the studio closes midway.
   const uploadImages = async (files: ReadonlyArray<File>) => {
     if (files.length === 0) {
       setUpload({ status: "settled", notice: "No supported images found.", error: null });
       return [];
     }
     setUpload({ status: "busy", done: 0, total: files.length });
-    const stored: Array<CustomBackgroundImageId | null> = files.map(() => null);
-    let alreadyImported = 0;
+    const results = await storeBackgroundImages(
+      files.map((file) => () => Promise.resolve(file)),
+      () =>
+        setUpload((previous) =>
+          previous.status === "busy" ? { ...previous, done: previous.done + 1 } : previous,
+        ),
+    );
     let error: string | null = null;
-    let next = 0;
-    const worker = async () => {
-      while (next < files.length && mounted.current) {
-        const index = next;
-        next += 1;
-        const file = files[index]!;
-        const result = await storeBackgroundImage(file);
-        if (result.ok) {
-          stored[index] = result.image.id;
-          if (result.existed) alreadyImported += 1;
-        } else {
-          const reason = describeUploadFailure(result.reason);
-          error = files.length > 1 ? `${file.name}: ${reason}` : reason;
-        }
-        if (mounted.current) {
-          setUpload((previous) =>
-            previous.status === "busy" ? { ...previous, done: previous.done + 1 } : previous,
-          );
-        }
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, files.length) }, worker));
-    if (!mounted.current) return [];
-    const imageIds = stored.filter((id) => id !== null);
+    results.forEach((result, index) => {
+      if (result.ok) return;
+      const reason = describeUploadFailure(result.reason);
+      error = files.length > 1 ? `${files[index]!.name}: ${reason}` : reason;
+    });
+    const imageIds = results.flatMap((result) => (result.ok ? [result.image.id] : []));
+    const alreadyImported = results.filter((result) => result.ok && result.existed).length;
     const notice =
       alreadyImported === 0
         ? null
         : `${imageIds.length - alreadyImported} new, ${alreadyImported} already imported.`;
     setUpload({ status: "settled", notice, error });
     return imageIds;
+  };
+
+  const linkFolders = async (backgroundId: string, paths: ReadonlyArray<string>) => {
+    flushPending();
+    for (const path of paths) {
+      setUpload({ status: "busy", done: 0, total: 0 });
+      const result = await linkBackgroundFolder({
+        backgroundId,
+        path,
+        onProgress: (done, total) => setUpload({ status: "busy", done, total }),
+      });
+      setUpload(describeFolderSync(path, result));
+    }
   };
 
   const createBackground = () => {
@@ -765,29 +786,66 @@ export function BackgroundStudioPanel() {
               }
               onUpload={(files) => {
                 void uploadImages(files).then((imageIds) => {
-                  if (imageIds.length > 0) {
-                    flushPending();
-                    const current = getClientSettings().customBackgrounds;
-                    // Add the image only to a surviving record whose images
-                    // did not change meanwhile. Edits made during encoding,
-                    // including edits to another selection, win.
-                    persistLibrary(
-                      current.map((entry) =>
-                        entry.id === record.id && sourcesEqual(entry.source, record.source)
-                          ? {
-                              ...entry,
-                              source: imageIds.reduce<CustomBackgroundSource>(
-                                appendBackgroundImage,
-                                entry.source,
-                              ),
-                            }
-                          : entry,
-                      ),
-                    );
-                  }
+                  if (imageIds.length === 0) return;
+                  flushPending();
+                  persistLibrary(
+                    getClientSettings().customBackgrounds.map((entry) =>
+                      entry.id === record.id
+                        ? {
+                            ...entry,
+                            source: imageIds.reduce<CustomBackgroundSource>(
+                              appendBackgroundImage,
+                              entry.source,
+                            ),
+                          }
+                        : entry,
+                    ),
+                  );
                 });
               }}
+              onLinkFolders={(paths) => void linkFolders(record.id, paths)}
             />
+            {record.folders.length > 0 ? (
+              <ul className="flex flex-col gap-1">
+                {record.folders.map((folder) => (
+                  <li
+                    key={folder.path}
+                    className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
+                  >
+                    <FolderSyncIcon className="size-3.5 shrink-0" />
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="min-w-0 flex-1 truncate">
+                            {backgroundFolderName(folder.path)}
+                          </span>
+                        }
+                      />
+                      <TooltipPopup side="top">{folder.path}</TooltipPopup>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            size="icon-micro"
+                            variant="ghost-muted"
+                            aria-label="Stop syncing folder"
+                            onClick={() =>
+                              commitRecord(unlinkBackgroundFolder(record, folder.path))
+                            }
+                          >
+                            <XIcon />
+                          </Button>
+                        }
+                      />
+                      <TooltipPopup side="top">
+                        Stop syncing. Its pictures stay in the playlist.
+                      </TooltipPopup>
+                    </Tooltip>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             {upload.status === "settled" && upload.notice ? (
               <p role="status" className="text-xs text-muted-foreground">
                 {upload.notice}

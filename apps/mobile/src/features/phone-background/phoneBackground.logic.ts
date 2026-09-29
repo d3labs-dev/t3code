@@ -167,6 +167,7 @@ export function phoneBackgroundWithPictures(
       id: "phone",
       name: "Phone photos",
       source: { kind: "none" },
+      folders: [],
       filter: { kind: "none" },
       ...PHONE_BACKGROUND_LOOK,
       blur: 0,

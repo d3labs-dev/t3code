@@ -40,8 +40,19 @@ vi.mock("~/hooks/useSettings", async () => {
   };
 });
 vi.mock("~/customBackground/imageStore", () => ({
-  storeBackgroundImage: state.upload,
+  storeBackgroundImages: (loads: ReadonlyArray<() => Promise<File>>, onSettled: () => void) =>
+    Promise.all(
+      loads.map(async (load) => {
+        const result: unknown = await state.upload(await load());
+        onSettled();
+        return result;
+      }),
+    ),
   useBackgroundImageTone: () => null,
+}));
+vi.mock("~/customBackground/folderSync", () => ({
+  backgroundFolderName: (path: string) => path,
+  linkBackgroundFolder: vi.fn(),
 }));
 vi.mock("~/hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
 vi.mock("~/customBackground/webgl", () => ({
@@ -96,6 +107,7 @@ const original: CustomBackgroundRecord = {
   opacity: 100,
   blur: 0,
   brightnessAdapt: 0,
+  folders: [],
   source: { kind: "none" },
   filter: defaultCustomBackgroundFilter("none"),
 };
@@ -193,23 +205,26 @@ it("keeps pending changes and selection on another background", async () => {
   ]);
 });
 
-it("keeps a newer image choice made while encoding", async () => {
+it("adds the import after an image chosen while encoding", async () => {
   const chosenId = "c".repeat(64);
   act(() => renderer.root.findByType(BackgroundImagePicker).props.onToggle(chosenId));
   await act(async () => finishUpload());
   expect(state.settings?.customBackgrounds[0]?.source).toEqual({
     kind: "image",
-    imageIds: [chosenId],
+    imageIds: [chosenId, uploadedId],
     rotationMinutes: 15,
     order: "sequential",
     transition: "fade",
   });
 });
 
-it("does not change the library after closing during encoding", async () => {
+it("still selects the import when the studio closes during encoding", async () => {
   await act(async () => renderer.unmount());
   await act(async () => finishUpload());
-  expect(state.settings?.customBackgrounds).toEqual([original, other]);
+  expect(state.settings?.customBackgrounds[0]?.source).toMatchObject({
+    kind: "image",
+    imageIds: [uploadedId],
+  });
 });
 
 it("imports only the new images when a folder is added again", async () => {

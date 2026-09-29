@@ -1156,7 +1156,9 @@ describe("ClientSettings custom backgrounds", () => {
       ],
       activeCustomBackgroundId: "bg-old",
     });
-    expect(settings.customBackgrounds).toEqual([{ ...record, blur: 0, brightnessAdapt: 0 }]);
+    expect(settings.customBackgrounds).toEqual([
+      { ...record, folders: [], blur: 0, brightnessAdapt: 0 },
+    ]);
     expect(settings.activeCustomBackgroundId).toBe("bg-old");
   });
 

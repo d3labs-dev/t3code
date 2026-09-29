@@ -12,6 +12,7 @@ import {
   nextNewBackgroundName,
   removeBackground,
   resolveDisplayedBackground,
+  syncBackgroundFolder,
   toggleBackgroundImage,
   upsertBackground,
   withFilterKind,
@@ -29,6 +30,7 @@ const sunset: CustomBackgroundRecord = {
     order: "sequential",
     transition: "fade",
   },
+  folders: [],
   filter: defaultCustomBackgroundFilter("image-dithering"),
   fade: 100,
   fadeHeight: 60,
@@ -232,5 +234,61 @@ describe("playlist images", () => {
       first,
       second,
     ]);
+  });
+});
+
+describe("syncBackgroundFolder", () => {
+  const [a, b, c, d] = ["a", "b", "c", "d"].map((char) => char.repeat(64)) as [
+    string,
+    string,
+    string,
+    string,
+  ];
+  const path = "/Users/me/Wallpapers";
+  const empty = createEmptyBackground({
+    id: "bg-2",
+    name: "Folder",
+    filter: defaultCustomBackgroundFilter("none"),
+    createdAt,
+  });
+  const imageIds = (record: CustomBackgroundRecord) =>
+    record.source.kind === "image" ? record.source.imageIds : [];
+
+  it("selects every picture of a newly linked folder", () => {
+    const linked = syncBackgroundFolder(
+      { ...empty, folders: [{ path, imageIds: [] }] },
+      { path, imageIds: [a, b] },
+    );
+    expect(imageIds(linked)).toEqual([a, b]);
+    expect(linked.folders).toEqual([{ path, imageIds: [a, b] }]);
+  });
+
+  it("adds new files, drops deleted ones, and keeps deselections and manual picks", () => {
+    const record: CustomBackgroundRecord = {
+      ...sunset,
+      source: {
+        kind: "image",
+        imageIds: [d, a],
+        rotationMinutes: 10,
+        order: "sequential",
+        transition: "fade",
+      },
+      folders: [{ path, imageIds: [a, b, c] }],
+    };
+    const synced = syncBackgroundFolder(record, { path, imageIds: [b, c] });
+    // `a` left the folder, `b` stays deselected, `d` was picked by hand.
+    expect(imageIds(synced)).toEqual([d]);
+
+    const grown = syncBackgroundFolder(synced, { path, imageIds: [b, c, a] });
+    expect(imageIds(grown)).toEqual([d, a]);
+    expect(grown.source.kind === "image" && grown.source.rotationMinutes).toBe(10);
+  });
+
+  it("empties the playlist when the folder's last picture goes", () => {
+    const record = syncBackgroundFolder(
+      { ...empty, folders: [{ path, imageIds: [] }] },
+      { path, imageIds: [a] },
+    );
+    expect(syncBackgroundFolder(record, { path, imageIds: [] }).source).toEqual({ kind: "none" });
   });
 });
