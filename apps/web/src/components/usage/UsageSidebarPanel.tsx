@@ -212,14 +212,20 @@ export function UsageSidebarPanel() {
         const spend = spendFor(kind);
         if (!hasSpend(spend)) return [];
         const presentation = PROVIDER_PRESENTATION[kind];
-        const Mark = presentation.mark;
         return [
           {
             key: kind,
             label: presentation.label,
             plan: null,
             accountCount: 0,
-            icon: <Mark className="size-4 text-sidebar-foreground/80" aria-hidden />,
+            icon: (
+              <ProviderInstanceIcon
+                driverKind={presentation.driverKind}
+                displayName={presentation.label}
+                className="size-4"
+                iconClassName="size-4 text-sidebar-foreground/80"
+              />
+            ),
             color: presentation.color,
             windows: [],
             spend,
