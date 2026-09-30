@@ -517,8 +517,14 @@ jobs:
     if: needs.prepare.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      runtime_version: ${{ steps.ota.outputs.runtime_version }}
     env:
       APK_PATH: release/T3-Code-${{ needs.prepare.outputs.version }}-android-arm64.apk
+      T3CODE_ANDROID_UPDATE_RELEASES_URL: https://api.github.com/repos/${{ github.repository }}/releases
+      # Server push and over-the-air updates stay off until these are set; see docs/operations/custom-nightly.md.
+      T3CODE_EXPO_PROJECT_ID: ${{ vars.T3CODE_EXPO_PROJECT_ID }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - name: Checkout release commit
         shell: bash
@@ -556,10 +562,7 @@ jobs:
         env:
           CUSTOM_ANDROID_KEYSTORE: ${{ secrets.CUSTOM_ANDROID_KEYSTORE }}
           T3CODE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CUSTOM_ANDROID_KEYSTORE_PASSWORD }}
-          T3CODE_ANDROID_UPDATE_RELEASES_URL: https://api.github.com/repos/${{ github.repository }}/releases
-          # Server push stays off until both are set; see docs/operations/custom-nightly.md.
           CUSTOM_ANDROID_GOOGLE_SERVICES_JSON: ${{ secrets.CUSTOM_ANDROID_GOOGLE_SERVICES_JSON }}
-          T3CODE_EXPO_PROJECT_ID: ${{ vars.T3CODE_EXPO_PROJECT_ID }}
         run: |
           set -euo pipefail
           if [[ -z "$CUSTOM_ANDROID_KEYSTORE" || -z "$T3CODE_ANDROID_KEYSTORE_PASSWORD" ]]; then
@@ -571,6 +574,8 @@ jobs:
           if [[ -n "$CUSTOM_ANDROID_GOOGLE_SERVICES_JSON" ]]; then
             export T3CODE_ANDROID_GOOGLE_SERVICES_FILE="$RUNNER_TEMP/google-services.json"
             printf '%s' "$CUSTOM_ANDROID_GOOGLE_SERVICES_JSON" > "$T3CODE_ANDROID_GOOGLE_SERVICES_FILE"
+            # The update publish must read the same app config as this build.
+            echo "T3CODE_ANDROID_GOOGLE_SERVICES_FILE=$T3CODE_ANDROID_GOOGLE_SERVICES_FILE" >> "$GITHUB_ENV"
           fi
           mkdir -p release
           scripts/build-custom-android-apk.sh \
@@ -588,6 +593,35 @@ jobs:
           "$build_tools/apksigner" verify --print-certs "$APK_PATH" \
             | grep -F 'certificate SHA-256 digest: c4dec69aca9c6c1da72b2bf83d506222359bf69067ca34dec29c88603ab0df20'
 
+      - name: Setup EAS
+        if: env.EXPO_TOKEN != '' && env.T3CODE_EXPO_PROJECT_ID != ''
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          # npm, not pnpm: this only installs eas-cli into the action's own
+          # tool dir, and pnpm 11 hard-fails that install on dtrace-provider's
+          # ignored build script (no allowBuilds config outside the repo).
+          packager: npm
+
+      # A failed publish still ships the APK; the release then lacks the
+      # runtime marker, so phones are offered the APK instead.
+      - name: Publish over-the-air update
+        id: ota
+        if: env.EXPO_TOKEN != '' && env.T3CODE_EXPO_PROJECT_ID != ''
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_version="$(
+            scripts/publish-custom-android-update.sh \
+              "${{ needs.prepare.outputs.version }}" \
+              "${{ needs.prepare.outputs.android_version_code }}" \
+              "$APK_PATH" \
+              "${{ needs.prepare.outputs.release_name }}"
+          )"
+          echo "runtime_version=$runtime_version" >> "$GITHUB_OUTPUT"
+
       - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
@@ -603,6 +637,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+      RUNTIME_VERSION: ${{ needs.android.outputs.runtime_version }}
     steps:
       - name: Download APK
         uses: actions/download-artifact@v8
@@ -619,4 +654,8 @@ jobs:
           notes_file="$RUNNER_TEMP/release-notes.md"
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$notes_file"
           printf '\n<!-- android-version-code: %s -->\n' "${{ needs.prepare.outputs.android_version_code }}" >> "$notes_file"
+          # Phones on this runtime take the release over the air, so the app skips its APK.
+          if [[ -n "$RUNTIME_VERSION" ]]; then
+            printf '<!-- android-runtime-version: %s -->\n' "$RUNTIME_VERSION" >> "$notes_file"
+          fi
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$notes_file"

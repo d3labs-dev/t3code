@@ -59,11 +59,21 @@ Install the `-x64.exe` from a release and accept the SmartScreen prompt; the ins
 
 ## Android app
 
-Install the `-android-arm64.apk` from a release. It installs as `com.t3tools.t3code.preview` under the name D3 Code, next to the Play Store app and local development builds. Its Clerk sign-in callback is already allowlisted, so T3 Connect works. It never takes Expo over-the-air updates.
+Install the `-android-arm64.apk` from a release. It installs as `com.t3tools.t3code.preview` under the name D3 Code, next to the Play Store app and local development builds. Its Clerk sign-in callback is already allowlisted, so T3 Connect works. It never takes upstream's over-the-air updates.
 
 Its launcher icon shows the same cat mood as the Mac Dock, counting a thread as seen once you open it on the phone. The icon changes only when you leave the app, and the launcher can take several seconds to redraw it.
 
 The app checks the fork's releases at launch and after 15 minutes in the background, and offers newer APKs. **Settings > About > Check for updates** checks on demand. Android asks to confirm every install; the first update also asks to allow D3 Code to install unknown apps.
+
+### Over-the-air updates
+
+Once the fork's Expo project is configured (see Agent notifications below) and `EXPO_TOKEN` holds an Expo access token for its account, each build also publishes its JavaScript to the project's `custom-nightly` channel. A phone whose installed APK has the same native code downloads it at launch and switches to it the next time the app goes to the background, with no install prompt. The release notes then carry an `android-runtime-version` marker, and the app skips offering that release's APK to phones on that runtime. A build that changes native code has a new runtime, so phones are offered its APK as before.
+
+```bash
+gh secret set EXPO_TOKEN --body <expo-access-token>
+```
+
+The Expo project's slug must be `t3-code`, the slug in `app.config.ts`, or `eas update` refuses to publish. The runtime fingerprint leaves out the version name and code (`apps/mobile/fingerprint.config.cjs`), which change on every build. A failed publish does not block the release: it ships without the marker, so phones are offered the APK.
 
 ### Agent notifications
 

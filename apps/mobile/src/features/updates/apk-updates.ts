@@ -1,6 +1,7 @@
 import Constants from "expo-constants";
 import { Directory, File, Paths } from "expo-file-system";
 import * as IntentLauncher from "expo-intent-launcher";
+import * as Updates from "expo-updates";
 import { useSyncExternalStore } from "react";
 import { Alert, AppState, Platform } from "react-native";
 
@@ -27,7 +28,13 @@ export type ApkUpdateState =
   | { readonly status: "downloading"; readonly release: ApkRelease; readonly percent: number }
   | { readonly status: "installing"; readonly release: ApkRelease };
 
-const config = Platform.OS === "android" ? resolveApkUpdateConfig(Constants.expoConfig) : null;
+const config =
+  Platform.OS === "android"
+    ? resolveApkUpdateConfig({
+        expoConfig: Constants.expoConfig,
+        runtimeVersion: Updates.isEnabled ? Updates.runtimeVersion : null,
+      })
+    : null;
 const downloadDirectory = new Directory(Paths.cache, "apk-updates");
 const APK_MIME_TYPE = "application/vnd.android.package-archive";
 const FLAG_GRANT_READ_URI_PERMISSION = 1;
@@ -69,7 +76,7 @@ function isBusy(current: ApkUpdateState): boolean {
 
 /**
  * Checks at launch and after the app returns from a long backgrounding, with
- * the same cadence as the over-the-air check it replaces in these builds.
+ * the same cadence as the over-the-air check.
  */
 export function startApkUpdateChecks(): void {
   if (!config || automaticChecksStarted) return;
@@ -102,10 +109,7 @@ export async function checkForApkUpdate(trigger: "automatic" | "manual"): Promis
       headers: { Accept: "application/vnd.github+json" },
     });
     if (!response.ok) throw new Error(`GitHub responded with HTTP ${response.status}.`);
-    return findNewerApkRelease(
-      decodeGitHubReleases(await response.json()),
-      config.installedVersionCode,
-    );
+    return findNewerApkRelease(decodeGitHubReleases(await response.json()), config.installed);
   });
 
   if (result._tag === "Failure") {

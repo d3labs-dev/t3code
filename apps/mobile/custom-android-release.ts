@@ -2,12 +2,16 @@ import type { ExpoConfig } from "expo/config";
 
 // Google Play's ceiling; Android itself accepts any positive 32-bit integer.
 const MAX_ANDROID_VERSION_CODE = 2_100_000_000;
+// .github/workflows/custom-nightly.yml publishes to this channel.
+const CUSTOM_UPDATE_CHANNEL = "custom-nightly";
 
 /**
  * Gives the D3 Code (preview) build its mood launcher icons, and turns the
  * build into this fork's sideloaded Android release when
  * `T3CODE_ANDROID_UPDATE_RELEASES_URL` points at the GitHub releases API
- * listing its APKs. Lives outside app.config.ts so upstream merges stay clean.
+ * listing its APKs. Once `T3CODE_EXPO_PROJECT_ID` names the fork's Expo
+ * project, that release also takes over-the-air updates from it. Lives outside
+ * app.config.ts so upstream merges stay clean.
  */
 function withSideloadedRelease(
   baseConfig: ExpoConfig,
@@ -41,11 +45,20 @@ function withSideloadedRelease(
     throw new Error("T3CODE_ANDROID_VERSION_NAME is required for a custom Android release.");
   }
 
+  const expoProjectId = env.T3CODE_EXPO_PROJECT_ID?.trim();
+  // Upstream's over-the-air bundles must never replace the fork's JavaScript,
+  // so updates come from the fork's own Expo project or not at all.
+  const { owner: _upstreamOwner, ...forkConfig } = config;
   return {
-    ...config,
+    ...forkConfig,
     version: versionName,
-    // Upstream's over-the-air bundles must never replace the fork's JavaScript.
-    updates: { ...config.updates, enabled: false },
+    updates: expoProjectId
+      ? {
+          ...config.updates,
+          url: `https://u.expo.dev/${expoProjectId}`,
+          requestHeaders: { "expo-channel-name": CUSTOM_UPDATE_CHANNEL },
+        }
+      : { ...config.updates, enabled: false },
     android: {
       ...config.android,
       versionCode,
@@ -54,7 +67,11 @@ function withSideloadedRelease(
         "android.permission.REQUEST_INSTALL_PACKAGES",
       ],
     },
-    extra: { ...config.extra, apkUpdates: { releasesUrl } },
+    extra: {
+      ...config.extra,
+      apkUpdates: { releasesUrl },
+      eas: { ...config.extra?.eas, projectId: expoProjectId ?? config.extra?.eas?.projectId },
+    },
   };
 }
 
