@@ -209,18 +209,17 @@ export function UsagePage() {
     setPreferences(nextPreferences);
     saveUsagePagePreferences(nextPreferences);
   };
-  const refreshLimits = async (automatic = false, afterPending = false) => {
+  const refreshLimits = async (afterPending = false) => {
     try {
       await Promise.all(
         Array.from(presentations, ([environmentId, presentation]) => {
           if (selectedEnvironmentIds !== null && !selectedEnvironmentIds.has(environmentId)) return;
           if (presentation.connection.phase === "connected" && presentation.serverConfig !== null) {
-            return refreshUsageLimits(
+            return refreshUsageLimits({
               environmentId,
-              () => refreshProviders({ environmentId, input: {} }),
-              automatic,
+              refresh: () => refreshProviders({ environmentId, input: {} }),
               afterPending,
-            );
+            });
           }
         }),
       );
@@ -282,23 +281,6 @@ export function UsagePage() {
       setIsRefreshing(false);
     });
   };
-  const connectedLimitsEnvironments = [...presentations]
-    .filter(
-      ([environmentId, presentation]) =>
-        presentation.connection.phase === "connected" &&
-        presentation.serverConfig !== null &&
-        (selectedEnvironmentIds === null || selectedEnvironmentIds.has(environmentId)),
-    )
-    .map(([environmentId]) => environmentId)
-    .sort()
-    .join(",");
-  const autoRefreshLimits = useEffectEvent(() => {
-    void refreshLimits(true);
-  });
-  useEffect(() => {
-    if (showingLimits && connectedLimitsEnvironments) autoRefreshLimits();
-  }, [showingLimits, connectedLimitsEnvironments]);
-
   const windowLabel =
     isPast24Hours && window.sinceTime !== undefined && window.untilTime !== undefined
       ? `${formatDateTimeShort(window.sinceTime, window.timeZone)} to ${formatDateTimeShort(window.untilTime, window.timeZone)}`
@@ -464,7 +446,7 @@ export function UsagePage() {
                       environments={cursorAccessEnvironments}
                       onEnabled={() => {
                         void refresh();
-                        void refreshLimits(false, true);
+                        void refreshLimits(true);
                       }}
                     />
                   ) : null
@@ -526,7 +508,7 @@ export function UsagePage() {
                             showEnvironment={selectedEnvironments.length > 1}
                             onEnabled={() => {
                               void refresh();
-                              void refreshLimits(false, true);
+                              void refreshLimits(true);
                             }}
                           />
                         );

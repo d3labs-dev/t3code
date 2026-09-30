@@ -47,37 +47,37 @@ export function cursorKeychainAccessEnvironments<
     : environments.filter((environment) => environment.needsCursorKeychainAccess);
 }
 
-const limitsRefreshAfter = new Map<EnvironmentId, number>();
 const limitsRefreshes = new Map<EnvironmentId, Promise<unknown>>();
 
-export async function refreshUsageLimits<A>(
-  environmentId: EnvironmentId,
-  refresh: () => Promise<A>,
-  automatic = false,
+/**
+ * Manually re-probes an environment's providers. Overlapping calls share the
+ * running probe; `afterPending` waits it out and probes again, for changes the
+ * running probe cannot have seen. The server re-probes on its own interval,
+ * which restarts after this.
+ */
+export async function refreshUsageLimits<A>({
+  environmentId,
+  refresh,
   afterPending = false,
-): Promise<A | undefined> {
+}: {
+  environmentId: EnvironmentId;
+  refresh: () => Promise<A>;
+  afterPending?: boolean;
+}): Promise<A> {
   const pending = limitsRefreshes.get(environmentId);
   if (pending !== undefined) {
-    if (afterPending) {
-      try {
-        await pending;
-      } catch {
-        // The new check still needs to run if the earlier one failed.
-      }
-      return refreshUsageLimits(environmentId, refresh, false, true);
+    if (!afterPending) return (await pending) as A;
+    try {
+      await pending;
+    } catch {
+      // The new check still needs to run if the earlier one failed.
     }
-    // Manual refresh waits for the current check; automatic refresh does not repeat it.
-    return automatic ? undefined : ((await pending) as A);
+    return refreshUsageLimits({ environmentId, refresh, afterPending: true });
   }
-  const refreshAfter = limitsRefreshAfter.get(environmentId) ?? 0;
-  // @effect-diagnostics-next-line globalDate:off
-  if (automatic && Date.now() < refreshAfter) return;
   const current = Promise.resolve()
     .then(refresh)
     .finally(() => {
       limitsRefreshes.delete(environmentId);
-      // @effect-diagnostics-next-line globalDate:off
-      limitsRefreshAfter.set(environmentId, Date.now() + 2 * 60_000);
     });
   limitsRefreshes.set(environmentId, current);
   return await current;

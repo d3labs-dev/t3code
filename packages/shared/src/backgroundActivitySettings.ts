@@ -25,7 +25,7 @@ const PRESET_SETTINGS: Record<BackgroundActivityProfile, ResolvedBackgroundActiv
   performance: {
     profile: "performance",
     automaticGitFetchInterval: Duration.seconds(15),
-    providerHealthRefreshInterval: Duration.minutes(1),
+    providerHealthRefreshInterval: DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL,
     hostPowerMonitorActiveInterval: Duration.seconds(30),
     hostPowerMonitorIdleInterval: Duration.minutes(2),
     idleClientTtl: Duration.seconds(45),
@@ -49,7 +49,7 @@ const PRESET_SETTINGS: Record<BackgroundActivityProfile, ResolvedBackgroundActiv
   "battery-saver": {
     profile: "battery-saver",
     automaticGitFetchInterval: Duration.seconds(0),
-    providerHealthRefreshInterval: Duration.minutes(15),
+    providerHealthRefreshInterval: DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL,
     hostPowerMonitorActiveInterval: Duration.minutes(1),
     hostPowerMonitorIdleInterval: Duration.minutes(10),
     idleClientTtl: Duration.seconds(45),

@@ -89,10 +89,9 @@ the bar show each account's quota, countdown, and credits. Tap a row to open its
 The same account signed in on more than one environment, or reported by a hub as well, counts once.
 Filter with the environment dropdown to see what a single machine has.
 
-Opening Limits checks the selected connected environments automatically. Each client waits at
-least two minutes between automatic checks of an environment, including after a failed check.
-Opening the usage sidebar refreshes spending and checks limits with the same cooldown.
-If a window still looks stale, refresh Limits to re-check every provider and hub.
+Limits update in the background every five minutes while T3 is open; opening Limits or the usage
+sidebar shows the latest reading without checking again. If a window looks stale, refresh Limits
+to re-check every provider and hub now; the next background check then waits another five minutes.
 
 Pick `/usage-limits` from the composer's command menu, or send it as a message, to check the
 current model's limits without leaving the conversation. The result opens above the composer and

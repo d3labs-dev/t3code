@@ -230,7 +230,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
           Effect.orElseSucceed(() => DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL),
         );
 
-  const refreshIntervalChanges = yield* Queue.sliding<void>(1);
+  const restartRefreshTimer = yield* Queue.sliding<void>(1);
   if (input.refreshInterval === undefined) {
     const serverSettingsChanges = yield* serverSettings.subscribeChanges;
     yield* serverSettingsChanges.pipe(
@@ -240,7 +240,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
         ),
       ),
       Stream.changes,
-      Stream.runForEach(() => Queue.offer(refreshIntervalChanges, undefined).pipe(Effect.asVoid)),
+      Stream.runForEach(() => Queue.offer(restartRefreshTimer, undefined).pipe(Effect.asVoid)),
       Effect.forkScoped,
     );
   }
@@ -252,14 +252,14 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
   yield* Effect.forever(
     getRefreshInterval.pipe(
       Effect.flatMap((refreshInterval) =>
-        // @effect-diagnostics-next-line raceFirstWithSleepToTimeout:off - races the interval against a settings-change signal, not a timeout
+        // @effect-diagnostics-next-line raceFirstWithSleepToTimeout:off - races the interval against a restart signal, not a timeout
         Effect.raceFirst(
           Effect.sleep(
             Duration.toMillis(Duration.fromInputUnsafe(refreshInterval)) <= 0
               ? "60 seconds"
               : refreshInterval,
           ).pipe(Effect.as(true)),
-          Queue.take(refreshIntervalChanges).pipe(Effect.as(false)),
+          Queue.take(restartRefreshTimer).pipe(Effect.as(false)),
         ).pipe(
           Effect.flatMap((intervalElapsed) =>
             input.refreshOnInterval !== false &&
@@ -286,7 +286,12 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
   return {
     resolveMaintenance: input.resolveMaintenance,
     getSnapshot: Ref.get(snapshotStateRef).pipe(Effect.map((state) => state.snapshot)),
-    refresh: refreshSnapshot().pipe(Effect.tapError(Effect.logError), Effect.orDie),
+    // An on-demand probe counts as the interval's probe, so the timer restarts.
+    refresh: refreshSnapshot().pipe(
+      Effect.tap(() => Queue.offer(restartRefreshTimer, undefined)),
+      Effect.tapError(Effect.logError),
+      Effect.orDie,
+    ),
     applyUsageLimits,
     get streamChanges() {
       return Stream.fromPubSub(changesPubSub);

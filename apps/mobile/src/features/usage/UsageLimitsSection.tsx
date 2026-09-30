@@ -16,7 +16,7 @@ import {
   paceOf,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
-import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { refreshUsageLimits } from "@t3tools/client-runtime/state/usage";
 import { Alert, Pressable, View } from "react-native";
 
@@ -274,16 +274,14 @@ export function ResetCredits(props: {
 
 /**
  * Re-probes every provider (and usage-limit source) on each connected
- * environment; the fresh snapshots then arrive over the config stream.
- * Countdowns and pace anchor to `now` rather than ticking, so a refresh also
- * re-anchors the clock: quota and elapsed time move together, or not at all.
+ * environment on request; the fresh snapshots then arrive over the config
+ * stream, as they do after the server's own interval probes. Countdowns and
+ * pace anchor to `now` rather than ticking, so showing the tab (`reanchor`)
+ * or refreshing re-anchors the clock.
  * Environments whose probe failed are named, since their rows keep showing
  * the previous quota with nothing else to say so.
  */
-export function useRefreshLimits(
-  selectedEnvironmentIds: ReadonlySet<EnvironmentId> | null = null,
-  active = false,
-) {
+export function useRefreshLimits(selectedEnvironmentIds: ReadonlySet<EnvironmentId> | null = null) {
   const presentations = useAtomValue(environmentPresentations.presentationsAtom);
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
@@ -294,7 +292,7 @@ export function useRefreshLimits(
   const [failedEnvironments, setFailedEnvironments] = useState<
     readonly { environmentId: EnvironmentId; label: string }[]
   >([]);
-  const refresh = async (automatic = false, afterPending = false) => {
+  const refresh = async (afterPending = false) => {
     const connected = [...presentations].filter(
       ([environmentId, presentation]) =>
         presentation.connection.phase === "connected" &&
@@ -303,13 +301,11 @@ export function useRefreshLimits(
     try {
       await Promise.all(
         connected.map(async ([environmentId, presentation]) => {
-          const result = await refreshUsageLimits(
+          const result = await refreshUsageLimits({
             environmentId,
-            () => refreshProviders({ environmentId, input: {} }),
-            automatic,
+            refresh: () => refreshProviders({ environmentId, input: {} }),
             afterPending,
-          );
-          if (result === undefined) return;
+          });
           setFailedEnvironments((previous) => [
             ...previous.filter((failed) => failed.environmentId !== environmentId),
             ...(result._tag === "Failure"
@@ -335,19 +331,6 @@ export function useRefreshLimits(
       setRefreshing(false);
     }
   };
-  const connectedLimitsEnvironments = [...presentations]
-    .filter(
-      ([environmentId, presentation]) =>
-        presentation.connection.phase === "connected" &&
-        (selectedEnvironmentIds === null || selectedEnvironmentIds.has(environmentId)),
-    )
-    .map(([environmentId]) => environmentId)
-    .sort()
-    .join(",");
-  const autoRefreshLimits = useEffectEvent(() => refresh(true));
-  useEffect(() => {
-    if (active && connectedLimitsEnvironments) void autoRefreshLimits();
-  }, [active, connectedLimitsEnvironments]);
 
   const failedLabels = failedEnvironments
     .filter(
@@ -360,6 +343,7 @@ export function useRefreshLimits(
     refreshing,
     failedLabels,
     refresh: refreshManually,
-    refreshAfterEnable: () => refresh(false, true),
+    refreshAfterEnable: () => refresh(true),
+    reanchor: () => setNow(Date.now()),
   };
 }

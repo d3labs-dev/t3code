@@ -20,28 +20,6 @@ export interface SubscriptionUsageSnapshot {
 // Snapshots expire after 15 minutes; background refresh needs a
 // separate authenticated transport while the mobile app is suspended.
 const SNAPSHOT_MAX_AGE = 15 * 60_000;
-export const WIDGET_REFRESH_INTERVAL = 5 * 60_000;
-
-/** Bound probes across config updates, reconnects, and foreground transitions. */
-export function createWidgetRefresher<Id>(refresh: (id: Id) => Promise<unknown>) {
-  const attempted = new Map<Id, number>();
-  const pending = new Set<Id>();
-  return async (connected: readonly Id[], now: number) => {
-    await Promise.allSettled(
-      connected.map(async (id) => {
-        if (pending.has(id) || now - (attempted.get(id) ?? -Infinity) < WIDGET_REFRESH_INTERVAL)
-          return;
-        attempted.set(id, now);
-        pending.add(id);
-        try {
-          await refresh(id);
-        } finally {
-          pending.delete(id);
-        }
-      }),
-    );
-  };
-}
 
 function subscriptionUsageProps(
   accounts: readonly LimitAccount[],

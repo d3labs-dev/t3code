@@ -44,7 +44,7 @@ import { PROVIDER_ORDER, PROVIDER_PRESENTATION, usageKindForDriver } from "./usa
 import { useSidebarPanelStore } from "../sidebar/sidebarPanelStore";
 
 const COST_WINDOW_DAYS = 30;
-const OPEN_REFRESH_COOLDOWN_MS = 2 * 60_000;
+const OPEN_REFRESH_COOLDOWN_MS = 3 * 60_000;
 const spendingRefreshAfter = new Map<EnvironmentId, number>();
 
 interface Spend {
@@ -104,15 +104,14 @@ export function UsageSidebarPanel() {
   const refreshingRef = useRef(false);
   const { merged, refresh } = useUsage(window);
 
-  const refreshLimits = async (automatic: boolean) => {
+  const refreshLimits = async () => {
     await Promise.all(
       Array.from(presentations, ([environmentId, presentation]) =>
         presentation.connection.phase === "connected" && presentation.serverConfig !== null
-          ? refreshUsageLimits(
+          ? refreshUsageLimits({
               environmentId,
-              () => refreshProviders({ environmentId, input: {} }),
-              automatic,
-            )
+              refresh: () => refreshProviders({ environmentId, input: {} }),
+            })
           : undefined,
       ),
     ).finally(() => {
@@ -149,9 +148,12 @@ export function UsageSidebarPanel() {
       if (nextWindow.sinceDay !== window.sinceDay || nextWindow.untilDay !== window.untilDay) {
         setWindow(nextWindow);
       }
-      await Promise.all([refreshLimits(automatic), refresh(nextWindow)]).finally(() => {
-        refreshingRef.current = false;
-      });
+      // Limits arrive with the server's own provider probes; opening only rescans spending.
+      await Promise.all([automatic ? undefined : refreshLimits(), refresh(nextWindow)]).finally(
+        () => {
+          refreshingRef.current = false;
+        },
+      );
     });
   };
 

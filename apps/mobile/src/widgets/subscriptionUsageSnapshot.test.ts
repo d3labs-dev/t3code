@@ -5,11 +5,9 @@ import {
   UsageLimitSourceId,
   type ServerProvider,
 } from "@t3tools/contracts";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import {
   buildSubscriptionUsageSnapshot,
-  createWidgetRefresher,
-  WIDGET_REFRESH_INTERVAL,
   subscriptionUsageTimeline,
 } from "./subscriptionUsageSnapshot";
 
@@ -280,38 +278,5 @@ describe("subscription widget snapshots", () => {
     const snapshot = buildSubscriptionUsageSnapshot(input, deepLink);
     expect(snapshot.providers[0]?.detail).toBe("Subscription remaining");
     expect(snapshot.providers[0]?.windows[0]?.remaining).toBe(20);
-  });
-});
-
-describe("widget refresh probes", () => {
-  it("throttles each connected environment independently and retries failures", async () => {
-    const probe = vi
-      .fn<(id: string) => Promise<void>>()
-      .mockRejectedValueOnce(new Error("offline"))
-      .mockResolvedValue(undefined);
-    const refresh = createWidgetRefresher(probe);
-    await refresh([], now);
-    expect(probe).not.toHaveBeenCalled();
-    await refresh(["first"], now);
-    await refresh(["first", "second"], now + 1);
-    expect(probe.mock.calls).toEqual([["first"], ["second"]]);
-    await refresh(["first"], now + WIDGET_REFRESH_INTERVAL);
-    expect(probe.mock.calls).toEqual([["first"], ["second"], ["first"]]);
-  });
-
-  it("does not overlap a slow probe even after the refresh interval", async () => {
-    let finish!: () => void;
-    const probe = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finish = resolve;
-        }),
-    );
-    const refresh = createWidgetRefresher(probe);
-    const first = refresh(["one", "one"], now);
-    await refresh(["one"], now + WIDGET_REFRESH_INTERVAL);
-    expect(probe).toHaveBeenCalledTimes(1);
-    finish();
-    await first;
   });
 });

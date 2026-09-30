@@ -6,7 +6,6 @@ const state = vi.hoisted(() => ({
   cursor: 0,
   presentations: new Map(),
   refreshProviders: vi.fn(),
-  autoRefresh: async () => {},
   refreshingRef: { current: false },
 }));
 vi.mock("react", () => ({
@@ -24,10 +23,6 @@ vi.mock("react", () => ({
   },
   useRef: () => state.refreshingRef,
   useEffect: () => {},
-  useEffectEvent: (callback: () => Promise<void>) => {
-    state.autoRefresh = callback;
-    return callback;
-  },
 }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => state.presentations }));
 vi.mock("react-native", () => ({ Alert: {}, Pressable: "button", View: "div" }));
@@ -71,11 +66,10 @@ it("keeps a newer environment failure when an older refresh finishes", async () 
     [a, presentation("A")],
     [b, presentation("B")],
   ]);
-  read();
-  await state.autoRefresh();
-  expect(read().failedLabels).toEqual(["B"]);
+  const second = read().refreshAfterEnable();
+  await vi.waitFor(() => expect(read().failedLabels).toEqual(["B"]));
   pending.resolve({ _tag: "Success" });
-  await first;
+  await Promise.all([first, second]);
   expect(read().failedLabels).toEqual(["B"]);
 });
 
@@ -104,10 +98,9 @@ it("does not let an older multi-environment batch clear a newer failure for the 
         ? aFirst.promise
         : Promise.resolve({ _tag: "Failure" }),
   );
-  read();
-  const older = state.autoRefresh();
+  const older = read().refreshAfterEnable();
   aFirst.resolve({ _tag: "Success" });
-  await refreshUsageLimits(a, () => aFirst.promise);
+  await refreshUsageLimits({ environmentId: a, refresh: () => aFirst.promise });
   const selected = new Set([a]);
   await read(selected).refresh();
   expect(read(selected).failedLabels).toEqual(["A"]);
