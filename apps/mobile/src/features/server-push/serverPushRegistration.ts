@@ -41,7 +41,7 @@ export function unregisterServerPushDevice(environmentId: EnvironmentId): Promis
 }
 
 const connectedSessions = Stream.unwrap(
-  EnvironmentSupervisor.pipe(
+  EnvironmentSupervisor.EnvironmentSupervisor.pipe(
     Effect.map((supervisor) => SubscriptionRef.changes(supervisor.session)),
   ),
 ).pipe(Stream.filter(Option.isSome));
@@ -56,7 +56,7 @@ export const serverPushRegistrationLayer = Layer.effectDiscard(
   Effect.gen(function* () {
     const projectId = serverPushExpoProjectId();
     if (projectId === null) return;
-    const registry = yield* EnvironmentRegistry;
+    const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
     const storage = yield* MobileStorage.MobileStorage;
     const preferencesStore = yield* MobilePreferencesStore;
     const context = yield* Effect.context<never>();
