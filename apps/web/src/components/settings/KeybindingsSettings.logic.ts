@@ -25,24 +25,24 @@ const usageCommandOrder = new Map<KeybindingCommand, number>(
   ].map((command, index) => [command, index]),
 );
 
-const usageCommandAnchor = METRIC_OPTIONS[0].command;
+const firstUsageCommand = METRIC_OPTIONS[0].command;
 
 /**
- * Sorts commands by `name`, except the Usage page's commands, which sort as one
- * block in page order where the first of them would. Keeping this transitive
- * makes the order independent of the input order.
+ * Orders commands by `key`, except Usage page commands, which sort as one
+ * block in page order where the first of them would sort. A total order, so
+ * adding a binding elsewhere cannot reshuffle the Usage rows.
  */
 function compareCommands(
   left: KeybindingCommand,
   right: KeybindingCommand,
-  name: (command: KeybindingCommand) => string,
+  key: (command: KeybindingCommand) => string,
 ): number {
-  const leftIndex = usageCommandOrder.get(left);
-  const rightIndex = usageCommandOrder.get(right);
-  const nameCompare = name(leftIndex === undefined ? left : usageCommandAnchor).localeCompare(
-    name(rightIndex === undefined ? right : usageCommandAnchor),
+  const leftRank = usageCommandOrder.get(left);
+  const rightRank = usageCommandOrder.get(right);
+  if (leftRank !== undefined && rightRank !== undefined) return leftRank - rightRank;
+  return key(leftRank === undefined ? left : firstUsageCommand).localeCompare(
+    key(rightRank === undefined ? right : firstUsageCommand),
   );
-  return nameCompare !== 0 ? nameCompare : (leftIndex ?? -1) - (rightIndex ?? -1);
 }
 
 export type KeybindingSource = "Default" | "Custom" | "Project";
@@ -235,7 +235,7 @@ export function buildKeybindingRows(
   });
 
   rowsWithConflicts.sort((left, right) => {
-    const commandCompare = compareCommands(left.command, right.command, String);
+    const commandCompare = compareCommands(left.command, right.command, (command) => command);
     if (commandCompare !== 0) return commandCompare;
     return left.key.localeCompare(right.key);
   });
@@ -368,6 +368,7 @@ function normalizeShortcutKeyToken(key: string): string | null {
   return null;
 }
 
+/** Turns a keydown into a binding such as `mod+shift+k` or `tab`. Null for modifier-only presses. */
 export function keybindingFromKeyboardEvent(
   event: Pick<KeyboardEvent, "key" | "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
   platform: string,
@@ -385,9 +386,6 @@ export function keybindingFromKeyboardEvent(
   }
   if (event.altKey) parts.push("alt");
   if (event.shiftKey) parts.push("shift");
-  if (parts.length === 0) {
-    return null;
-  }
   parts.push(keyToken);
   return parts.join("+");
 }
