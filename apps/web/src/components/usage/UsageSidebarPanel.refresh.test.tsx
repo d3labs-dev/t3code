@@ -97,7 +97,7 @@ it("reopening within the two minute cooldown does not refresh", async () => {
         </StrictMode>,
       );
     });
-    expect(state.refreshProviders).toHaveBeenCalledTimes(opening === 3 ? 2 : 1);
+    expect(state.refreshProviders).not.toHaveBeenCalled();
     expect(state.refreshUsage).toHaveBeenCalledTimes(opening === 3 ? 2 : 1);
     await act(() => renderer.unmount());
   }
@@ -113,9 +113,9 @@ it("waits for connection and does not refresh on ordinary renders", async () => 
   expect(state.refreshUsage).not.toHaveBeenCalled();
   state.presentations = new Map([[id, presentation]]);
   await act(() => renderer.update(<UsageSidebarPanel />));
-  expect(state.refreshProviders).toHaveBeenCalledTimes(1);
+  expect(state.refreshProviders).not.toHaveBeenCalled();
   expect(state.refreshUsage).toHaveBeenCalledTimes(1);
   await act(() => renderer.update(<UsageSidebarPanel />));
-  expect(state.refreshProviders).toHaveBeenCalledTimes(1);
+  expect(state.refreshProviders).not.toHaveBeenCalled();
   expect(state.refreshUsage).toHaveBeenCalledTimes(1);
 });

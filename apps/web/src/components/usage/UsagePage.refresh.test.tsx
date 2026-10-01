@@ -194,10 +194,10 @@ it("uses the current time when returning to limits from tokens", async () => {
   expect(
     JSON.stringify(renderer.toJSON(), (key, value) => (key === "props" ? undefined : value)),
   ).toContain("in 1h 0m");
-  expect(state.refreshProviders).toHaveBeenCalledTimes(2);
+  expect(state.refreshProviders).not.toHaveBeenCalled();
 });
 
-it("refreshes once on opening Limits and suppresses rapid returns and remounts", async () => {
+it("does not probe limits on opening Limits, on returns, or on remounts", async () => {
   state.metric = "tokens";
   await act(() => {
     renderer = create(
@@ -206,13 +206,11 @@ it("refreshes once on opening Limits and suppresses rapid returns and remounts",
       </StrictMode>,
     );
   });
-  expect(state.refreshProviders).not.toHaveBeenCalled();
   const selectMetric = (metric: string) =>
     renderer.root
       .findAll((node) => node.type === "div" && node.props["aria-label"] === "Usage metric")[0]!
       .props.onValueChange([metric]);
   await act(() => selectMetric("limits"));
-  expect(state.refreshProviders).toHaveBeenCalledTimes(1);
   await act(() => selectMetric("tokens"));
   await act(() => selectMetric("limits"));
   await act(() => renderer.unmount());
@@ -224,61 +222,5 @@ it("refreshes once on opening Limits and suppresses rapid returns and remounts",
       </StrictMode>,
     );
   });
-  expect(state.refreshProviders).toHaveBeenCalledTimes(1);
-  await act(() => selectMetric("tokens"));
-  vi.mocked(Date.now).mockReturnValue(Date.parse("2026-09-11T12:05:00Z"));
-  await act(() => selectMetric("limits"));
-  expect(state.refreshProviders).toHaveBeenCalledTimes(2);
-});
-
-it("waits for connection and refreshes new environments during a slow refresh", async () => {
-  const [id, presentation] = [...state.presentations][0]!;
-  state.presentations = new Map([[id, { ...presentation, connection: { phase: "disconnected" } }]]);
-  await act(() => {
-    renderer = create(<UsagePage />);
-  });
   expect(state.refreshProviders).not.toHaveBeenCalled();
-  let finishRefresh!: () => void;
-  state.refreshProviders.mockImplementationOnce(
-    () =>
-      new Promise<undefined>((resolve) => {
-        finishRefresh = () => resolve(undefined);
-      }),
-  );
-  state.presentations = new Map([[id, presentation]]);
-  await act(() => renderer.update(<UsagePage />));
-  expect(state.refreshProviders).toHaveBeenCalledTimes(1);
-  const nextId = EnvironmentId.make(`${id}-next`);
-  state.presentations = new Map([...state.presentations, [nextId, presentation]]);
-  await act(() => renderer.update(<UsagePage />));
-  expect(state.refreshProviders).toHaveBeenCalledTimes(2);
-  expect(state.refreshProviders).toHaveBeenLastCalledWith({ environmentId: nextId, input: {} });
-  await act(() => finishRefresh());
-});
-
-it("keeps manual refresh busy until the already-running automatic check settles", async () => {
-  let finishRefresh!: () => void;
-  const pending = new Promise<undefined>((resolve) => {
-    finishRefresh = () => resolve(undefined);
-  });
-  state.refreshProviders.mockImplementationOnce(() => pending);
-  await act(() => {
-    renderer = create(<UsagePage />);
-  });
-  const button = () =>
-    renderer.root.findAll(
-      (node) => node.type === "button" && node.props["aria-label"] === "Refresh limits",
-    )[0]!;
-  expect(state.refreshProviders).toHaveBeenCalledTimes(1);
-  await act(() => button().props.onClick());
-  try {
-    expect(button().props["aria-busy"]).toBe(true);
-    expect(state.refreshProviders).toHaveBeenCalledTimes(1);
-  } finally {
-    await act(async () => {
-      finishRefresh();
-      await pending;
-    });
-  }
-  expect(button().props["aria-busy"]).toBe(false);
 });

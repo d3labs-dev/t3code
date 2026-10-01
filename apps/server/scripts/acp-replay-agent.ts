@@ -56,9 +56,11 @@ let nextAgentRequestId = 1;
 const pendingClientRequestIds = new Map<string, string | number>();
 const pendingAgentRequestMethods = new Map<string, string>();
 
+// Renamed into place so the test harness never reads a truncated, half-written file.
 function writeStatus(failure?: unknown): void {
+  const pendingPath = `${replayStatusPath}.${process.pid}.tmp`;
   NodeFS.writeFileSync(
-    replayStatusPath,
+    pendingPath,
     JSON.stringify({
       scenario: transcript.scenario,
       cursor,
@@ -67,6 +69,7 @@ function writeStatus(failure?: unknown): void {
     }),
     "utf8",
   );
+  NodeFS.renameSync(pendingPath, replayStatusPath);
 }
 
 function stableStringify(value: unknown): string {

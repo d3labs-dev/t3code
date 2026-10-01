@@ -231,7 +231,7 @@ const readSavedDevices = (baseDir: string) =>
     ),
   );
 
-describe.sequential("ServerPush", () => {
+describe("ServerPush", () => {
   it.effect("pushes the card and alerts to a phone, and drops it once Expo says it is gone", () =>
     Effect.scoped(
       Effect.gen(function* () {
