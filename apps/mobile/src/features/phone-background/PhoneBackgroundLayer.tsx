@@ -5,11 +5,10 @@ import { StyleSheet, View } from "react-native";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import {
   usePhoneBackgroundImage,
-  usePhonePictureTone,
+  usePhonePictureMeasure,
   useShownPhoneBackground,
 } from "./phoneBackground";
 import { fadeOverlayGradient } from "./phoneBackground.logic";
-import { phonePictureFile } from "./phonePictures";
 
 // The desktop's slide transition length, so a rotation looks the same on both.
 const FADE_TRANSITION = { duration: 1400, effect: "cross-dissolve" } as const;
@@ -24,10 +23,11 @@ export function PhoneBackgroundLayer() {
   const background = useShownPhoneBackground();
   const { phoneBackdropColor, themeAppearance } = useAppearancePreferences();
   const record = background?.record ?? null;
-  const image = usePhoneBackgroundImage(record?.source ?? null);
-  const tone = usePhonePictureTone(image.current);
+  const image = usePhoneBackgroundImage();
+  const current = record === null ? null : image.current;
+  const tone = usePhonePictureMeasure(current?.uri ?? null)?.tone;
   // Measured ahead so the next picture arrives with its own look already known.
-  usePhonePictureTone(image.upcoming);
+  usePhonePictureMeasure(record === null ? null : (image.upcoming?.uri ?? null));
   if (record === null || phoneBackdropColor === null) return null;
   const look = tone ? adaptToBrightness({ ...record, tone, appearance: themeAppearance }) : record;
 
@@ -37,9 +37,9 @@ export function PhoneBackgroundLayer() {
       className="absolute inset-0"
       style={{ backgroundColor: phoneBackdropColor }}
     >
-      {image.current !== null ? (
+      {current !== null ? (
         <Image
-          source={{ uri: phonePictureFile(image.current).uri }}
+          source={{ uri: current.uri }}
           style={[StyleSheet.absoluteFill, { opacity: look.opacity / 100 }]}
           contentFit="cover"
           contentPosition="center"

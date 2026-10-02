@@ -60,7 +60,7 @@ export function PhoneBackgroundQuickAdjust() {
           <View className="flex-row items-center justify-between px-5 pb-1 pt-4">
             <Text className="flex-1 text-lg font-t3-medium text-foreground">Background</Text>
             <View className="mr-3">
-              <PhoneBackgroundStepButtons source={background.record.source} />
+              <PhoneBackgroundStepButtons />
             </View>
             <Pressable
               accessibilityRole="button"

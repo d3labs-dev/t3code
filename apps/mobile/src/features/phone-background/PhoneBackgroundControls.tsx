@@ -1,6 +1,5 @@
 import {
   type CustomBackgroundRecord,
-  type CustomBackgroundSource,
   MAX_CUSTOM_BACKGROUND_FADE,
   MIN_CUSTOM_BACKGROUND_FADE,
 } from "@t3tools/contracts";
@@ -9,7 +8,11 @@ import { Pressable, View } from "react-native";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { FontSizeSliderRow as SliderRow } from "../settings/appearance/components/FontSizeSliderRow";
-import { useStepPhoneBackground, useUpdatePhoneBackground } from "./phoneBackground";
+import {
+  usePhonePlaylist,
+  useStepPhoneBackground,
+  useUpdatePhoneBackground,
+} from "./phoneBackground";
 
 // Material draws a tick per step, so percentages move in fives.
 const PERCENT_STEP = 5;
@@ -67,9 +70,10 @@ function StepButton(props: { readonly direction: 1 | -1; readonly onPress: () =>
 }
 
 /** Previous and next picture buttons; nothing while there is one picture or none. */
-export function PhoneBackgroundStepButtons(props: { readonly source: CustomBackgroundSource }) {
+export function PhoneBackgroundStepButtons() {
   const step = useStepPhoneBackground();
-  if (props.source.kind !== "image" || props.source.imageIds.length < 2) return null;
+  const playlist = usePhonePlaylist();
+  if (playlist === null || playlist.pictures.size < 2) return null;
   return (
     <View className="flex-row gap-2">
       <StepButton direction={-1} onPress={() => step(-1)} />

@@ -86,9 +86,30 @@ function withServerPush(
     : config;
 }
 
+/**
+ * Lets the phone background follow a device folder. Photos only: the plugin
+ * declares READ_MEDIA_IMAGES for them and READ_MEDIA_VISUAL_USER_SELECTED for
+ * Android 14's selected-photos access.
+ */
+function withFolderBackgrounds(config: ExpoConfig): ExpoConfig {
+  return {
+    ...config,
+    plugins: [
+      ...(config.plugins ?? []),
+      [
+        "expo-media-library",
+        {
+          photosPermission: "Allow $(PRODUCT_NAME) to show photos from a folder as its background.",
+          granularPermissions: ["photo"],
+        },
+      ],
+    ],
+  };
+}
+
 export function withCustomAndroidRelease(
   config: ExpoConfig,
   env: Readonly<Record<string, string | undefined>>,
 ): ExpoConfig {
-  return withServerPush(withSideloadedRelease(config, env), env);
+  return withServerPush(withSideloadedRelease(withFolderBackgrounds(config), env), env);
 }

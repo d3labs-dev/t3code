@@ -5,8 +5,11 @@ import { getMobileThemeRuntimeVariables } from "../../lib/mobileThemeVariables";
 import {
   fadeOverlayGradient,
   phoneBackgroundThemeVariables,
+  phoneBackgroundWithFolder,
+  phoneBackgroundWithoutFolder,
   phoneBackgroundWithoutPicture,
   phoneBackgroundWithPictures,
+  phonePlaylist,
   sourceColorFromPixels,
   toneFromPixels,
 } from "./phoneBackground.logic";
@@ -135,6 +138,39 @@ describe("editing the shared phone playlist", () => {
     expect(one?.record.source).toMatchObject({ imageIds: ["a".repeat(64)] });
     expect(one?.sourceColors).toEqual({});
     expect(phoneBackgroundWithoutPicture(one!, "a".repeat(64))).toBeNull();
+  });
+
+  it("starts a playlist from a folder alone and clears it when the folder is unlinked", () => {
+    const started = phoneBackgroundWithFolder(null, "camera", "2026-09-23T00:00:00.000Z");
+    expect(started.record.source).toMatchObject({ kind: "image", imageIds: [] });
+    expect(started.record.folders).toEqual([{ path: "camera", imageIds: [] }]);
+    expect(phoneBackgroundWithFolder(started, "camera", "later")).toBe(started);
+    expect(phoneBackgroundWithoutFolder(started, "camera")).toBeNull();
+  });
+
+  it("keeps the background while a folder or a picture is still in it", () => {
+    const linked = phoneBackgroundWithFolder(background, "camera", "2026-09-23T00:00:00.000Z");
+    const folderOnly = phoneBackgroundWithoutPicture(linked, "a".repeat(64));
+    expect(folderOnly?.record.source).toMatchObject({ imageIds: [], rotationMinutes: 10 });
+    expect(phoneBackgroundWithoutFolder(linked, "camera")?.record.folders).toEqual([]);
+  });
+
+  it("rotates through the phone's pictures, then each folder's photos as read", () => {
+    const linked = phoneBackgroundWithFolder(background, "camera", "2026-09-23T00:00:00.000Z");
+    const playlist = phonePlaylist({
+      background: linked,
+      pictureUri: (imageId) => `file:///stored/${imageId}.webp`,
+      folderPictures: (albumId) =>
+        albumId === "camera" ? [{ id: "41", uri: "file:///DCIM/Camera/41.jpg" }] : [],
+    });
+    expect(playlist.source).toMatchObject({
+      imageIds: ["a".repeat(64), "41"],
+      rotationMinutes: 10,
+    });
+    expect(playlist.pictures.get("41")?.uri).toBe("file:///DCIM/Camera/41.jpg");
+    expect(playlist.pictures.get("a".repeat(64))?.uri).toBe(
+      `file:///stored/${"a".repeat(64)}.webp`,
+    );
   });
 
   it("scores a seed only from opaque pixels", () => {

@@ -101,21 +101,24 @@ export async function pickPhonePictures(): Promise<ReadonlyArray<AddedPicture>> 
   return pictures;
 }
 
+export interface PictureMeasure {
+  readonly tone: PictureTone | null;
+  readonly sourceColor: number | null;
+}
+
 /**
- * Measured from the stored file on first use, like the desktop, so pictures
- * added before brightness adapt existed get a tone too. Null when unreadable.
+ * Measured on first use, like the desktop, so folder photos and pictures added
+ * before brightness adapt existed get a tone and colors too. Null when unreadable.
  */
-export async function measurePhonePictureTone(
-  imageId: CustomBackgroundImageId,
-): Promise<PictureTone | null> {
+export async function measurePhonePicture(uri: string): Promise<PictureMeasure | null> {
   try {
     const manipulator = await import("expo-image-manipulator");
-    const source = await manipulator.ImageManipulator.manipulate(
-      phonePictureFile(imageId).uri,
-    ).renderAsync();
+    const source = await manipulator.ImageManipulator.manipulate(uri).renderAsync();
     try {
       const pixels = await samplePixels(manipulator, source);
-      return pixels ? toneFromPixels(pixels) : null;
+      return pixels
+        ? { tone: toneFromPixels(pixels), sourceColor: sourceColorFromPixels(pixels) }
+        : null;
     } finally {
       source.release();
     }

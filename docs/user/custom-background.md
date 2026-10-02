@@ -81,6 +81,12 @@ Wallpaper**. **Add photos** picks pictures from the phone's library; tap a pictu
 The pictures stay on the phone, so the background works with any computer, or none. It shows
 behind home and threads, cropped to fill the screen.
 
+**Sync a folder** follows a folder on the phone, such as Camera or Screenshots, instead of
+copying pictures: photos added to it join the rotation and deleted ones drop out, whenever the
+picture changes or you return to the app. It needs access to all photos; with Android's
+**Allow limited access**, a folder shows only the photos you selected. Tap a synced folder to
+stop syncing it.
+
 The same screen sets how often the pictures change, their order, and whether they fade or cut,
 plus the bottom fade, picture opacity, and background blur. **Bubbles behind agent replies** sets each reply on a
 translucent bubble so it stays readable over bright pictures; it starts on, and **Bubble

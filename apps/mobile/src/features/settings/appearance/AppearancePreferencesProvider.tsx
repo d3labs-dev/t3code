@@ -44,7 +44,7 @@ import {
   type MobileThemeRuntimeState,
 } from "../../../lib/mobileThemeRuntime";
 import {
-  usePhoneBackgroundImage,
+  usePhoneBackgroundSourceColor,
   useShownPhoneBackground,
 } from "../../phone-background/phoneBackground";
 import { phoneBackgroundThemeVariables } from "../../phone-background/phoneBackground.logic";
@@ -134,9 +134,7 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
     return { light: resolve("light"), dark: resolve("dark") };
   }, [themeIds, systemColorPalettes]);
   const phoneBackground = useShownPhoneBackground();
-  const phoneImage = usePhoneBackgroundImage(
-    phoneBackground?.dynamicTheme ? phoneBackground.record.source : null,
-  );
+  const phoneSourceColor = usePhoneBackgroundSourceColor(phoneBackground);
   const phoneTheme = useMemo(
     () =>
       phoneBackground === null
@@ -144,12 +142,9 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
         : phoneBackgroundThemeVariables({
             variables: themeVariablesByAppearance[themeAppearance],
             appearance: themeAppearance,
-            sourceColor:
-              phoneImage.current === null
-                ? null
-                : (phoneBackground.sourceColors[phoneImage.current] ?? null),
+            sourceColor: phoneSourceColor,
           }),
-    [phoneBackground, phoneImage.current, themeAppearance, themeVariablesByAppearance],
+    [phoneBackground, phoneSourceColor, themeAppearance, themeVariablesByAppearance],
   );
   const themeVariables = phoneTheme?.variables ?? themeVariablesByAppearance[themeAppearance];
   const activeThemeName = getMobileUniwindThemeName(themeId, themeAppearance);

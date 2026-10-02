@@ -369,7 +369,8 @@ export const CustomBackgroundTransition = Schema.String.pipe(
 
 export const CustomBackgroundImageSource = Schema.Struct({
   kind: Schema.Literal("image"),
-  imageIds: Schema.Array(CustomBackgroundImageId).check(Schema.isMinLength(1)),
+  /** Empty only on the phone, while every picture comes from its linked folders. */
+  imageIds: Schema.Array(CustomBackgroundImageId),
   rotationMinutes: CustomBackgroundRotationMinutes.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_CUSTOM_BACKGROUND_ROTATION_MINUTES)),
   ),
@@ -417,9 +418,11 @@ const RetiredCustomBackgroundFilter = Schema.Struct({
 );
 
 /**
- * A folder on the desktop whose pictures the playlist follows. `imageIds` is
- * what the folder held at its last sync, so a picture the user deselected is
- * told apart from one newly added to the folder.
+ * A folder whose pictures the playlist follows. On the desktop, `path` is the
+ * folder's path and `imageIds` is what it held at its last sync, so a picture
+ * the user deselected is told apart from one newly added to the folder. On the
+ * phone, `path` is a media library album ID and `imageIds` stays empty: the
+ * phone reads the album each time it rotates instead of copying its photos.
  */
 export const CustomBackgroundFolder = Schema.Struct({
   path: TrimmedNonEmptyString,

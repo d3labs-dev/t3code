@@ -1,23 +1,20 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import type {
-  CustomBackgroundImageId,
-  CustomBackgroundSource,
-  PhoneBackground,
-} from "@t3tools/contracts";
-import type { PictureTone } from "@t3tools/shared/customBackgroundBrightness";
+import type { CustomBackgroundSource, PhoneBackground } from "@t3tools/contracts";
 import {
   currentBackgroundImageId,
-  nextBackgroundRotationAt,
   upcomingBackgroundImageId,
 } from "@t3tools/shared/customBackgroundRotation";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
+import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
 import type { PhoneBackgroundQuickAdjustPosition } from "../../persistence/mobile-preferences";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { measurePhonePictureTone } from "./phonePictures";
+import { phonePlaylist, type PhonePlaylistPicture } from "./phoneBackground.logic";
+import { appForegroundSignal, type PhoneFolderRead, readPhoneFolder } from "./phoneFolders";
+import { measurePhonePicture, type PictureMeasure, phonePictureFile } from "./phonePictures";
 
 const DEFAULT_QUICK_ADJUST_POSITION: PhoneBackgroundQuickAdjustPosition = { x: 0, y: 0.45 };
 
@@ -80,7 +77,71 @@ export function useShownPhoneBackground(): PhoneBackground | null {
   return usePhoneBackgroundEnabled() ? background : null;
 }
 
-const NO_SOURCE: CustomBackgroundSource = { kind: "none" };
+const phoneFolderAtom = Atom.family((albumId: string) =>
+  Atom.make((get) => {
+    get(appForegroundSignal);
+    get(rotationClockAtom);
+    return Effect.promise(() => readPhoneFolder(albumId));
+  }).pipe(Atom.withLabel(`phone-background-folder:${albumId}`)),
+);
+
+const rotationMinutesAtom = Atom.make((get) => {
+  const source = get(phoneBackgroundAtom)?.record.source;
+  return source?.kind === "image" ? source.rotationMinutes : null;
+}).pipe(Atom.withLabel("phone-background-rotation-minutes"));
+
+/**
+ * Wall-clock time, moved forward at each rotation boundary. Linked folders are
+ * read again on every tick and whenever the app returns to the foreground.
+ */
+const rotationClockAtom = Atom.make((get) => {
+  const minutes = get(rotationMinutesAtom);
+  if (minutes === null) return Date.now();
+  const interval = minutes * 60_000;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const schedule = () => {
+    const wakeAt = (Math.floor(Date.now() / interval) + 1) * interval;
+    timer = setTimeout(
+      () => {
+        get.setSelf(Math.max(Date.now(), wakeAt));
+        schedule();
+      },
+      Math.max(0, wakeAt - Date.now()),
+    );
+  };
+  schedule();
+  get.addFinalizer(() => clearTimeout(timer));
+  return Date.now();
+}).pipe(Atom.withLabel("phone-background-rotation-clock"));
+
+const phoneFolderReadAtom = Atom.family((albumId: string) =>
+  Atom.make((get): PhoneFolderRead | null =>
+    Option.getOrNull(AsyncResult.value(get(phoneFolderAtom(albumId)))),
+  ),
+);
+
+const phonePlaylistAtom = Atom.make((get) => {
+  const background = get(phoneBackgroundAtom);
+  if (background === null) return null;
+  return phonePlaylist({
+    background,
+    pictureUri: (imageId) => phonePictureFile(imageId).uri,
+    folderPictures: (albumId) => {
+      const read = get(phoneFolderReadAtom(albumId));
+      return read?.status === "read" ? read.pictures : [];
+    },
+  });
+}).pipe(Atom.withLabel("phone-background-playlist"));
+
+/** The phone's pictures plus its linked folders' photos; null while it has no background. */
+export function usePhonePlaylist() {
+  return useAtomValue(phonePlaylistAtom);
+}
+
+/** A linked folder's last read; null until the first read lands. */
+export function usePhoneFolderRead(albumId: string): PhoneFolderRead | null {
+  return useAtomValue(phoneFolderReadAtom(albumId));
+}
 
 // Manual previous/next steps, like the desktop's: in memory only, so a restart
 // lands back on the wall clock every client shares.
@@ -96,36 +157,42 @@ export function useStepPhoneBackground(): (delta: 1 | -1) => void {
   return useCallback((delta) => setOffset(offset + delta), [offset, setOffset]);
 }
 
+const NO_SOURCE: CustomBackgroundSource = { kind: "none" };
+
 /** The picture showing now and the next one, on the same wall clock the desktop rotates by. */
-export function usePhoneBackgroundImage(source: CustomBackgroundSource | null) {
-  const rotation = source ?? NO_SOURCE;
+export function usePhoneBackgroundImage(): {
+  readonly current: PhonePlaylistPicture | null;
+  readonly upcoming: PhonePlaylistPicture | null;
+} {
+  const playlist = useAtomValue(phonePlaylistAtom);
+  const now = useAtomValue(rotationClockAtom);
   const offset = useAtomValue(rotationOffsetAtom);
-  const [now, setNow] = useState(Date.now);
-  const wakeAt = nextBackgroundRotationAt(rotation, now);
-  useEffect(() => {
-    if (wakeAt === null) return;
-    const timer = setTimeout(
-      () => setNow(Math.max(Date.now(), wakeAt)),
-      Math.max(0, wakeAt - Date.now()),
-    );
-    return () => clearTimeout(timer);
-  }, [wakeAt]);
+  const source = playlist?.source ?? NO_SOURCE;
+  const picture = (id: string | null) =>
+    id === null ? null : (playlist?.pictures.get(id) ?? null);
   return {
-    current: currentBackgroundImageId(rotation, now, offset),
-    upcoming: upcomingBackgroundImageId(rotation, now, offset),
+    current: picture(currentBackgroundImageId(source, now, offset)),
+    upcoming: picture(upcomingBackgroundImageId(source, now, offset)),
   };
 }
 
-const pictureToneAtom = Atom.family((imageId: CustomBackgroundImageId | null) =>
+const pictureMeasureAtom = Atom.family((uri: string | null) =>
   Atom.make(
-    imageId === null
-      ? Effect.succeed(null)
-      : Effect.promise(() => measurePhonePictureTone(imageId)),
-  ).pipe(Atom.keepAlive, Atom.withLabel(`phone-background-tone:${imageId}`)),
+    uri === null ? Effect.succeed(null) : Effect.promise(() => measurePhonePicture(uri)),
+  ).pipe(Atom.keepAlive, Atom.withLabel(`phone-background-measure:${uri}`)),
 );
 
-/** The picture's tone for brightness adapt; null while it measures or when it cannot. */
-export function usePhonePictureTone(imageId: CustomBackgroundImageId | null): PictureTone | null {
-  const tone = useAtomValue(pictureToneAtom(imageId));
-  return AsyncResult.isSuccess(tone) ? tone.value : null;
+/** The picture's tone and colors; null while it measures or when it cannot. */
+export function usePhonePictureMeasure(uri: string | null): PictureMeasure | null {
+  const measure = useAtomValue(pictureMeasureAtom(uri));
+  return AsyncResult.isSuccess(measure) ? measure.value : null;
+}
+
+/** The showing picture's Material seed when colors come from pictures. */
+export function usePhoneBackgroundSourceColor(background: PhoneBackground | null): number | null {
+  const { current } = usePhoneBackgroundImage();
+  const dynamic = background?.dynamicTheme === true ? current : null;
+  const measure = usePhonePictureMeasure(dynamic?.uri ?? null);
+  if (!background || dynamic === null) return null;
+  return background.sourceColors[dynamic.id] ?? measure?.sourceColor ?? null;
 }

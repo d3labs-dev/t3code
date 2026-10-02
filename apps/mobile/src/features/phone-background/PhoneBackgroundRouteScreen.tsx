@@ -27,6 +27,7 @@ import {
   usePhoneBackground,
   usePhoneBackgroundEnabled,
   usePhoneBackgroundQuickAdjust,
+  usePhonePlaylist,
   useUpdatePhoneBackground,
 } from "./phoneBackground";
 import {
@@ -35,6 +36,7 @@ import {
 } from "./phoneBackground.logic";
 import { deletePhonePicture, phonePictureFile, pickPhonePictures } from "./phonePictures";
 import { PhoneBackgroundLookSliders, PhoneBackgroundStepButtons } from "./PhoneBackgroundControls";
+import { PhoneBackgroundFolders } from "./PhoneBackgroundFolders";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 
@@ -122,6 +124,7 @@ function PicturesSection(props: { readonly background: PhoneBackground | null })
   const [busy, setBusy] = useState(false);
   const source = props.background?.record.source;
   const imageIds = source?.kind === "image" ? source.imageIds : [];
+  const pictureCount = usePhonePlaylist()?.pictures.size ?? 0;
 
   const addPictures = () => {
     setBusy(true);
@@ -173,7 +176,7 @@ function PicturesSection(props: { readonly background: PhoneBackground | null })
           <SettingsSwitchRow
             icon="photo"
             label="Show behind home and threads"
-            subtitle={`${imageIds.length} ${imageIds.length === 1 ? "picture" : "pictures"}`}
+            subtitle={`${pictureCount} ${pictureCount === 1 ? "picture" : "pictures"}`}
             value={enabled}
             onValueChange={(phoneBackgroundEnabled) => savePreferences({ phoneBackgroundEnabled })}
           />
@@ -209,12 +212,14 @@ function PicturesSection(props: { readonly background: PhoneBackground | null })
         disabled={busy}
         onPress={addPictures}
       />
+      <PhoneBackgroundFolders background={props.background} />
     </SettingsSection>
   );
 }
 
 function RotationSection(props: { readonly source: CustomBackgroundImageSource }) {
   const update = useUpdatePhoneBackground();
+  const pictureCount = usePhonePlaylist()?.pictures.size ?? 0;
   const setSource = (change: Partial<CustomBackgroundImageSource>) =>
     update((background) =>
       background.record.source.kind === "image"
@@ -226,7 +231,7 @@ function RotationSection(props: { readonly source: CustomBackgroundImageSource }
     );
   return (
     <SettingsSection title="Rotation">
-      {props.source.imageIds.length < 2 ? (
+      {pictureCount < 2 ? (
         <View className="px-4 pt-3">
           <Text className="text-sm text-foreground-muted">
             Add another picture to rotate through them. These settings apply once you do.
@@ -234,7 +239,7 @@ function RotationSection(props: { readonly source: CustomBackgroundImageSource }
         </View>
       ) : (
         <SettingsControlRow icon="photo" label="Showing now">
-          <PhoneBackgroundStepButtons source={props.source} />
+          <PhoneBackgroundStepButtons />
         </SettingsControlRow>
       )}
       <ChoiceRow

@@ -11,6 +11,8 @@ import {
   type CustomBackgroundImageId,
   DEFAULT_CUSTOM_BACKGROUND_BRIGHTNESS_ADAPT,
   DEFAULT_CUSTOM_BACKGROUND_ROTATION_MINUTES,
+  type CustomBackgroundImageSource,
+  type CustomBackgroundSource,
   type PhoneBackground,
 } from "@t3tools/contracts";
 import type { PictureTone } from "@t3tools/shared/customBackgroundBrightness";
@@ -156,17 +158,24 @@ export interface AddedPicture {
   readonly sourceColor: number | null;
 }
 
-/** Appends pictures, starting the playlist when the phone has none yet. */
-export function phoneBackgroundWithPictures(
-  current: PhoneBackground | null,
-  pictures: ReadonlyArray<AddedPicture>,
-  createdAt: string,
-): PhoneBackground {
-  const base: PhoneBackground = current ?? {
+function imageSource(
+  imageIds: ReadonlyArray<CustomBackgroundImageId>,
+): CustomBackgroundImageSource {
+  return {
+    kind: "image",
+    imageIds,
+    rotationMinutes: DEFAULT_CUSTOM_BACKGROUND_ROTATION_MINUTES,
+    order: "sequential",
+    transition: "fade",
+  };
+}
+
+function emptyPhoneBackground(createdAt: string): PhoneBackground {
+  return {
     record: {
       id: "phone",
       name: "Phone photos",
-      source: { kind: "none" },
+      source: imageSource([]),
       folders: [],
       filter: { kind: "none" },
       ...PHONE_BACKGROUND_LOOK,
@@ -177,27 +186,45 @@ export function phoneBackgroundWithPictures(
     dynamicTheme: true,
     sourceColors: {},
   };
-  const source = base.record.source;
-  const existing = source.kind === "image" ? source.imageIds : [];
-  const imageIds = [
-    ...existing,
-    ...new Set(pictures.map((picture) => picture.imageId).filter((id) => !existing.includes(id))),
-  ];
+}
+
+function pickedImageIds(background: PhoneBackground): ReadonlyArray<CustomBackgroundImageId> {
+  const source = background.record.source;
+  return source.kind === "image" ? source.imageIds : [];
+}
+
+function withImageIds(
+  background: PhoneBackground,
+  imageIds: ReadonlyArray<CustomBackgroundImageId>,
+): PhoneBackground {
+  const source = background.record.source;
   return {
-    ...base,
+    ...background,
     record: {
-      ...base.record,
-      source:
-        source.kind === "image"
-          ? { ...source, imageIds }
-          : {
-              kind: "image",
-              imageIds,
-              rotationMinutes: DEFAULT_CUSTOM_BACKGROUND_ROTATION_MINUTES,
-              order: "sequential",
-              transition: "fade",
-            },
+      ...background.record,
+      source: source.kind === "image" ? { ...source, imageIds } : imageSource(imageIds),
     },
+  };
+}
+
+/** The background left over, or null once it has no pictures and no folders. */
+function unlessEmpty(background: PhoneBackground): PhoneBackground | null {
+  return pickedImageIds(background).length === 0 && background.record.folders.length === 0
+    ? null
+    : background;
+}
+
+/** Appends pictures, starting the playlist when the phone has none yet. */
+export function phoneBackgroundWithPictures(
+  current: PhoneBackground | null,
+  pictures: ReadonlyArray<AddedPicture>,
+  createdAt: string,
+): PhoneBackground {
+  const base = current ?? emptyPhoneBackground(createdAt);
+  const existing = pickedImageIds(base);
+  const added = pictures.map((picture) => picture.imageId).filter((id) => !existing.includes(id));
+  return {
+    ...withImageIds(base, [...existing, ...new Set(added)]),
     sourceColors: {
       ...base.sourceColors,
       ...Object.fromEntries(
@@ -209,18 +236,78 @@ export function phoneBackgroundWithPictures(
   };
 }
 
-/** Drops one picture; removing the last one clears the background. */
+/** Drops one picture; removing the last one, with no folder linked, clears the background. */
 export function phoneBackgroundWithoutPicture(
   current: PhoneBackground,
   imageId: CustomBackgroundImageId,
 ): PhoneBackground | null {
-  const source = current.record.source;
-  const imageIds = source.kind === "image" ? source.imageIds.filter((id) => id !== imageId) : [];
-  if (source.kind !== "image" || imageIds.length === 0) return null;
   const { [imageId]: _removed, ...sourceColors } = current.sourceColors;
-  return {
-    ...current,
-    record: { ...current.record, source: { ...source, imageIds } },
+  return unlessEmpty({
+    ...withImageIds(
+      current,
+      pickedImageIds(current).filter((id) => id !== imageId),
+    ),
     sourceColors,
+  });
+}
+
+/** Links a device folder by its media library album ID, starting the playlist when needed. */
+export function phoneBackgroundWithFolder(
+  current: PhoneBackground | null,
+  albumId: string,
+  createdAt: string,
+): PhoneBackground {
+  const base = current ?? emptyPhoneBackground(createdAt);
+  const folders = base.record.folders;
+  if (folders.some((folder) => folder.path === albumId)) return base;
+  const linked = withImageIds(base, pickedImageIds(base));
+  return {
+    ...linked,
+    record: { ...linked.record, folders: [...folders, { path: albumId, imageIds: [] }] },
+  };
+}
+
+/** Unlinks a folder; unlinking the last one, with no pictures added, clears the background. */
+export function phoneBackgroundWithoutFolder(
+  current: PhoneBackground,
+  albumId: string,
+): PhoneBackground | null {
+  return unlessEmpty({
+    ...current,
+    record: {
+      ...current.record,
+      folders: current.record.folders.filter((folder) => folder.path !== albumId),
+    },
+  });
+}
+
+export interface PhonePlaylistPicture {
+  readonly id: string;
+  readonly uri: string;
+}
+
+/**
+ * What the phone rotates through: its own pictures, then each linked folder's
+ * photos as last read. Folder photos are keyed by their media library ID.
+ */
+export function phonePlaylist(input: {
+  readonly background: PhoneBackground;
+  readonly pictureUri: (imageId: CustomBackgroundImageId) => string;
+  readonly folderPictures: (albumId: string) => ReadonlyArray<PhonePlaylistPicture>;
+}): {
+  readonly source: CustomBackgroundSource;
+  readonly pictures: ReadonlyMap<string, PhonePlaylistPicture>;
+} {
+  const pictures = new Map<string, PhonePlaylistPicture>();
+  for (const id of pickedImageIds(input.background)) {
+    pictures.set(id, { id, uri: input.pictureUri(id) });
+  }
+  for (const folder of input.background.record.folders) {
+    for (const picture of input.folderPictures(folder.path)) pictures.set(picture.id, picture);
+  }
+  const source = input.background.record.source;
+  return {
+    source: source.kind === "image" ? { ...source, imageIds: [...pictures.keys()] } : source,
+    pictures,
   };
 }
