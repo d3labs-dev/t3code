@@ -90,7 +90,9 @@ button** to get a small button on home and threads that opens the fade, blur, an
 controls in a drawer, so you see each change on the screen behind it.
 
 While a picture's colors theme the app, on the phone or the desktop, the theme cards are hidden,
-since no theme choice would show. Turn off the picture colors to pick a theme again.
+since no theme choice would show. Turn off the picture colors to pick a theme again. On the
+desktop and web, a black-and-white picture has no color to lend, so your selected theme stays
+while it shows.
 
 ## New chats and conversations
 

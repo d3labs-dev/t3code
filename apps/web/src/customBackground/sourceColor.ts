@@ -58,7 +58,21 @@ async function samplePixels(blob: Blob): Promise<number[] | null> {
 export async function sourceColorFromImage(blob: Blob): Promise<number | null> {
   const pixels = await samplePixels(blob);
   if (!pixels) return null;
-  return Score.score(QuantizerCelebi.quantize(pixels, QUANTIZE_BUCKETS))[0] ?? null;
+  return seedFromPixels(pixels);
+}
+
+/**
+ * Score substitutes Google blue when no color clears its chroma cutoff, which
+ * would paint a black-and-white picture's interface blue. Quantized colors are
+ * always opaque, so a transparent fallback marks that case.
+ */
+const UNSCORED = 0;
+
+export function seedFromPixels(pixels: number[]): number | null {
+  const [seed] = Score.score(QuantizerCelebi.quantize(pixels, QUANTIZE_BUCKETS), {
+    fallbackColorARGB: UNSCORED,
+  });
+  return seed === undefined || seed === UNSCORED ? null : seed;
 }
 
 // Material's chroma tops out near 120 for the most saturated sRGB colors.

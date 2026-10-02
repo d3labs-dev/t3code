@@ -41,3 +41,30 @@ it("repaints the sidebar header art in the seed's hue", () => {
     expect(Math.abs(hue(artwork[name]!) - Hct.fromInt(orange).hue), name).toBeLessThan(20);
   }
 });
+
+function tone(color: string): number {
+  return Hct.fromInt(argbFromHex(color)).tone;
+}
+
+it("tints the dark sidebar with a colorful picture's hue", () => {
+  const colors = backgroundThemeColors(TEAL, "dark");
+  expect(Math.abs(hue(colors.sidebar) - Hct.fromInt(TEAL).hue)).toBeLessThan(20);
+  expect(Hct.fromInt(argbFromHex(colors.sidebar)).chroma).toBeGreaterThan(8);
+  expect(tone(colors.sidebar)).toBeGreaterThan(8);
+});
+
+it("lifts a muted picture's sidebar less than a colorful one's", () => {
+  const muted = backgroundThemeColors(argbFromHex("#18171d"), "dark");
+  const colorful = backgroundThemeColors(TEAL, "dark");
+  expect(tone(muted.sidebar)).toBeLessThan(tone(colorful.sidebar) - 2);
+});
+
+it("steps sidebar rows away from the sidebar in both appearances", () => {
+  for (const appearance of ["light", "dark"] as const) {
+    const colors = backgroundThemeColors(TEAL, appearance);
+    const distance = (color: string) => Math.abs(tone(color) - tone(colors.sidebar));
+    expect(distance(colors.sidebarRowHover), appearance).toBeGreaterThan(2);
+    expect(distance(colors.sidebarRowSelected)).toBeGreaterThan(distance(colors.sidebarRowHover));
+    expect(distance(colors.sidebarRowActive)).toBeGreaterThan(distance(colors.sidebarRowSelected));
+  }
+});

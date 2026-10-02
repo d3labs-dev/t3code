@@ -17,13 +17,21 @@ const CONTRAST_LEVEL = 0;
 /** Amber, because Material has no warning role and a warning has to stay a warning. */
 const WARNING_HUE = 80;
 const WARNING_CHROMA = 70;
+/**
+ * Tonal spot's neutrals carry so little chroma that a dark sidebar reads as
+ * black beside the picture. The sidebar takes the seed's hue at up to this
+ * chroma instead, low enough that row text keeps its contrast.
+ */
+const SIDEBAR_MAX_CHROMA = 14;
+/** How far a fully colorful seed moves the sidebar off the end of the tone scale. */
+const SIDEBAR_MAX_LIFT = { dark: 6, light: 3 } as const;
 
 /**
  * Repaints every theme role from one seed color the way Material builds a
  * scheme from a wallpaper. Roles Material names directly are taken as they
  * come; the rest are pulled to an explicit tone so T3's own contrast steps
- * (sidebar darker than canvas, raised surfaces lighter than flat ones)
- * survive the translation.
+ * (raised surfaces lighter than flat ones, sidebar rows stepping off the
+ * sidebar) survive the translation.
  */
 export function backgroundThemeColors(
   sourceColor: number,
@@ -38,6 +46,19 @@ export function backgroundThemeColors(
   };
   const warning = (value: number): string =>
     hexFromArgb(Hct.from(WARNING_HUE, WARNING_CHROMA, value).toInt());
+  // The sidebar is T3's darkest plane in dark mode and its lightest in light
+  // mode. A colorless picture keeps it there; color lifts it toward the canvas.
+  const sidebarChroma = Math.min(SIDEBAR_MAX_CHROMA, scheme.sourceColorHct.chroma);
+  const sidebarLift = SIDEBAR_MAX_LIFT[appearance] * (sidebarChroma / SIDEBAR_MAX_CHROMA);
+  const sidebarBase = dark ? 4 + sidebarLift : 100 - sidebarLift;
+  const sidebarStep = (steps: number): string =>
+    hexFromArgb(
+      Hct.from(
+        scheme.sourceColorHct.hue,
+        sidebarChroma,
+        dark ? sidebarBase + steps : sidebarBase - steps,
+      ).toInt(),
+    );
 
   return {
     canvas: color(Material.surface),
@@ -83,16 +104,14 @@ export function backgroundThemeColors(
     messageActionHover: tone(Material.primary, dark ? 70 : 35),
     codeBackground: color(Material.surfaceContainer),
     codeForeground: color(Material.onSurface),
-    // The sidebar is T3's darkest plane in dark mode and its lightest in
-    // light mode, which is the opposite end of the ladder from the canvas.
-    sidebar: dark ? tone(Material.surface, 4) : color(Material.surfaceContainerLowest),
+    sidebar: sidebarStep(0),
     sidebarForeground: color(Material.onSurface),
     sidebarMutedForeground: color(Material.onSurfaceVariant),
-    sidebarControlSurface: color(Material.surfaceContainerLow),
-    sidebarRowHover: color(Material.surfaceContainerLow),
-    sidebarRowActive: color(Material.surfaceContainerHigh),
-    sidebarRowSelected: color(Material.surfaceContainer),
-    sidebarBorder: tone(Material.surface, dark ? 12 : 88),
+    sidebarControlSurface: sidebarStep(4),
+    sidebarRowHover: sidebarStep(4),
+    sidebarRowActive: sidebarStep(10),
+    sidebarRowSelected: sidebarStep(7),
+    sidebarBorder: sidebarStep(8),
     terminalBackground: color(Material.surface),
     terminalForeground: color(Material.onSurface),
     terminalCursor: color(Material.primary),
