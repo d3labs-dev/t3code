@@ -489,13 +489,19 @@ export const StoredCustomBackgroundRecords = Schema.Array(Schema.Unknown).pipe(
 );
 
 /**
- * The phone's own background, kept in the phone's preferences. Its pictures
- * live in the phone's app storage; `sourceColors` holds each picture's
- * Material seed, scored when the picture was added.
+ * The phone's own backgrounds, kept in the phone's preferences: a library of
+ * playlists like the desktop's, one of them showing. Their pictures live in
+ * the phone's app storage and may be shared between playlists;
+ * `sourceColors` holds each picture's Material seed, scored when it was added.
  */
 export const PhoneBackground = Schema.Struct({
-  record: CustomBackgroundRecord,
+  playlists: Schema.Array(CustomBackgroundRecord).check(Schema.isMinLength(1)),
+  activePlaylistId: CustomBackgroundId,
   dynamicTheme: Schema.Boolean,
   sourceColors: Schema.Record(CustomBackgroundImageId, Schema.Int),
-});
+}).check(
+  Schema.makeFilter((background) =>
+    background.playlists.some((playlist) => playlist.id === background.activePlaylistId),
+  ),
+);
 export type PhoneBackground = typeof PhoneBackground.Type;

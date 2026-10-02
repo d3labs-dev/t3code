@@ -77,15 +77,19 @@ connect to remote environments; other browsers and devices keep their own appear
 ## Phone background
 
 T3 Code Mobile has its own background, set on the phone in **Settings → Appearance →
-Wallpaper**. **Add photos** picks pictures from the phone's library; tap a picture to remove it.
-The pictures stay on the phone, so the background works with any computer, or none. It shows
-behind home and threads, cropped to fill the screen.
+Wallpaper**. The pictures stay on the phone, so the background works with any computer, or
+none. It shows behind home and threads, cropped to fill the screen.
 
-**Sync a folder** follows a folder on the phone, such as Camera or Screenshots, instead of
-copying pictures: photos added to it join the rotation and deleted ones drop out, whenever the
-picture changes or you return to the app. It needs access to all photos; with Android's
-**Allow limited access**, a folder shows only the photos you selected. Tap a synced folder to
-stop syncing it.
+Pictures come in playlists, and one playlist shows at a time. **New playlist from a folder**
+follows a folder on the phone, such as Camera or Screenshots, instead of copying pictures:
+photos added to it join the rotation and deleted ones drop out, whenever the picture changes or
+you return to the app. **New playlist from photos** starts one from pictures you pick. Tap a
+playlist to show it; the quick adjust drawer can switch playlists too. The showing playlist
+can take more photos (**Add photos**) and more folders (**Sync a folder**); tap a picture to
+remove it, or a synced folder to stop syncing it. Each playlist keeps its own rotation and look.
+
+Folders need access to all photos; with Android's **Allow limited access**, a folder shows only
+the photos you selected.
 
 The same screen sets how often the pictures change, their order, and whether they fade or cut,
 plus the bottom fade, picture opacity, and background blur. **Bubbles behind agent replies** sets each reply on a

@@ -17,7 +17,12 @@ import {
   usePhoneBackgroundQuickAdjust,
   usePhoneBackgroundQuickAdjustPosition,
 } from "./phoneBackground";
-import { PhoneBackgroundLookSliders, PhoneBackgroundStepButtons } from "./PhoneBackgroundControls";
+import { activePhonePlaylist } from "./phoneBackground.logic";
+import {
+  PhoneBackgroundLookSliders,
+  PhoneBackgroundStepButtons,
+  PhonePlaylistChips,
+} from "./PhoneBackgroundControls";
 
 const BUTTON_SIZE = 44;
 const EDGE_GAP = 12;
@@ -70,6 +75,7 @@ export function PhoneBackgroundQuickAdjust() {
               <Text className="text-sm font-t3-medium text-foreground">Done</Text>
             </Pressable>
           </View>
+          <PhonePlaylistChips />
           <ScrollView showsVerticalScrollIndicator={false}>
             <SettingsSwitchRow
               icon="photo"
@@ -79,7 +85,7 @@ export function PhoneBackgroundQuickAdjust() {
                 savePreferences({ phoneBackgroundEnabled })
               }
             />
-            <PhoneBackgroundLookSliders record={background.record} />
+            <PhoneBackgroundLookSliders record={activePhonePlaylist(background)} />
           </ScrollView>
         </View>
       </Modal>

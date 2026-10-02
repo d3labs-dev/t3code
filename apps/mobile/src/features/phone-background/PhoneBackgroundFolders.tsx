@@ -1,16 +1,15 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { PhoneBackground } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
+import type { CustomBackgroundRecord } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { useState } from "react";
+import { type ComponentProps, useState } from "react";
 import { Alert, Linking, View } from "react-native";
 
+import type { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
-import { updateMobilePreferencesAtom } from "../../state/preferences";
 import { SettingsActionRow } from "../settings/components/SettingsActionRow";
 import { SettingsRow } from "../settings/components/SettingsRow";
 import { usePhoneFolderRead } from "./phoneBackground";
-import { phoneBackgroundWithFolder, phoneBackgroundWithoutFolder } from "./phoneBackground.logic";
 import {
   appForegroundSignal,
   listPhoneFolders,
@@ -26,7 +25,7 @@ type FolderFlow =
 
 const IDLE: FolderFlow = { step: "idle" };
 
-// Titles for the linked folders; empty while photo access is off.
+// Titles for linked folders; empty while photo access is off.
 const folderTitlesAtom = Atom.make((get) => {
   get(appForegroundSignal);
   return Effect.promise(() =>
@@ -36,6 +35,11 @@ const folderTitlesAtom = Atom.make((get) => {
     ),
   );
 }).pipe(Atom.withLabel("phone-background-folder-titles"));
+
+function usePhoneFolderTitles(): ReadonlyMap<string, string> | null {
+  const titles = useAtomValue(folderTitlesAtom);
+  return AsyncResult.isSuccess(titles) ? titles.value : null;
+}
 
 function photoCount(count: number): string {
   return `${count} ${count === 1 ? "photo" : "photos"}`;
@@ -64,25 +68,53 @@ function LinkedFolderRow(props: {
 }
 
 /**
- * Device folders the playlist follows. Their photos are read in place each
- * time the background rotates, so additions and deletions show up on their own.
+ * The folders a playlist follows. Their photos are read in place each time the
+ * background rotates, so additions and deletions show up on their own.
  */
-export function PhoneBackgroundFolders(props: { readonly background: PhoneBackground | null }) {
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
-  const titlesResult = useAtomValue(folderTitlesAtom);
-  const titles = AsyncResult.isSuccess(titlesResult) ? titlesResult.value : null;
-  const [flow, setFlow] = useState<FolderFlow>(IDLE);
-  const linked = props.background?.record.folders.map((folder) => folder.path) ?? [];
+export function PhoneLinkedFolders(props: {
+  readonly playlist: CustomBackgroundRecord;
+  readonly onUnlink: (albumId: string) => void;
+}) {
+  const titles = usePhoneFolderTitles();
+  const confirmUnlink = (albumId: string) =>
+    Alert.alert(
+      "Stop syncing this folder?",
+      "Its photos leave this playlist and stay on the phone.",
+      [
+        { style: "cancel", text: "Cancel" },
+        { style: "destructive", text: "Stop syncing", onPress: () => props.onUnlink(albumId) },
+      ],
+    );
+  return props.playlist.folders.map((folder) => (
+    <LinkedFolderRow
+      key={folder.path}
+      albumId={folder.path}
+      title={titles?.get(folder.path)}
+      onUnlink={() => confirmUnlink(folder.path)}
+    />
+  ));
+}
 
-  const syncFolder = async () => {
+/**
+ * A row that asks for photo access, then lists the phone's folders in place to
+ * pick one. Access is asked for through expo-media-library, since on Android
+ * 13+ expo-image-picker's request reports "granted" without asking.
+ */
+export function PhoneFolderChooser(props: {
+  readonly icon: ComponentProps<typeof SymbolView>["name"];
+  readonly label: string;
+  readonly exclude: ReadonlyArray<string>;
+  readonly onChoose: (folder: PhoneFolder) => void;
+}) {
+  const [flow, setFlow] = useState<FolderFlow>(IDLE);
+
+  const chooseFolder = async () => {
     setFlow({ step: "asking" });
     const access = await requestPhoneFolderAccess();
     switch (access) {
-      case "granted": {
-        const folders = await listPhoneFolders();
-        setFlow({ step: "choosing", folders });
+      case "granted":
+        setFlow({ step: "choosing", folders: await listPhoneFolders() });
         return;
-      }
       case "limited":
         setFlow({ step: "limited" });
         return;
@@ -93,7 +125,7 @@ export function PhoneBackgroundFolders(props: { readonly background: PhoneBackgr
           "A synced folder is read from your photos. Allow access to choose one.",
           [
             { style: "cancel", text: "Not now" },
-            { text: "Ask again", onPress: () => void startSync() },
+            { text: "Ask again", onPress: () => void start() },
           ],
         );
         return;
@@ -110,8 +142,8 @@ export function PhoneBackgroundFolders(props: { readonly background: PhoneBackgr
         return;
     }
   };
-  const startSync = () =>
-    syncFolder().catch((error: unknown) => {
+  const start = () =>
+    chooseFolder().catch((error: unknown) => {
       setFlow(IDLE);
       Alert.alert(
         "Could not read your folders",
@@ -119,96 +151,59 @@ export function PhoneBackgroundFolders(props: { readonly background: PhoneBackgr
       );
     });
 
-  const link = (folder: PhoneFolder) => {
-    setFlow(IDLE);
-    savePreferences({
-      transform: (current) => ({
-        phoneBackground: phoneBackgroundWithFolder(
-          current.phoneBackground ?? null,
-          folder.id,
-          new Date().toISOString(),
-        ),
-      }),
-    });
-  };
-  const confirmUnlink = (albumId: string) => {
-    Alert.alert(
-      "Stop syncing this folder?",
-      "Its photos leave the rotation and stay on the phone.",
-      [
-        { style: "cancel", text: "Cancel" },
-        {
-          style: "destructive",
-          text: "Stop syncing",
-          onPress: () =>
-            savePreferences({
-              transform: (current) => ({
-                phoneBackground: current.phoneBackground
-                  ? phoneBackgroundWithoutFolder(current.phoneBackground, albumId)
-                  : null,
-              }),
-            }),
-        },
-      ],
+  if (flow.step === "choosing") {
+    return (
+      <>
+        <View className="px-4 pt-3">
+          <Text className="text-sm text-foreground-muted">
+            Choose a folder. Photos added to it later join the rotation.
+          </Text>
+        </View>
+        {flow.folders
+          .filter((folder) => !props.exclude.includes(folder.id))
+          .map((folder) => (
+            <SettingsRow
+              key={folder.id}
+              icon="folder.fill"
+              label={folder.title}
+              value={photoCount(folder.photoCount)}
+              onPress={() => {
+                setFlow(IDLE);
+                props.onChoose(folder);
+              }}
+            />
+          ))}
+        <SettingsActionRow icon="xmark" label="Cancel" onPress={() => setFlow(IDLE)} />
+      </>
     );
-  };
-
-  return (
-    <>
-      {linked.map((albumId) => (
-        <LinkedFolderRow
-          key={albumId}
-          albumId={albumId}
-          title={titles?.get(albumId)}
-          onUnlink={() => confirmUnlink(albumId)}
-        />
-      ))}
-      {flow.step === "choosing" ? (
-        <>
-          <View className="px-4 pt-3">
-            <Text className="text-sm text-foreground-muted">
-              Choose a folder. Photos added to it later join the rotation.
-            </Text>
-          </View>
-          {flow.folders
-            .filter((folder) => !linked.includes(folder.id))
-            .map((folder) => (
-              <SettingsRow
-                key={folder.id}
-                icon="folder.fill"
-                label={folder.title}
-                value={photoCount(folder.photoCount)}
-                onPress={() => link(folder)}
-              />
-            ))}
-          <SettingsActionRow icon="xmark" label="Cancel" onPress={() => setFlow(IDLE)} />
-        </>
-      ) : flow.step === "limited" ? (
-        <>
-          <View className="px-4 pt-3">
-            <Text className="text-sm text-foreground-muted">
-              The app can see only the photos you selected, so a folder would show just those and
-              never pick up new ones. Allow all photos in system settings, then sync again.
-            </Text>
-          </View>
-          <SettingsActionRow
-            icon={{ ios: "lock.open", android: "lock" }}
-            label="Open settings"
-            onPress={() => {
-              setFlow(IDLE);
-              void Linking.openSettings();
-            }}
-          />
-        </>
-      ) : (
+  }
+  if (flow.step === "limited") {
+    return (
+      <>
+        <View className="px-4 pt-3">
+          <Text className="text-sm text-foreground-muted">
+            The app can see only the photos you selected, so a folder would show just those and
+            never pick up new ones. Allow all photos in system settings, then sync again.
+          </Text>
+        </View>
         <SettingsActionRow
-          icon="folder.badge.plus"
-          label={flow.step === "asking" ? "Opening folders…" : "Sync a folder"}
-          loading={flow.step === "asking"}
-          disabled={flow.step === "asking"}
-          onPress={() => void startSync()}
+          icon={{ ios: "lock.open", android: "lock" }}
+          label="Open settings"
+          onPress={() => {
+            setFlow(IDLE);
+            void Linking.openSettings();
+          }}
         />
-      )}
-    </>
+      </>
+    );
+  }
+  return (
+    <SettingsActionRow
+      icon={props.icon}
+      label={flow.step === "asking" ? "Opening folders…" : props.label}
+      loading={flow.step === "asking"}
+      disabled={flow.step === "asking"}
+      onPress={() => void start()}
+    />
   );
 }

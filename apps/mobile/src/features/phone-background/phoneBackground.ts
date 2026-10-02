@@ -1,5 +1,9 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { CustomBackgroundSource, PhoneBackground } from "@t3tools/contracts";
+import type {
+  CustomBackgroundRecord,
+  CustomBackgroundSource,
+  PhoneBackground,
+} from "@t3tools/contracts";
 import {
   currentBackgroundImageId,
   upcomingBackgroundImageId,
@@ -12,7 +16,12 @@ import { useCallback } from "react";
 
 import type { PhoneBackgroundQuickAdjustPosition } from "../../persistence/mobile-preferences";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { phonePlaylist, type PhonePlaylistPicture } from "./phoneBackground.logic";
+import {
+  activePhonePlaylist,
+  phoneBackgroundWithActivePlaylist,
+  phonePlaylist,
+  type PhonePlaylistPicture,
+} from "./phoneBackground.logic";
 import { appForegroundSignal, type PhoneFolderRead, readPhoneFolder } from "./phoneFolders";
 import { measurePhonePicture, type PictureMeasure, phonePictureFile } from "./phonePictures";
 
@@ -71,6 +80,16 @@ export function useUpdatePhoneBackground() {
   );
 }
 
+/** Edits the showing playlist's own settings; does nothing while the phone has none. */
+export function useUpdateActivePlaylist() {
+  const update = useUpdatePhoneBackground();
+  return useCallback(
+    (change: (playlist: CustomBackgroundRecord) => CustomBackgroundRecord) =>
+      update((background) => phoneBackgroundWithActivePlaylist(background, change)),
+    [update],
+  );
+}
+
 /** The phone's background, unless it is switched off. */
 export function useShownPhoneBackground(): PhoneBackground | null {
   const background = usePhoneBackground();
@@ -85,8 +104,14 @@ const phoneFolderAtom = Atom.family((albumId: string) =>
   }).pipe(Atom.withLabel(`phone-background-folder:${albumId}`)),
 );
 
+const activePlaylistIdAtom = Atom.make((get) => {
+  const background = get(phoneBackgroundAtom);
+  return background === null ? null : activePhonePlaylist(background).id;
+}).pipe(Atom.withLabel("phone-background-active-playlist"));
+
 const rotationMinutesAtom = Atom.make((get) => {
-  const source = get(phoneBackgroundAtom)?.record.source;
+  const background = get(phoneBackgroundAtom);
+  const source = background === null ? null : activePhonePlaylist(background).source;
   return source?.kind === "image" ? source.rotationMinutes : null;
 }).pipe(Atom.withLabel("phone-background-rotation-minutes"));
 
@@ -120,22 +145,36 @@ const phoneFolderReadAtom = Atom.family((albumId: string) =>
   ),
 );
 
-const phonePlaylistAtom = Atom.make((get) => {
-  const background = get(phoneBackgroundAtom);
-  if (background === null) return null;
-  return phonePlaylist({
-    background,
-    pictureUri: (imageId) => phonePictureFile(imageId).uri,
-    folderPictures: (albumId) => {
-      const read = get(phoneFolderReadAtom(albumId));
-      return read?.status === "read" ? read.pictures : [];
-    },
-  });
-}).pipe(Atom.withLabel("phone-background-playlist"));
+const phonePlaylistAtom = Atom.family((playlistId: string) =>
+  Atom.make((get) => {
+    const playlist = get(phoneBackgroundAtom)?.playlists.find(
+      (candidate) => candidate.id === playlistId,
+    );
+    if (playlist === undefined) return null;
+    return phonePlaylist({
+      playlist,
+      pictureUri: (imageId) => phonePictureFile(imageId).uri,
+      folderPictures: (albumId) => {
+        const read = get(phoneFolderReadAtom(albumId));
+        return read?.status === "read" ? read.pictures : [];
+      },
+    });
+  }).pipe(Atom.withLabel(`phone-background-playlist:${playlistId}`)),
+);
 
-/** The phone's pictures plus its linked folders' photos; null while it has no background. */
+const activePhonePlaylistAtom = Atom.make((get) => {
+  const playlistId = get(activePlaylistIdAtom);
+  return playlistId === null ? null : get(phonePlaylistAtom(playlistId));
+}).pipe(Atom.withLabel("phone-background-active-pictures"));
+
+/** The showing playlist's pictures plus its folders' photos; null while the phone has none. */
 export function usePhonePlaylist() {
-  return useAtomValue(phonePlaylistAtom);
+  return useAtomValue(activePhonePlaylistAtom);
+}
+
+/** How many pictures a playlist rotates through, reading its folders as needed. */
+export function usePhonePlaylistSize(playlistId: string): number {
+  return useAtomValue(phonePlaylistAtom(playlistId))?.pictures.size ?? 0;
 }
 
 /** A linked folder's last read; null until the first read lands. */
@@ -164,7 +203,7 @@ export function usePhoneBackgroundImage(): {
   readonly current: PhonePlaylistPicture | null;
   readonly upcoming: PhonePlaylistPicture | null;
 } {
-  const playlist = useAtomValue(phonePlaylistAtom);
+  const playlist = useAtomValue(activePhonePlaylistAtom);
   const now = useAtomValue(rotationClockAtom);
   const offset = useAtomValue(rotationOffsetAtom);
   const source = playlist?.source ?? NO_SOURCE;

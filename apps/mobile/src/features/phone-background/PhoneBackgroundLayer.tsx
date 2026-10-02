@@ -8,7 +8,7 @@ import {
   usePhonePictureMeasure,
   useShownPhoneBackground,
 } from "./phoneBackground";
-import { fadeOverlayGradient } from "./phoneBackground.logic";
+import { activePhonePlaylist, fadeOverlayGradient } from "./phoneBackground.logic";
 
 // The desktop's slide transition length, so a rotation looks the same on both.
 const FADE_TRANSITION = { duration: 1400, effect: "cross-dissolve" } as const;
@@ -22,7 +22,7 @@ const FADE_TRANSITION = { duration: 1400, effect: "cross-dissolve" } as const;
 export function PhoneBackgroundLayer() {
   const background = useShownPhoneBackground();
   const { phoneBackdropColor, themeAppearance } = useAppearancePreferences();
-  const record = background?.record ?? null;
+  const record = background === null ? null : activePhonePlaylist(background);
   const image = usePhoneBackgroundImage();
   const current = record === null ? null : image.current;
   const tone = usePhonePictureMeasure(current?.uri ?? null)?.tone;
