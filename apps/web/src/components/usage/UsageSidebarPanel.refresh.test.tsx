@@ -85,11 +85,14 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("reopening within the two minute cooldown does not refresh", async () => {
-  for (let opening = 1; opening <= 3; opening += 1) {
-    vi.mocked(Date.now).mockReturnValue(
-      Date.parse("2026-09-11T12:00:00Z") + (opening - 1) * 60_000,
-    );
+it("opening rescans spending once per three minute cooldown and never probes limits", async () => {
+  const openings = [
+    { minutes: 0, spendingRefreshes: 1 },
+    { minutes: 2, spendingRefreshes: 1 },
+    { minutes: 3, spendingRefreshes: 2 },
+  ];
+  for (const { minutes, spendingRefreshes } of openings) {
+    vi.mocked(Date.now).mockReturnValue(Date.parse("2026-09-11T12:00:00Z") + minutes * 60_000);
     await act(() => {
       renderer = create(
         <StrictMode>
@@ -97,8 +100,8 @@ it("reopening within the two minute cooldown does not refresh", async () => {
         </StrictMode>,
       );
     });
-    expect(state.refreshProviders).toHaveBeenCalledTimes(opening === 3 ? 2 : 1);
-    expect(state.refreshUsage).toHaveBeenCalledTimes(opening === 3 ? 2 : 1);
+    expect(state.refreshProviders).not.toHaveBeenCalled();
+    expect(state.refreshUsage).toHaveBeenCalledTimes(spendingRefreshes);
     await act(() => renderer.unmount());
   }
 });
@@ -109,13 +112,11 @@ it("waits for connection and does not refresh on ordinary renders", async () => 
   await act(() => {
     renderer = create(<UsageSidebarPanel />);
   });
-  expect(state.refreshProviders).not.toHaveBeenCalled();
   expect(state.refreshUsage).not.toHaveBeenCalled();
   state.presentations = new Map([[id, presentation]]);
   await act(() => renderer.update(<UsageSidebarPanel />));
-  expect(state.refreshProviders).toHaveBeenCalledTimes(1);
   expect(state.refreshUsage).toHaveBeenCalledTimes(1);
   await act(() => renderer.update(<UsageSidebarPanel />));
-  expect(state.refreshProviders).toHaveBeenCalledTimes(1);
   expect(state.refreshUsage).toHaveBeenCalledTimes(1);
+  expect(state.refreshProviders).not.toHaveBeenCalled();
 });
