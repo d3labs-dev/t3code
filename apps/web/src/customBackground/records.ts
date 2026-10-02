@@ -176,18 +176,6 @@ export function unlinkBackgroundFolder(
   return { ...record, folders: record.folders.filter((folder) => folder.path !== path) };
 }
 
-export function sourcesEqual(a: CustomBackgroundSource, b: CustomBackgroundSource): boolean {
-  if (a.kind !== b.kind) return false;
-  if (a.kind !== "image" || b.kind !== "image") return true;
-  return (
-    a.rotationMinutes === b.rotationMinutes &&
-    a.order === b.order &&
-    a.transition === b.transition &&
-    a.imageIds.length === b.imageIds.length &&
-    a.imageIds.every((id, index) => id === b.imageIds[index])
-  );
-}
-
 export function filtersEqual(a: CustomBackgroundFilter, b: CustomBackgroundFilter): boolean {
   if (a.kind !== b.kind) return false;
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
