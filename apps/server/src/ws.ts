@@ -197,7 +197,7 @@ import { linkCreatedPullRequest } from "./git/linkCreatedPullRequest.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ProjectEnrichmentService from "./project/ProjectEnrichmentService.ts";
 import * as ProjectService from "./project/ProjectService.ts";
-import * as ScratchWorkspace from "./project/ScratchWorkspace.ts";
+import * as ManagedProjectFolders from "./project/ManagedProjectFolders.ts";
 import { projectMutationOperation } from "./project/ProjectMutation.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
@@ -1086,7 +1086,7 @@ const makeWsRpcLayer = (
       const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
       const projectStore = yield* ProjectStore.ProjectStoreV2;
       const projectService = yield* ProjectService.ProjectService;
-      const scratchWorkspace = yield* ScratchWorkspace.ScratchWorkspace;
+      const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
       const threadSearch = yield* ThreadSearch.ThreadSearch;
 
       const providerSessionsV2 = yield* ProviderSessionManager.ProviderSessionManagerV2;
@@ -1605,7 +1605,7 @@ const makeWsRpcLayer = (
           );
           const environment = yield* serverEnvironment.getDescriptor;
           const auth = yield* serverAuth.getDescriptor();
-          const scratchWorkspaceRoot = yield* scratchWorkspace.root;
+          const scratchWorkspaceRoot = yield* managedFolders.scratchRoot;
           const availableEditors: ReadonlyArray<EditorId> = yield* resolveAvailableEditorsForConfig(
             externalLauncher.resolveAvailableEditors(),
           );
@@ -1657,6 +1657,7 @@ const makeWsRpcLayer = (
               onNone: () => ({}),
               onSome: (root) => ({ scratchWorkspaceRoot: root }),
             }),
+            newProjectsRoot: managedFolders.namedProjectsRoot,
           };
         });
 
@@ -2220,6 +2221,7 @@ const makeWsRpcLayer = (
                 ? providerRegistry.refreshWorkspaceSnapshot({
                     instanceId: input.instanceId,
                     cwd: input.cwd,
+                    fresh: input.fresh === true,
                   })
                 : input.instanceId !== undefined
                   ? providerRegistry.refreshInstance(input.instanceId)
@@ -2899,11 +2901,24 @@ const makeWsRpcLayer = (
         [WS_METHODS.projectsEnsureScratch]: () =>
           observeRpcEffect(
             WS_METHODS.projectsEnsureScratch,
-            scratchWorkspace.ensureProject.pipe(
+            managedFolders.ensureScratchProject.pipe(
               Effect.mapError(
                 (cause) => new OrchestrationDispatchCommandError({ message: cause.message, cause }),
               ),
             ),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [WS_METHODS.projectsCreateNew]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsCreateNew,
+            managedFolders
+              .createNamedProject(input)
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new OrchestrationDispatchCommandError({ message: cause.message, cause }),
+                ),
+              ),
             { "rpc.aggregate": "orchestration" },
           ),
         [WS_METHODS.projectCloneCancel]: (input) =>
