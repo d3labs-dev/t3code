@@ -17,6 +17,9 @@ on:
         type: boolean
 
 permissions:
+  # release-desktop.yml asks for actions: read, and a reusable workflow can
+  # never hold more than its caller grants.
+  actions: read
   contents: write
   issues: write
   id-token: write
