@@ -2,16 +2,16 @@ name: Custom nightly
 
 on:
   schedule:
-    # Upstream publishes an Orchestrator V2 preview at irregular times, and GitHub
+    # Upstream publishes main-branch nightlies at irregular times, and GitHub
     # drops many scheduled runs. Checking twice an hour, off the busy minute zero,
-    # picks each preview up soon after it lands.
+    # picks each nightly up soon after it lands.
     - cron: "23,53 * * * *"
   push:
     branches: [custom-nightly]
   workflow_dispatch:
     inputs:
       force:
-        description: Build even when the latest upstream preview is already published
+        description: Build even when the latest upstream nightly is already published
         required: false
         default: false
         type: boolean
@@ -26,14 +26,14 @@ permissions:
 
 # A push supersedes whatever is building, including the run whose upstream
 # merge push triggered it. Scheduled and manual runs queue instead, so a check
-# for a new preview never restarts a build that is already on its way.
+# for a new nightly never restarts a build that is already on its way.
 concurrency:
   group: custom-nightly
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   prepare:
-    name: Merge upstream preview
+    name: Merge upstream nightly
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.prepare.outputs.should_build }}
@@ -74,7 +74,7 @@ jobs:
           git checkout -B "$GITHUB_REF_NAME" FETCH_HEAD
 
       - id: prepare
-        name: Merge the latest released preview
+        name: Merge the latest released nightly
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -86,16 +86,18 @@ jobs:
           git config user.email "t3code-custom-nightly[bot]@users.noreply.github.com"
           git checkout -B "$GITHUB_REF_NAME" "$GITHUB_SHA"
           git remote add upstream https://github.com/pingdotgg/t3code.git
-          git fetch upstream --tags --force
+          git fetch --no-tags upstream main
 
           upstream_tag="$(
             gh api 'repos/pingdotgg/t3code/releases?per_page=30' \
-              --jq '[.[] | select(.draft == false and .prerelease == true and (.tag_name | contains("-preview.")))][0].tag_name // ""'
+              --jq '[.[] | select(.draft == false and .prerelease == true and (.tag_name | contains("-nightly.")))][0].tag_name // ""'
           )"
           if [[ -z "$upstream_tag" ]]; then
-            echo "No upstream preview release was found." >&2
+            echo "No upstream nightly release was found." >&2
             exit 1
           fi
+          git fetch --no-tags upstream tag "$upstream_tag"
+          git merge-base --is-ancestor "$upstream_tag" upstream/main
 
           published_release_body="$(
             gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=30" \
@@ -110,12 +112,12 @@ jobs:
             && "$published_upstream_tag" == "$upstream_tag" \
             && "$published_custom_commit" == "$current_commit" \
           ]]; then
-            echo "Latest upstream preview and customization commit are already published."
+            echo "Latest upstream nightly and customization commit are already published."
             echo "should_build=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # One open issue per conflicting upstream preview, so a stalled build notifies the owner.
+          # One open issue per conflicting upstream nightly, so a stalled build notifies the owner.
           conflict_title_suffix="conflicts with ${GITHUB_REF_NAME}"
           open_conflict_issues() {
             gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title \
@@ -126,7 +128,7 @@ jobs:
             if ! git merge --no-edit "$upstream_tag"; then
               conflicted_files="$(git diff --name-only --diff-filter=U | sed 's/.*/- `&`/')"
               git merge --abort
-              title="Upstream preview ${upstream_tag} ${conflict_title_suffix}"
+              title="Upstream nightly ${upstream_tag} ${conflict_title_suffix}"
               already_reported="$(
                 gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json title \
                   --jq "[.[] | select(.title == \"${title}\")] | length"
@@ -144,7 +146,7 @@ jobs:
                   echo "::warning::Could not create the automerge label."
                 job_branch="chamaquita/upstream-${upstream_tag}"
                 issue_url="$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$(cat <<EOF
-          @DiegoJohnsonL merging upstream preview [${upstream_tag}](https://github.com/pingdotgg/t3code/releases/tag/${upstream_tag}) into \`${GITHUB_REF_NAME}\` stopped on conflicts, so no custom build is published until they are resolved. Chamaquita resolves them and, because this issue carries \`automerge\`, merges its pull request once every check passes.
+          @DiegoJohnsonL merging upstream nightly [${upstream_tag}](https://github.com/pingdotgg/t3code/releases/tag/${upstream_tag}) from \`main\` into \`${GITHUB_REF_NAME}\` stopped on conflicts, so no custom build is published until they are resolved. Chamaquita resolves them and, because this issue carries \`automerge\`, merges its pull request once every check passes.
 
           Base branch: \`${GITHUB_REF_NAME}\`
           Job branch: \`${job_branch}\`

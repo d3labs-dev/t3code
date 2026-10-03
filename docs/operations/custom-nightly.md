@@ -1,6 +1,6 @@
 # Custom nightly builds
 
-This fork follows released T3 Code nightlies and publishes them as D3 Code: a macOS arm64 build signed with a private development certificate, plus a signed Android APK. Both apps update from the fork's GitHub releases.
+This fork follows released T3 Code nightlies from upstream `main` and publishes them as D3 Code: a macOS arm64 build signed with a private development certificate, plus a signed Android APK. Both apps update from the fork's GitHub releases.
 
 The automation merges upstream nightly tags into the fork's default branch. A merge conflict stops the workflow so a customization cannot disappear silently, and opens an issue on the fork listing the conflicted files. Merge the tag, resolve, and push; the next run closes the issue. The workflow retries the build until a release records the upstream tag it contains.
 
