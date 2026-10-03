@@ -73,7 +73,7 @@ Once the fork's Expo project is configured (see Agent notifications below) and `
 gh secret set EXPO_TOKEN --body <expo-access-token>
 ```
 
-The Expo project's slug must be `t3-code`, the slug in `app.config.ts`, or `eas update` refuses to publish. The runtime fingerprint leaves out the version name and code (`apps/mobile/fingerprint.config.cjs`), which change on every build. A failed publish does not block the release: it ships without the marker, so phones are offered the APK.
+The Expo project's slug must be `t3-code`, the slug in `app.config.ts`, or `eas update` refuses to publish. The runtime fingerprint leaves out the version name and code (`apps/mobile/fingerprint.config.js`), which change on every build. A failed publish does not block the release: it ships without the marker, so phones are offered the APK.
 
 ### Agent notifications
 
