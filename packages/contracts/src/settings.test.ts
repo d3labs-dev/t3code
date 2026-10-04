@@ -1128,7 +1128,7 @@ describe("ClientSettings custom backgrounds", () => {
     expect(settings.customBackgroundAgentBubbles).toBe(true);
     expect(settings.customBackgroundAgentBubbleOpacity).toBe(25);
     expect(settings.customBackgroundAgentBubbleBlur).toBe(0);
-    expect(settings.customBackgroundAgentBubblePadding).toBe(6);
+    expect(settings.customBackgroundAgentBubblePadding).toBe(12);
     expect(settings.customBackgroundReplyTextShadow).toBe(40);
     expect(() => decodeClientSettingsPatch({ customBackgroundAgentBubbleBlur: 21 })).toThrow();
   });
