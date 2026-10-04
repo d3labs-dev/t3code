@@ -24,7 +24,11 @@ class AgentMessagingService : ExpoFirebaseMessagingService() {
       AgentNotifications.receive(this, remoteMessage.data)
     } else {
       val expoData = expoPushAgentActivity(remoteMessage.data)
-      if (expoData != null) AgentNotifications.receive(this, expoData) else super.onMessageReceived(remoteMessage)
+      if (expoData != null) {
+        AgentNotifications.receive(this, expoData)
+      } else {
+        super.onMessageReceived(remoteMessage)
+      }
     }
   }
 }
