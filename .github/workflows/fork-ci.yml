@@ -181,9 +181,9 @@ jobs:
             cargo test --locked --manifest-path "native/$crate/Cargo.toml"
           done
 
-  # Release verification and manual runs always lint. On a pull request the lint runs when native
-  # sources or their lint configuration change, and whenever the changed files
-  # cannot be listed in full.
+  # Release verification and manual runs always lint. On a pull request, lint
+  # runs when native sources or their lint configuration change, and whenever
+  # the changed files cannot be listed in full.
   mobile_native_changes:
     name: Mobile Native Changes
     runs-on: ubuntu-latest

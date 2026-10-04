@@ -36,6 +36,22 @@ html[data-theme-id]:not([data-theme-id=""]) {
   --glass-surface: var(--app-theme-surface-raised);
 }
 
+[data-slot="composer-shell"] {
+  --chat-composer-glass-surface: var(--glass-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+[data-native-scrolling]::-webkit-scrollbar-thumb {
+  background: var(--app-scrollbar-thumb);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--app-scrollbar-thumb-hover);
+}
+
 /* A plain rule rather than a second @utility: Tailwind places generated
    utilities by its own sort, while this block is always last in the layer. */
 @layer utilities {

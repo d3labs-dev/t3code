@@ -9,13 +9,17 @@ import org.json.JSONObject
  * flattened relay-shaped data, or null for any other message.
  */
 internal fun expoPushAgentActivity(data: Map<String, String>): Map<String, String>? {
-  val json = try {
-    JSONObject(data["body"] ?: return null)
+  val body = data["body"] ?: return null
+  return try {
+    val json = JSONObject(body)
+    if (json.optString("t3_kind") == "agent_activity") {
+      json.keys().asSequence()
+        .filterNot { json.isNull(it) }
+        .associateWith { json.get(it).toString() }
+    } else {
+      null
+    }
   } catch (_: JSONException) {
-    return null
+    null
   }
-  if (json.optString("t3_kind") != "agent_activity") return null
-  return json.keys().asSequence()
-    .filterNot { json.isNull(it) }
-    .associateWith { json.get(it).toString() }
 }
