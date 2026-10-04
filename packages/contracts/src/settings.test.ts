@@ -1123,12 +1123,44 @@ describe("ClientSettings custom backgrounds", () => {
     expect(decodeClientSettings({}).customBackgroundEnabled).toBe(true);
   });
 
-  it("starts agent bubbles at 77% fill with a 2px blur", () => {
+  it("starts with light, compact bubbles and a subtle text shadow", () => {
     const settings = decodeClientSettings({});
     expect(settings.customBackgroundAgentBubbles).toBe(true);
-    expect(settings.customBackgroundAgentBubbleOpacity).toBe(77);
-    expect(settings.customBackgroundAgentBubbleBlur).toBe(2);
+    expect(settings.customBackgroundAgentBubbleOpacity).toBe(25);
+    expect(settings.customBackgroundAgentBubbleBlur).toBe(0);
+    expect(settings.customBackgroundAgentBubblePadding).toBe(6);
+    expect(settings.customBackgroundReplyTextShadow).toBe(40);
     expect(() => decodeClientSettingsPatch({ customBackgroundAgentBubbleBlur: 21 })).toThrow();
+  });
+
+  it("persists readability controls, including zero padding and disabled shadows", () => {
+    const patch = decodeClientSettingsPatch({
+      customBackgroundAgentBubbles: false,
+      customBackgroundAgentBubbleOpacity: 30,
+      customBackgroundAgentBubbleBlur: 0,
+      customBackgroundAgentBubblePadding: 0,
+      customBackgroundReplyTextShadow: 0,
+      customBackgroundReplyTextEmphasis: true,
+    });
+    const settings = decodeClientSettings(patch);
+    expect(decodeClientSettings(encodeClientSettings(settings))).toMatchObject(patch);
+    expect(
+      decodeClientSettingsPatch({
+        customBackgroundAgentBubblePadding: 24,
+        customBackgroundReplyTextShadow: 100,
+      }),
+    ).toMatchObject({
+      customBackgroundAgentBubblePadding: 24,
+      customBackgroundReplyTextShadow: 100,
+    });
+    for (const value of [-1, 25, 1.5]) {
+      expect(() =>
+        decodeClientSettingsPatch({ customBackgroundAgentBubblePadding: value }),
+      ).toThrow();
+    }
+    for (const value of [-1, 101, 1.5]) {
+      expect(() => decodeClientSettingsPatch({ customBackgroundReplyTextShadow: value })).toThrow();
+    }
   });
 
   it("gives playlists saved before blur and brightness adapt existed neither", () => {

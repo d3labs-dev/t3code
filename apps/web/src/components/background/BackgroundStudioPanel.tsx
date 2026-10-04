@@ -11,6 +11,7 @@ import {
   type CustomBackgroundFilterKind,
   type CustomBackgroundRecord,
   MAX_AGENT_BUBBLE_BLUR,
+  MAX_AGENT_BUBBLE_PADDING,
   MAX_CUSTOM_BACKGROUND_BLUR,
   MAX_CUSTOM_BACKGROUND_FADE,
   MIN_CUSTOM_BACKGROUND_FADE,
@@ -567,6 +568,10 @@ export function BackgroundStudioPanel() {
     (settings) => settings.customBackgroundAgentBubbleOpacity,
   );
   const bubbleBlur = useClientSettings((settings) => settings.customBackgroundAgentBubbleBlur);
+  const bubblePadding = useClientSettings(
+    (settings) => settings.customBackgroundAgentBubblePadding,
+  );
+  const textShadow = useClientSettings((settings) => settings.customBackgroundReplyTextShadow);
   const replyTextEmphasis = useClientSettings(
     (settings) => settings.customBackgroundReplyTextEmphasis,
   );
@@ -1009,6 +1014,15 @@ export function BackgroundStudioPanel() {
               format={(value) => `${value}px`}
               onChange={(value) => updateSettings({ customBackgroundAgentBubbleBlur: value })}
             />
+            <RangeControl
+              label="Reply bubble padding"
+              min={0}
+              max={MAX_AGENT_BUBBLE_PADDING}
+              step={1}
+              value={bubblePadding}
+              format={(value) => `${value}px`}
+              onChange={(value) => updateSettings({ customBackgroundAgentBubblePadding: value })}
+            />
           </>
         ) : null}
         <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -1020,6 +1034,15 @@ export function BackgroundStudioPanel() {
             }
           />
         </label>
+        <RangeControl
+          label="Reply text shadow"
+          min={0}
+          max={100}
+          step={1}
+          value={textShadow}
+          format={(value) => (value === 0 ? "Off" : `${value}%`)}
+          onChange={(value) => updateSettings({ customBackgroundReplyTextShadow: value })}
+        />
       </StudioSection>
     </div>
   );

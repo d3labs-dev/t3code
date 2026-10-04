@@ -82,12 +82,13 @@ html[data-theme-id]:not([data-theme-id=""]) {
     [data-assistant-reply]
     > [data-assistant-citation-source] {
     width: fit-content;
-    max-width: 100%;
+    max-width: calc(100% + var(--agent-bubble-padding, 6px) * 2);
+    margin-inline: calc(var(--agent-bubble-padding, 6px) * -1);
     border-radius: var(--radius-2xl);
-    padding: calc(var(--spacing) * 3);
+    padding: var(--agent-bubble-padding, 6px);
     background-color: color-mix(
       in srgb,
-      var(--message-surface) var(--agent-bubble-opacity, 82%),
+      var(--message-surface) var(--agent-bubble-opacity, 25%),
       transparent
     );
     -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
@@ -218,7 +219,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
   [data-user-message-bubble] {
   background: color-mix(
     in srgb,
-    var(--message-surface) var(--agent-bubble-opacity, 82%),
+    var(--message-surface) var(--agent-bubble-opacity, 25%),
     transparent
   );
   -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
@@ -242,6 +243,26 @@ html[data-theme-id]:not([data-theme-id=""]) {
   & pre,
   & code {
     font-weight: normal;
+  }
+}
+
+[data-chat-background-pane]:has(> [data-chat-backdrop="source"])
+  [data-assistant-reply]
+  > [data-assistant-citation-source]
+  .chat-markdown {
+  --reply-text-shadow-color: rgb(255 255 255 / var(--reply-text-shadow-opacity, 40%));
+  text-shadow:
+    0 1px 2px var(--reply-text-shadow-color),
+    0 0 4px var(--reply-text-shadow-color);
+
+  @variant dark {
+    --reply-text-shadow-color: rgb(0 0 0 / var(--reply-text-shadow-opacity, 40%));
+  }
+
+  & pre,
+  & code,
+  & button {
+    text-shadow: none;
   }
 }
 

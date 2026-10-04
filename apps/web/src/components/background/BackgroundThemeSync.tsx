@@ -28,9 +28,18 @@ export function BackgroundThemeSync() {
     (settings) => settings.customBackgroundAgentBubbleOpacity,
   );
   const bubbleBlur = useClientSettings((settings) => settings.customBackgroundAgentBubbleBlur);
+  const bubblePadding = useClientSettings(
+    (settings) => settings.customBackgroundAgentBubblePadding,
+  );
+  const textShadow = useClientSettings((settings) => settings.customBackgroundReplyTextShadow);
   useEffect(() => {
-    applyAgentBubbleSurface(document.documentElement, { opacity: bubbleOpacity, blur: bubbleBlur });
-  }, [bubbleOpacity, bubbleBlur]);
+    applyAgentBubbleSurface(document.documentElement, {
+      opacity: bubbleOpacity,
+      blur: bubbleBlur,
+      padding: bubblePadding,
+    });
+    document.documentElement.style.setProperty("--reply-text-shadow-opacity", `${textShadow}%`);
+  }, [bubbleOpacity, bubbleBlur, bubblePadding, textShadow]);
   const editing = useBackgroundStudioOpen();
   const preview = useBackgroundStudioStore((store) => store.preview);
   const record = dynamicTheme

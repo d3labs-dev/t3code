@@ -27,10 +27,14 @@ import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./
 import {
   AgentBubbleBlur,
   AgentBubbleOpacity,
+  AgentBubblePadding,
+  ReplyTextShadow,
   CustomBackgroundId,
   CustomBackgroundRecords,
   DEFAULT_AGENT_BUBBLE_BLUR,
   DEFAULT_AGENT_BUBBLE_OPACITY,
+  DEFAULT_AGENT_BUBBLE_PADDING,
+  DEFAULT_REPLY_TEXT_SHADOW,
   StoredCustomBackgroundRecords,
 } from "./customBackground.ts";
 import {
@@ -338,6 +342,12 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   customBackgroundAgentBubbleBlur: AgentBubbleBlur.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_BUBBLE_BLUR)),
+  ),
+  customBackgroundAgentBubblePadding: AgentBubblePadding.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_BUBBLE_PADDING)),
+  ),
+  customBackgroundReplyTextShadow: ReplyTextShadow.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_REPLY_TEXT_SHADOW)),
   ),
   /** Makes agent reply text bolder, and brighter in dark mode, over a background. */
   customBackgroundReplyTextEmphasis: Schema.Boolean.pipe(
@@ -1792,6 +1802,8 @@ export const ClientSettingsPatch = Schema.Struct({
   customBackgroundAgentBubbleOpacity: Schema.optionalKey(AgentBubbleOpacity),
   customBackgroundAgentBubbleBlur: Schema.optionalKey(AgentBubbleBlur),
   customBackgroundReplyTextEmphasis: Schema.optionalKey(Schema.Boolean),
+  customBackgroundAgentBubblePadding: Schema.optionalKey(AgentBubblePadding),
+  customBackgroundReplyTextShadow: Schema.optionalKey(ReplyTextShadow),
   appearanceContrast: Schema.optionalKey(AppearanceContrast),
   panelAnimationDurationMs: Schema.optionalKey(PanelAnimationDurationMs),
   browserDefaultViewport: Schema.optionalKey(PreviewViewportSetting),

@@ -224,7 +224,7 @@ export const CustomBackgroundBlur = Schema.Int.check(
 /** Fill of the bubble behind agent replies, in percent of the message surface color. */
 export const AgentBubbleOpacity = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 }));
 export type AgentBubbleOpacity = typeof AgentBubbleOpacity.Type;
-export const DEFAULT_AGENT_BUBBLE_OPACITY: AgentBubbleOpacity = 77;
+export const DEFAULT_AGENT_BUBBLE_OPACITY: AgentBubbleOpacity = 25;
 
 export const MAX_AGENT_BUBBLE_BLUR = 20;
 /** Backdrop blur behind agent reply bubbles, in pixels. 0 applies no backdrop filter. */
@@ -232,7 +232,18 @@ export const AgentBubbleBlur = Schema.Int.check(
   Schema.isBetween({ minimum: 0, maximum: MAX_AGENT_BUBBLE_BLUR }),
 );
 export type AgentBubbleBlur = typeof AgentBubbleBlur.Type;
-export const DEFAULT_AGENT_BUBBLE_BLUR: AgentBubbleBlur = 2;
+export const DEFAULT_AGENT_BUBBLE_BLUR: AgentBubbleBlur = 0;
+
+export const MAX_AGENT_BUBBLE_PADDING = 24;
+export const AgentBubblePadding = Schema.Int.check(
+  Schema.isBetween({ minimum: 0, maximum: MAX_AGENT_BUBBLE_PADDING }),
+);
+export type AgentBubblePadding = typeof AgentBubblePadding.Type;
+export const DEFAULT_AGENT_BUBBLE_PADDING: AgentBubblePadding = 6;
+
+export const ReplyTextShadow = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 }));
+export type ReplyTextShadow = typeof ReplyTextShadow.Type;
+export const DEFAULT_REPLY_TEXT_SHADOW: ReplyTextShadow = 40;
 
 export type ImageDitheringFilter = typeof IMAGE_DITHERING_FILTER.schema.Type;
 
