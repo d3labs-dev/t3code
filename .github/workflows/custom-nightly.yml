@@ -146,7 +146,7 @@ jobs:
                   echo "::warning::Could not create the automerge label."
                 job_branch="chamaquita/upstream-${upstream_tag}"
                 issue_url="$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$(cat <<EOF
-          @DiegoJohnsonL merging upstream nightly [${upstream_tag}](https://github.com/pingdotgg/t3code/releases/tag/${upstream_tag}) from \`main\` into \`${GITHUB_REF_NAME}\` stopped on conflicts, so no custom build is published until they are resolved. Chamaquita resolves them and, because this issue carries \`automerge\`, merges its pull request once every check passes.
+          Merging upstream nightly [${upstream_tag}](https://github.com/pingdotgg/t3code/releases/tag/${upstream_tag}) from \`main\` into \`${GITHUB_REF_NAME}\` stopped on conflicts, so no custom build is published until they are resolved. Chamaquita resolves them and, because this issue carries \`automerge\`, merges its pull request once every check passes.
 
           Base branch: \`${GITHUB_REF_NAME}\`
           Job branch: \`${job_branch}\`
