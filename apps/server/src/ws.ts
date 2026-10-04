@@ -98,7 +98,6 @@ import {
   type PullRequestRef,
   WS_METHODS,
   WsRpcGroup,
-  VoiceTranscriptionNotConfiguredError,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import {
@@ -240,8 +239,7 @@ import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
 import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
-import * as VoiceTranscription from "./voice/VoiceTranscription.ts";
-import { issueVoiceTranscriptionUrl } from "./voice/VoiceTranscriptionUrl.ts";
+import * as VoiceRpc from "./voice/VoiceRpc.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import {
   sameUsageLimitCommandCoverage,
@@ -1275,7 +1273,6 @@ const makeWsRpcLayer = (
       const config = yield* ServerConfig.ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
-      const voiceTranscription = yield* VoiceTranscription.VoiceTranscription;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
@@ -1797,6 +1794,7 @@ const makeWsRpcLayer = (
 
       const handlers = ServerWsRpcGroup.of({
         ...(yield* ServerPush.makeRpcHandlers(observeRpcEffect)),
+        ...(yield* VoiceRpc.makeRpcHandlers),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
@@ -3153,32 +3151,6 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.attachmentsCreateUploadUrl, issueAttachmentUploadUrl(input), {
             "rpc.aggregate": "workspace",
           }),
-        [WS_METHODS.voiceCreateTranscriptionUrl]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.voiceCreateTranscriptionUrl,
-            Effect.gen(function* () {
-              if (!(yield* voiceTranscription.isConfigured)) {
-                return yield* new VoiceTranscriptionNotConfiguredError();
-              }
-              return yield* issueVoiceTranscriptionUrl(input);
-            }),
-            { "rpc.aggregate": "workspace" },
-          ),
-        [WS_METHODS.voiceLearnCorrections]: ({ corrections }) =>
-          observeRpcEffect(
-            WS_METHODS.voiceLearnCorrections,
-            voiceTranscription.learnCorrections(corrections).pipe(
-              Effect.map((learned) => ({ learned })),
-              Effect.catchTag("VoiceTranscriptionFailure", (failure) =>
-                failure.reason === "not-configured"
-                  ? Effect.fail(new VoiceTranscriptionNotConfiguredError())
-                  : Effect.logWarning("Could not learn from dictation corrections.", {
-                      reason: failure.reason,
-                    }).pipe(Effect.as({ learned: [] })),
-              ),
-            ),
-            { "rpc.aggregate": "workspace" },
-          ),
         [WS_METHODS.attachmentsDelete]: (input) =>
           observeRpcEffect(
             WS_METHODS.attachmentsDelete,

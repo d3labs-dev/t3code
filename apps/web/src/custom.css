@@ -212,6 +212,10 @@ html[data-theme-id]:not([data-theme-id=""]) {
   mask-image: none;
 }
 
+[data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-timeline-divider="working"] {
+  border-bottom-width: 0;
+}
+
 /* Dark themes draw the composer outline and the timeline's turn dividers in
    opaque near-background colors, which read as black lines over a picture.
    Use the context strip's white/7 edge instead. Unlayered so it beats the
