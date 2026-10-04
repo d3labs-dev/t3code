@@ -99,7 +99,9 @@ internal object LauncherMoodAliases {
           .distinctBy { it.id }
           .map { ShortcutInfo.Builder(context, it.id).setActivity(target).build() }
       if (moved.isNotEmpty()) shortcutManager.updateShortcuts(moved)
-    } catch (error: RuntimeException) {
+    } catch (error: IllegalArgumentException) {
+      Log.w(TAG, "Could not move launcher shortcuts to $target", error)
+    } catch (error: IllegalStateException) {
       Log.w(TAG, "Could not move launcher shortcuts to $target", error)
     }
   }
