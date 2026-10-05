@@ -87,7 +87,7 @@ import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstra
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
-import { useClientSettings } from "../hooks/useSettings";
+import { getClientSettings, useClientSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
 import { useCustomThemes } from "../hooks/useCustomThemes";
 import { useEnvironmentThemeDefinitions } from "../hooks/useEnvironmentTheme";
@@ -562,7 +562,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
         });
         return;
       }
-      if (command === "backgroundEditor.toggle") {
+      if (command === "backgroundEditor.toggle" && getClientSettings().customBackgroundEnabled) {
         event.preventDefault();
         event.stopPropagation();
         toggleBackgroundStudio();
@@ -2274,27 +2274,29 @@ function OpenCommandPaletteDialog(props: {
     },
   });
 
-  actionItems.push({
-    kind: "action",
-    value: "action:background-studio",
-    searchTerms: [
-      "background",
-      "custom",
-      "customize",
-      "wallpaper",
-      "image",
-      "shader",
-      "filter",
-      "rotation",
-      "studio",
-    ],
-    title: "Customize background",
-    icon: <ImageIcon className={ITEM_ICON_CLASS} />,
-    shortcutCommand: "backgroundEditor.toggle",
-    run: async () => {
-      toggleBackgroundStudio();
-    },
-  });
+  if (clientSettings.customBackgroundEnabled) {
+    actionItems.push({
+      kind: "action",
+      value: "action:background-studio",
+      searchTerms: [
+        "background",
+        "custom",
+        "customize",
+        "wallpaper",
+        "image",
+        "shader",
+        "filter",
+        "rotation",
+        "studio",
+      ],
+      title: "Customize background",
+      icon: <ImageIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "backgroundEditor.toggle",
+      run: async () => {
+        toggleBackgroundStudio();
+      },
+    });
+  }
 
   actionItems.push({
     kind: "action",

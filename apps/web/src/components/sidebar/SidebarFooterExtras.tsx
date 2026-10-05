@@ -2,21 +2,39 @@ import { useAtomValue } from "@effect/atom-react";
 import { serveModeComputerName } from "@t3tools/client-runtime/serve-mode";
 import type { UnifiedSettings } from "@t3tools/contracts";
 import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
   CoffeeIcon,
   ImageIcon,
+  ImagesIcon,
   MoonIcon,
+  SkipBackIcon,
+  SkipForwardIcon,
   SlidersHorizontalIcon,
 } from "lucide-react";
 
 import { openBackgroundStudio } from "~/customBackground/backgroundStudioStore";
 import { stepBackgroundImage } from "~/customBackground/rotation";
 import { useActiveBackground } from "~/customBackground/useActiveBackground";
-import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
+import {
+  useClientSettings,
+  usePrimarySettings,
+  useUpdateClientSettings,
+  useUpdatePrimarySettings,
+} from "../../hooks/useSettings";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { serverEnvironment } from "../../state/server";
-import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuRadioItemIndicator,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "../ui/menu";
 import { SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -32,7 +50,11 @@ export function SidebarFooterExtras() {
 
 function SidebarBackgroundMenu() {
   const active = useActiveBackground();
+  const playlists = useClientSettings((settings) => settings.customBackgrounds);
+  const enabled = useClientSettings((settings) => settings.customBackgroundEnabled);
+  const updateSettings = useUpdateClientSettings();
   const rotating = active?.source.kind === "image" && active.source.imageIds.length > 1;
+  if (!enabled) return null;
   return (
     <SidebarMenuItem className="shrink-0">
       <Menu>
@@ -48,12 +70,35 @@ function SidebarBackgroundMenu() {
         </Tooltip>
         <MenuPopup side="top" align="start">
           <MenuItem disabled={!rotating} onClick={() => stepBackgroundImage(1)}>
-            <ChevronRightIcon /> Next image
+            <SkipForwardIcon /> Next image
           </MenuItem>
           <MenuItem disabled={!rotating} onClick={() => stepBackgroundImage(-1)}>
-            <ChevronLeftIcon /> Previous image
+            <SkipBackIcon /> Previous image
           </MenuItem>
           <MenuSeparator />
+          {playlists.length > 0 ? (
+            <MenuSub>
+              <MenuSubTrigger>
+                <ImagesIcon /> Playlist
+              </MenuSubTrigger>
+              <MenuSubPopup>
+                <MenuRadioGroup value={active?.id ?? null}>
+                  {playlists.map((playlist) => (
+                    <MenuRadioItem
+                      key={playlist.id}
+                      value={playlist.id}
+                      onClick={() => updateSettings({ activeCustomBackgroundId: playlist.id })}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate">{playlist.name}</span>
+                        <MenuRadioItemIndicator />
+                      </span>
+                    </MenuRadioItem>
+                  ))}
+                </MenuRadioGroup>
+              </MenuSubPopup>
+            </MenuSub>
+          ) : null}
           <MenuItem onClick={openBackgroundStudio}>
             <SlidersHorizontalIcon /> Customize background
           </MenuItem>
