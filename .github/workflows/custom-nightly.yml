@@ -40,6 +40,7 @@ jobs:
       should_build: ${{ steps.prepare.outputs.should_build }}
       commit: ${{ steps.prepare.outputs.commit }}
       upstream_tag: ${{ steps.prepare.outputs.upstream_tag }}
+      upstream_changes: ${{ steps.prepare.outputs.upstream_changes }}
       version: ${{ steps.prepare.outputs.version }}
       release_tag: ${{ steps.prepare.outputs.release_tag }}
       release_name: ${{ steps.prepare.outputs.release_name }}
@@ -195,9 +196,20 @@ jobs:
           version="${major}.${minor}.${target_patch}-nightly.${release_date}.${release_run}"
           commit="$(git rev-parse HEAD)"
 
+          upstream_changes=""
+          if [[ -n "$published_upstream_tag" && "$published_upstream_tag" != "$upstream_tag" ]]; then
+            git fetch --no-tags upstream tag "$published_upstream_tag"
+            upstream_changes="$(git log --reverse --first-parent --format='- %s' "${published_upstream_tag}..${upstream_tag}")"
+          fi
+
           echo "should_build=true" >> "$GITHUB_OUTPUT"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
+          {
+            echo "upstream_changes<<UPSTREAM_CHANGES_EOF"
+            echo "$upstream_changes"
+            echo "UPSTREAM_CHANGES_EOF"
+          } >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "release_tag=v$version" >> "$GITHUB_OUTPUT"
           echo "release_name=D3 Code $version" >> "$GITHUB_OUTPUT"
@@ -345,6 +357,8 @@ jobs:
 
       - name: Publish custom nightly
         shell: bash
+        env:
+          UPSTREAM_CHANGES: ${{ needs.prepare.outputs.upstream_changes }}
         run: |
           set -euo pipefail
           notes_file="$RUNNER_TEMP/release-notes.md"
@@ -356,6 +370,10 @@ jobs:
           <!-- upstream-release: ${{ needs.prepare.outputs.upstream_tag }} -->
           <!-- custom-commit: ${{ needs.prepare.outputs.commit }} -->
           EOF
+          # The update popover shows a release's last eight list items, so upstream's changes go last.
+          if [[ -n "$UPSTREAM_CHANGES" ]]; then
+            printf '\n## Upstream changes\n\n%s\n' "$UPSTREAM_CHANGES" >> "$notes_file"
+          fi
 
           gh release create "${{ needs.prepare.outputs.release_tag }}" \
             release/*.dmg \
