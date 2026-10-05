@@ -239,7 +239,7 @@ export const AgentBubblePadding = Schema.Int.check(
   Schema.isBetween({ minimum: 0, maximum: MAX_AGENT_BUBBLE_PADDING }),
 );
 export type AgentBubblePadding = typeof AgentBubblePadding.Type;
-export const DEFAULT_AGENT_BUBBLE_PADDING: AgentBubblePadding = 12;
+export const DEFAULT_AGENT_BUBBLE_PADDING: AgentBubblePadding = 10;
 
 export const ReplyTextShadow = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 }));
 export type ReplyTextShadow = typeof ReplyTextShadow.Type;

@@ -98,10 +98,10 @@ html[data-theme-id]:not([data-theme-id=""]) {
     [data-assistant-reply]
     > [data-assistant-citation-source] {
     width: fit-content;
-    max-width: calc(100% + var(--agent-bubble-padding, 12px) * 2);
-    margin-inline: calc(var(--agent-bubble-padding, 12px) * -1);
+    max-width: calc(100% + var(--agent-bubble-padding, 10px) * 2);
+    margin-inline: calc(var(--agent-bubble-padding, 10px) * -1);
     border-radius: var(--radius-2xl);
-    padding: var(--agent-bubble-padding, 12px);
+    padding: var(--agent-bubble-padding, 10px);
     background-color: color-mix(
       in srgb,
       var(--message-surface) var(--agent-bubble-opacity, 25%),
