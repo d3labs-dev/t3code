@@ -80,11 +80,16 @@ html[data-theme-id]:not([data-theme-id=""]) {
 }
 
 @layer components {
-  /* The hero composer floats mid-pane where the wallpaper is brightest, so its
-     glass needs more fill than the bottom-anchored composer over the fade. */
+  /* BackgroundThemeSync sets the input box glass for new and ongoing threads. */
+  [data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-chat-composer-stack] {
+    --glass-opacity: var(--composer-glass-opacity, 80%);
+    --glass-blur: var(--composer-glass-blur, 16px);
+  }
+
   [data-chat-background-pane][data-chat-draft-hero]:has(> [data-chat-backdrop="source"])
     [data-chat-composer-stack] {
-    --glass-opacity: 94%;
+    --glass-opacity: var(--hero-composer-glass-opacity, 94%);
+    --glass-blur: var(--hero-composer-glass-blur, 16px);
   }
 
   [data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-chat-header] {
@@ -212,22 +217,18 @@ html[data-theme-id]:not([data-theme-id=""]) {
   mask-image: none;
 }
 
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-timeline-divider="working"] {
+/* The "Worked for" and "Working for" rows carry no rule under them. */
+[data-timeline-divider] {
   border-bottom-width: 0;
 }
 
-/* Dark themes draw the composer outline and the timeline's turn dividers in
-   opaque near-background colors, which read as black lines over a picture.
-   Use the context strip's white/7 edge instead. Unlayered so it beats the
-   theme utilities. */
+/* Dark themes draw the composer outline in an opaque near-background color,
+   which reads as a black line over a picture. Use the context strip's white/7
+   edge instead. Unlayered so it beats the theme utilities. */
 [data-chat-background-pane]:has(> [data-chat-backdrop="source"]) {
   @variant dark {
     & [data-slot="composer-shell"] {
       --chat-composer-outline: color-mix(in srgb, var(--color-white) 7%, transparent);
-    }
-
-    & [data-timeline-divider] {
-      border-color: color-mix(in srgb, var(--color-white) 7%, transparent);
     }
   }
 }
@@ -235,7 +236,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
 /* Your messages share the reply bubbles' opacity and blur. Unlayered so it
    beats the surface-glass utility; set on the bubble alone so the glass tiles
    inside it keep their own look. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-agent-bubbles])
+[data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-user-bubbles])
   [data-user-message-bubble] {
   background: color-mix(
     in srgb,
@@ -244,6 +245,16 @@ html[data-theme-id]:not([data-theme-id=""]) {
   );
   -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
   backdrop-filter: var(--agent-bubble-backdrop, none);
+}
+
+/* Without its bubble, your message sits on the picture with its text against
+   the column edge, the way a reply without a bubble does. */
+[data-chat-background-pane]:has(> [data-chat-backdrop="source"]:not([data-user-bubbles]))
+  [data-user-message-bubble] {
+  padding-inline: 0;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* 450 sits between regular and medium: the system fonts are variable, and a
@@ -269,7 +280,9 @@ html[data-theme-id]:not([data-theme-id=""]) {
 [data-chat-background-pane]:has(> [data-chat-backdrop="source"])
   [data-assistant-reply]
   > [data-assistant-citation-source]
-  .chat-markdown {
+  .chat-markdown,
+[data-chat-background-pane]:has(> [data-chat-backdrop="source"]:not([data-user-bubbles]))
+  [data-user-message-bubble] {
   --reply-text-shadow-color: rgb(255 255 255 / var(--reply-text-shadow-opacity, 40%));
   text-shadow:
     0 1px 2px var(--reply-text-shadow-color),

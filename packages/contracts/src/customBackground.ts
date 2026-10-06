@@ -221,7 +221,7 @@ export const CustomBackgroundBlur = Schema.Int.check(
   Schema.isBetween({ minimum: 0, maximum: MAX_CUSTOM_BACKGROUND_BLUR }),
 );
 
-/** Fill of the bubble behind agent replies, in percent of the message surface color. */
+/** Fill of the bubbles behind agent replies and your messages, in percent of the message surface color. */
 export const AgentBubbleOpacity = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 }));
 export type AgentBubbleOpacity = typeof AgentBubbleOpacity.Type;
 export const DEFAULT_AGENT_BUBBLE_OPACITY: AgentBubbleOpacity = 25;
@@ -240,6 +240,22 @@ export const AgentBubblePadding = Schema.Int.check(
 );
 export type AgentBubblePadding = typeof AgentBubblePadding.Type;
 export const DEFAULT_AGENT_BUBBLE_PADDING: AgentBubblePadding = 10;
+
+/** Fill of the input box's glass over a background, in percent of its surface color. */
+export const ComposerGlassOpacity = Schema.Int.check(
+  Schema.isBetween({ minimum: 0, maximum: 100 }),
+);
+export type ComposerGlassOpacity = typeof ComposerGlassOpacity.Type;
+/** The new-thread input floats mid-pane where the picture is brightest, so it starts more opaque. */
+export const DEFAULT_HERO_COMPOSER_GLASS_OPACITY: ComposerGlassOpacity = 94;
+export const DEFAULT_COMPOSER_GLASS_OPACITY: ComposerGlassOpacity = 80;
+
+export const MAX_COMPOSER_GLASS_BLUR = 40;
+export const ComposerGlassBlur = Schema.Int.check(
+  Schema.isBetween({ minimum: 0, maximum: MAX_COMPOSER_GLASS_BLUR }),
+);
+export type ComposerGlassBlur = typeof ComposerGlassBlur.Type;
+export const DEFAULT_COMPOSER_GLASS_BLUR: ComposerGlassBlur = 16;
 
 export const ReplyTextShadow = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 }));
 export type ReplyTextShadow = typeof ReplyTextShadow.Type;

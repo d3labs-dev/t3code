@@ -19,6 +19,7 @@ export const CustomBackground = memo(function CustomBackground({
 }) {
   const backdrop = useChatBackdrop(routeKind);
   const agentBubbles = useClientSettings((settings) => settings.customBackgroundAgentBubbles);
+  const userBubbles = useClientSettings((settings) => settings.customBackgroundUserBubbles);
   const replyTextEmphasis = useClientSettings(
     (settings) => settings.customBackgroundReplyTextEmphasis,
   );
@@ -27,6 +28,7 @@ export const CustomBackground = memo(function CustomBackground({
     <div
       data-chat-backdrop="source"
       data-agent-bubbles={agentBubbles || undefined}
+      data-user-bubbles={userBubbles || undefined}
       data-reply-text-emphasis={replyTextEmphasis || undefined}
       className="pointer-events-none absolute inset-0 -z-10"
     >

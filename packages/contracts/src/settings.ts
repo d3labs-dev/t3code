@@ -28,12 +28,17 @@ import {
   AgentBubbleBlur,
   AgentBubbleOpacity,
   AgentBubblePadding,
+  ComposerGlassBlur,
+  ComposerGlassOpacity,
   ReplyTextShadow,
   CustomBackgroundId,
   CustomBackgroundRecords,
   DEFAULT_AGENT_BUBBLE_BLUR,
   DEFAULT_AGENT_BUBBLE_OPACITY,
   DEFAULT_AGENT_BUBBLE_PADDING,
+  DEFAULT_COMPOSER_GLASS_BLUR,
+  DEFAULT_COMPOSER_GLASS_OPACITY,
+  DEFAULT_HERO_COMPOSER_GLASS_OPACITY,
   DEFAULT_REPLY_TEXT_SHADOW,
   StoredCustomBackgroundRecords,
 } from "./customBackground.ts";
@@ -337,6 +342,10 @@ export const ClientSettingsSchema = Schema.Struct({
   customBackgroundAgentBubbles: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
   ),
+  /** Sets your messages on a translucent bubble over a background; off, they sit on the picture like replies. */
+  customBackgroundUserBubbles: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
   customBackgroundAgentBubbleOpacity: AgentBubbleOpacity.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_BUBBLE_OPACITY)),
   ),
@@ -348,6 +357,20 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   customBackgroundReplyTextShadow: ReplyTextShadow.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_REPLY_TEXT_SHADOW)),
+  ),
+  /** Glass of the input box over a background on a new thread. */
+  customBackgroundHeroComposerOpacity: ComposerGlassOpacity.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_HERO_COMPOSER_GLASS_OPACITY)),
+  ),
+  customBackgroundHeroComposerBlur: ComposerGlassBlur.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_COMPOSER_GLASS_BLUR)),
+  ),
+  /** Glass of the input box over a background once the thread has messages. */
+  customBackgroundComposerOpacity: ComposerGlassOpacity.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_COMPOSER_GLASS_OPACITY)),
+  ),
+  customBackgroundComposerBlur: ComposerGlassBlur.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_COMPOSER_GLASS_BLUR)),
   ),
   /** Makes agent reply text bolder, and brighter in dark mode, over a background. */
   customBackgroundReplyTextEmphasis: Schema.Boolean.pipe(
@@ -1842,6 +1865,11 @@ export const ClientSettingsPatch = Schema.Struct({
   customBackgroundReplyTextEmphasis: Schema.optionalKey(Schema.Boolean),
   customBackgroundAgentBubblePadding: Schema.optionalKey(AgentBubblePadding),
   customBackgroundReplyTextShadow: Schema.optionalKey(ReplyTextShadow),
+  customBackgroundUserBubbles: Schema.optionalKey(Schema.Boolean),
+  customBackgroundHeroComposerOpacity: Schema.optionalKey(ComposerGlassOpacity),
+  customBackgroundHeroComposerBlur: Schema.optionalKey(ComposerGlassBlur),
+  customBackgroundComposerOpacity: Schema.optionalKey(ComposerGlassOpacity),
+  customBackgroundComposerBlur: Schema.optionalKey(ComposerGlassBlur),
   appearanceContrast: Schema.optionalKey(AppearanceContrast),
   panelAnimationDurationMs: Schema.optionalKey(PanelAnimationDurationMs),
   browserDefaultViewport: Schema.optionalKey(PreviewViewportSetting),

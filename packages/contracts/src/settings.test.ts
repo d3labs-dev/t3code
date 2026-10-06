@@ -1134,6 +1134,29 @@ describe("ClientSettings custom backgrounds", () => {
     expect(() => decodeClientSettingsPatch({ customBackgroundAgentBubbleBlur: 21 })).toThrow();
   });
 
+  it("starts with bubbled user messages and a more opaque new-thread input box", () => {
+    const settings = decodeClientSettings({});
+    expect(settings.customBackgroundUserBubbles).toBe(true);
+    expect(settings.customBackgroundHeroComposerOpacity).toBe(94);
+    expect(settings.customBackgroundComposerOpacity).toBe(80);
+    expect(settings.customBackgroundHeroComposerBlur).toBe(16);
+    expect(settings.customBackgroundComposerBlur).toBe(16);
+  });
+
+  it("persists the user bubble switch and both input box looks, including clear glass", () => {
+    const patch = decodeClientSettingsPatch({
+      customBackgroundUserBubbles: false,
+      customBackgroundHeroComposerOpacity: 0,
+      customBackgroundHeroComposerBlur: 0,
+      customBackgroundComposerOpacity: 100,
+      customBackgroundComposerBlur: 40,
+    });
+    const settings = decodeClientSettings(patch);
+    expect(decodeClientSettings(encodeClientSettings(settings))).toMatchObject(patch);
+    expect(() => decodeClientSettingsPatch({ customBackgroundComposerOpacity: 101 })).toThrow();
+    expect(() => decodeClientSettingsPatch({ customBackgroundHeroComposerBlur: 41 })).toThrow();
+  });
+
   it("persists readability controls, including zero padding and disabled shadows", () => {
     const patch = decodeClientSettingsPatch({
       customBackgroundAgentBubbles: false,

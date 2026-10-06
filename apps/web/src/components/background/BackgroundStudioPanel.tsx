@@ -12,6 +12,7 @@ import {
   type CustomBackgroundRecord,
   MAX_AGENT_BUBBLE_BLUR,
   MAX_AGENT_BUBBLE_PADDING,
+  MAX_COMPOSER_GLASS_BLUR,
   MAX_CUSTOM_BACKGROUND_BLUR,
   MAX_CUSTOM_BACKGROUND_FADE,
   MIN_CUSTOM_BACKGROUND_FADE,
@@ -564,6 +565,7 @@ export function BackgroundStudioPanel() {
   const enabled = useClientSettings((settings) => settings.customBackgroundEnabled);
   const dynamicTheme = useClientSettings((settings) => settings.customBackgroundDynamicTheme);
   const agentBubbles = useClientSettings((settings) => settings.customBackgroundAgentBubbles);
+  const userBubbles = useClientSettings((settings) => settings.customBackgroundUserBubbles);
   const bubbleOpacity = useClientSettings(
     (settings) => settings.customBackgroundAgentBubbleOpacity,
   );
@@ -575,6 +577,14 @@ export function BackgroundStudioPanel() {
   const replyTextEmphasis = useClientSettings(
     (settings) => settings.customBackgroundReplyTextEmphasis,
   );
+  const heroComposerOpacity = useClientSettings(
+    (settings) => settings.customBackgroundHeroComposerOpacity,
+  );
+  const heroComposerBlur = useClientSettings(
+    (settings) => settings.customBackgroundHeroComposerBlur,
+  );
+  const composerOpacity = useClientSettings((settings) => settings.customBackgroundComposerOpacity);
+  const composerBlur = useClientSettings((settings) => settings.customBackgroundComposerBlur);
   const updateSettings = useUpdateClientSettings();
 
   const selectedId = activeId;
@@ -994,7 +1004,14 @@ export function BackgroundStudioPanel() {
             onCheckedChange={(checked) => updateSettings({ customBackgroundAgentBubbles: checked })}
           />
         </label>
-        {agentBubbles ? (
+        <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          Bubbles behind your messages
+          <Switch
+            checked={userBubbles}
+            onCheckedChange={(checked) => updateSettings({ customBackgroundUserBubbles: checked })}
+          />
+        </label>
+        {agentBubbles || userBubbles ? (
           <>
             <RangeControl
               label="Bubble opacity"
@@ -1014,16 +1031,18 @@ export function BackgroundStudioPanel() {
               format={(value) => `${value}px`}
               onChange={(value) => updateSettings({ customBackgroundAgentBubbleBlur: value })}
             />
-            <RangeControl
-              label="Reply bubble padding"
-              min={0}
-              max={MAX_AGENT_BUBBLE_PADDING}
-              step={1}
-              value={bubblePadding}
-              format={(value) => `${value}px`}
-              onChange={(value) => updateSettings({ customBackgroundAgentBubblePadding: value })}
-            />
           </>
+        ) : null}
+        {agentBubbles ? (
+          <RangeControl
+            label="Reply bubble padding"
+            min={0}
+            max={MAX_AGENT_BUBBLE_PADDING}
+            step={1}
+            value={bubblePadding}
+            format={(value) => `${value}px`}
+            onChange={(value) => updateSettings({ customBackgroundAgentBubblePadding: value })}
+          />
         ) : null}
         <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           Bolder, brighter reply text
@@ -1042,6 +1061,44 @@ export function BackgroundStudioPanel() {
           value={textShadow}
           format={(value) => (value === 0 ? "Off" : `${value}%`)}
           onChange={(value) => updateSettings({ customBackgroundReplyTextShadow: value })}
+        />
+      </StudioSection>
+      <StudioSection title="Input box">
+        <RangeControl
+          label="New thread opacity"
+          min={0}
+          max={100}
+          step={1}
+          value={heroComposerOpacity}
+          format={(value) => `${value}%`}
+          onChange={(value) => updateSettings({ customBackgroundHeroComposerOpacity: value })}
+        />
+        <RangeControl
+          label="New thread blur"
+          min={0}
+          max={MAX_COMPOSER_GLASS_BLUR}
+          step={1}
+          value={heroComposerBlur}
+          format={(value) => `${value}px`}
+          onChange={(value) => updateSettings({ customBackgroundHeroComposerBlur: value })}
+        />
+        <RangeControl
+          label="Ongoing chat opacity"
+          min={0}
+          max={100}
+          step={1}
+          value={composerOpacity}
+          format={(value) => `${value}%`}
+          onChange={(value) => updateSettings({ customBackgroundComposerOpacity: value })}
+        />
+        <RangeControl
+          label="Ongoing chat blur"
+          min={0}
+          max={MAX_COMPOSER_GLASS_BLUR}
+          step={1}
+          value={composerBlur}
+          format={(value) => `${value}px`}
+          onChange={(value) => updateSettings({ customBackgroundComposerBlur: value })}
         />
       </StudioSection>
     </div>
