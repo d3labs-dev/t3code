@@ -596,9 +596,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         assert.equal((yield* serverSettings.getSettings).dictation.apiKey, "");
         assert.isTrue(Option.isNone(yield* secretStore.get("dictation-api-key")));
       }),
-    ).pipe(
-      Effect.provide(ServerSecretStore.layer.pipe(Layer.provideMerge(makeServerSettingsLayer()))),
-    ),
+    ).pipe(Effect.provide(layerServerSettingsWithSecrets())),
   );
 
   it.effect("persists and broadcasts thread settlement settings", () =>

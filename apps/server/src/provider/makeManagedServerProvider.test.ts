@@ -320,7 +320,7 @@ describe("makeManagedServerProvider", () => {
         yield* Effect.yieldNow;
         assert.strictEqual(yield* Ref.get(checkCalls), 3);
       }),
-    ).pipe(Effect.provide(Layer.mergeAll(AlwaysRunTestLayer, TestClock.layer()))),
+    ).pipe(Effect.provide(Layer.mergeAll(layerAlwaysRunTest, TestClock.layer()))),
   );
 
   it.effect("wakes a sleeping provider refresh loop when its interval changes", () =>
