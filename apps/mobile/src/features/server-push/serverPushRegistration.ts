@@ -123,7 +123,7 @@ export const serverPushRegistrationLayer = Layer.effectDiscard(
             .run(environmentId, request(WS_METHODS.serverPushRegisterDevice, registration))
             .pipe(
               // A disconnected environment registers once its session opens.
-              Effect.catchTag("EnvironmentRpcUnavailableError", () => Effect.void),
+              Effect.catchTags({ EnvironmentRpcUnavailableError: () => Effect.void }),
               Effect.timeout(REQUEST_TIMEOUT),
               Effect.catchCause((cause) =>
                 Effect.logWarning("Could not register for server push.", { environmentId, cause }),

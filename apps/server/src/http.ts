@@ -545,13 +545,14 @@ export const voiceTranscriptionRouteLayer = HttpRouter.add(
     const voiceTranscription = yield* VoiceTranscription.VoiceTranscription;
     return yield* voiceTranscription.transcribe({ audio, threadId: claims.threadId }).pipe(
       Effect.map((text) => HttpServerResponse.jsonUnsafe({ text })),
-      Effect.catchTag("VoiceTranscriptionFailure", (failure) =>
-        Effect.succeed(
-          HttpServerResponse.text(failure.message, {
-            status: VOICE_TRANSCRIPTION_FAILURE_STATUS[failure.reason],
-          }),
-        ),
-      ),
+      Effect.catchTags({
+        VoiceTranscriptionFailure: (failure) =>
+          Effect.succeed(
+            HttpServerResponse.text(failure.message, {
+              status: VOICE_TRANSCRIPTION_FAILURE_STATUS[failure.reason],
+            }),
+          ),
+      }),
     );
   }),
 );
