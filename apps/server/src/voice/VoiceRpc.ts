@@ -28,13 +28,14 @@ export const makeRpcHandlers = VoiceTranscription.VoiceTranscription.pipe(
         WS_METHODS.voiceLearnCorrections,
         voiceTranscription.learnCorrections(corrections).pipe(
           Effect.map((learned) => ({ learned })),
-          Effect.catchTag("VoiceTranscriptionFailure", (failure) =>
-            failure.reason === "not-configured"
-              ? Effect.fail(new VoiceTranscriptionNotConfiguredError())
-              : Effect.logWarning("Could not learn from dictation corrections.", {
-                  reason: failure.reason,
-                }).pipe(Effect.as({ learned: [] })),
-          ),
+          Effect.catchTags({
+            VoiceTranscriptionFailure: (failure) =>
+              failure.reason === "not-configured"
+                ? Effect.fail(new VoiceTranscriptionNotConfiguredError())
+                : Effect.logWarning("Could not learn from dictation corrections.", {
+                    reason: failure.reason,
+                  }).pipe(Effect.as({ learned: [] })),
+          }),
         ),
         { "rpc.aggregate": "workspace" },
       ),

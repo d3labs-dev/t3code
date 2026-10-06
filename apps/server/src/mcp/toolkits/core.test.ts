@@ -1,6 +1,8 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
+import type { JsonSchemaType } from "@modelcontextprotocol/sdk/validation";
 import {
   DEFAULT_SERVER_SETTINGS,
   ChatImageAttachment,
@@ -21,8 +23,9 @@ import * as ServerConfig from "../../config.ts";
 import { OrchestratorProjectionError } from "../../orchestration-v2/Orchestrator.ts";
 import * as ProviderAdapterRegistry from "../../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadManagement from "../../orchestration-v2/ThreadManagementService.ts";
+import * as PreviewBrowser from "../../preview/PreviewBrowser.ts";
 import * as ProjectService from "../../project/ProjectService.ts";
-import * as ProviderRegistry from "../../provider/Services/ProviderRegistry.ts";
+import * as ProviderRegistry from "../../provider/ProviderRegistry.ts";
 import * as SecretRequests from "../../secrets/SecretRequests.ts";
 import * as ScheduledTaskService from "../../scheduledTasks/ScheduledTaskService.ts";
 import * as McpHttpServer from "../McpHttpServer.ts";
@@ -135,9 +138,11 @@ it.effect("checks capability before accessing services through the production re
         Effect.provideService(McpSchema.McpServerClient, client),
       );
     expect(declaredFailure(result)).toMatchObject({ code: "capability_denied" });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
   }).pipe(
     Effect.provide(
-      McpHttpServer.ThreadToolkitRegistrationLive.pipe(
+      McpHttpServer.layerThreadToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
@@ -160,9 +165,25 @@ it.effect("returns a bounded public failure without serializing storage causes",
       code: "orchestration_error",
       message: "The operation could not be completed.",
     });
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([
+      {
+        type: "text",
+        text: '{"_tag":"OrchestratorMcpFailure","code":"orchestration_error","message":"The operation could not be completed."}',
+      },
+    ]);
+    const definition = server.tools.find(({ tool }) => tool.name === "t3_thread_organize");
+    expect(definition?.tool.outputSchema).toBeDefined();
+    const validate = new AjvJsonSchemaValidator().getValidator(
+      definition!.tool.outputSchema! as JsonSchemaType,
+    );
+    expect(result.structuredContent).toBeUndefined();
+    expect(validate({ sequence: 1 }).valid).toBe(true);
+    expect(validate({ code: "orchestration_error" }).valid).toBe(false);
+    expect(validate({ sequence: "invalid" }).valid).toBe(false);
   }).pipe(
     Effect.provide(
-      McpHttpServer.ThreadToolkitRegistrationLive.pipe(
+      McpHttpServer.layerThreadToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(
@@ -203,8 +224,9 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
     ).toEqual(reference);
   }).pipe(
     Effect.provide(
-      McpHttpServer.HtmlToolkitRegistrationLive.pipe(
+      McpHttpServer.layerHtmlToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
+        Layer.provide(PreviewBrowser.layer),
         Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-html-render-" })),
         Layer.provide(NodeServices.layer),
         // The preview browser is not installed in a fresh home, so nothing downloads.
@@ -220,6 +242,57 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
                 activeRunId: RunId.make("mcp-core-run"),
                 providerInstanceId: ProviderInstanceId.make("codex"),
               } as OrchestrationV2ThreadShell),
+          }),
+        ),
+      ),
+    ),
+  ),
+);
+
+it.effect("returns invalid parameter errors through the production registration", () =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const error = yield* server
+      .callTool({ name: "t3_thread_organize", arguments: { action: "invalid" } })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+        Effect.provideService(McpSchema.McpServerClient, client),
+        Effect.flip,
+      );
+    expect(error._tag).toBe("InvalidParams");
+  }).pipe(
+    Effect.provide(
+      McpHttpServer.layerThreadToolkit.pipe(
+        Layer.provideMerge(McpServer.McpServer.layer),
+        Layer.provide(NodeCrypto.layer),
+        Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
+      ),
+    ),
+  ),
+);
+
+it.effect("keeps unexpected handler defects private through the production registration", () =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const result = yield* server
+      .callTool({ name: "t3_thread_organize", arguments: { action: "pin" } })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(result.content).toEqual([
+      { type: "text", text: "Tool execution failed due to an internal server error." },
+    ]);
+  }).pipe(
+    Effect.provide(
+      McpHttpServer.layerThreadToolkit.pipe(
+        Layer.provideMerge(McpServer.McpServer.layer),
+        Layer.provide(NodeCrypto.layer),
+        Layer.provide(
+          Layer.mock(ThreadManagement.ThreadManagementService)({
+            getThreadShell: () => Effect.die(new Error("private-storage-path")),
           }),
         ),
       ),
@@ -332,7 +405,7 @@ it.effect("a client caller targets any thread within its ceiling and cannot act 
     expect(declaredFailure(forked)).toMatchObject({ code: "target_required" });
   }).pipe(
     Effect.provide(
-      McpHttpServer.ThreadToolkitRegistrationLive.pipe(
+      McpHttpServer.layerThreadToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(
@@ -379,7 +452,7 @@ it.effect("refuses act-as-caller tools to a client caller", () =>
     expect(declaredFailure(result)).toMatchObject({ code: "thread_credential_required" });
   }).pipe(
     Effect.provide(
-      McpHttpServer.OrchestratorToolkitRegistrationLive.pipe(
+      McpHttpServer.layerOrchestratorToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
@@ -417,7 +490,7 @@ it.effect("a caller cannot rewrite a scheduled task that runs above its own mode
     expect(allowed.isError).toBe(false);
   }).pipe(
     Effect.provide(
-      McpHttpServer.OrchestratorToolkitRegistrationLive.pipe(
+      McpHttpServer.layerOrchestratorToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
@@ -483,7 +556,7 @@ it.effect("a caller cannot interrupt a thread that runs above its own modes", ()
     expect(declaredFailure(result)).toMatchObject({ code: "runtime_mode_escalation_denied" });
   }).pipe(
     Effect.provide(
-      McpHttpServer.OrchestratorToolkitRegistrationLive.pipe(
+      McpHttpServer.layerOrchestratorToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(
