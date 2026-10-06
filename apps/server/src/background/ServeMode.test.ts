@@ -13,14 +13,14 @@ import { ChildProcessSpawner } from "effect/process";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as ServeMode from "./ServeMode.ts";
 
 const settingsLayer = () =>
   ServerSettings.layer.pipe(
     Layer.provide(ServerSecretStore.layer),
-    Layer.provideMerge(Layer.fresh(SqlitePersistenceMemory)),
+    Layer.provideMerge(Layer.fresh(SqlitePersistence.layerMemory)),
     Layer.provideMerge(
       Layer.fresh(ServerConfig.layerTest(process.cwd(), { prefix: "t3code-serve-mode-test-" })),
     ),

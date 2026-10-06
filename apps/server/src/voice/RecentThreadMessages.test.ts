@@ -11,12 +11,12 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as RecentThreadMessages from "./RecentThreadMessages.ts";
 
 const TestLayer = Layer.mergeAll(RecentThreadMessages.layer, ProjectionStore.layer).pipe(
-  Layer.provideMerge(SqlitePersistenceMemory),
+  Layer.provideMerge(SqlitePersistence.layerMemory),
 );
 
 const providerInstanceId = ProviderInstanceId.make("codex");
