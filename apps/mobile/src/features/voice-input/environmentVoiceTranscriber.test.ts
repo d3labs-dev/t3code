@@ -2,7 +2,7 @@ import { EnvironmentId, VoiceTranscriptionNotConfiguredError } from "@t3tools/co
 import { VoiceTranscriptionError } from "@t3tools/client-runtime/voice-input";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => ({

@@ -3,9 +3,9 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
-import type { SqlError } from "effect/unstable/sql/SqlError";
-import * as SqlSchema from "effect/unstable/sql/SqlSchema";
+import * as SqlClient from "effect/sql/SqlClient";
+import type { SqlError } from "effect/sql/SqlError";
+import * as SqlSchema from "effect/sql/SqlSchema";
 
 const RecentThreadMessagesRequest = Schema.Struct({ threadId: ThreadId, limit: Schema.Int });
 const RecentThreadMessage = Schema.Struct({ text: Schema.String });

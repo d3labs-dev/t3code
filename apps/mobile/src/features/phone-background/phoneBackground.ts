@@ -11,7 +11,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as Option from "effect/Option";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useCallback } from "react";
 
 import type { PhoneBackgroundQuickAdjustPosition } from "../../persistence/mobile-preferences";

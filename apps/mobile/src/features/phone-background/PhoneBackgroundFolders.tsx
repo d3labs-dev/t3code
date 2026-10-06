@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { CustomBackgroundRecord } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { type ComponentProps, useState } from "react";
 import { Alert, Linking, View } from "react-native";
 
