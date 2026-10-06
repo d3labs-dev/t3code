@@ -227,7 +227,7 @@ export type AgentBubbleOpacity = typeof AgentBubbleOpacity.Type;
 export const DEFAULT_AGENT_BUBBLE_OPACITY: AgentBubbleOpacity = 25;
 
 export const MAX_AGENT_BUBBLE_BLUR = 20;
-/** Backdrop blur behind agent reply bubbles, in pixels. 0 applies no backdrop filter. */
+/** Backdrop blur behind the bubbles of agent replies and your messages, in pixels. 0 applies no backdrop filter. */
 export const AgentBubbleBlur = Schema.Int.check(
   Schema.isBetween({ minimum: 0, maximum: MAX_AGENT_BUBBLE_BLUR }),
 );
@@ -235,6 +235,7 @@ export type AgentBubbleBlur = typeof AgentBubbleBlur.Type;
 export const DEFAULT_AGENT_BUBBLE_BLUR: AgentBubbleBlur = 0;
 
 export const MAX_AGENT_BUBBLE_PADDING = 24;
+/** Inner padding of the bubbles behind agent replies and your messages, in pixels. */
 export const AgentBubblePadding = Schema.Int.check(
   Schema.isBetween({ minimum: 0, maximum: MAX_AGENT_BUBBLE_PADDING }),
 );

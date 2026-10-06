@@ -1031,18 +1031,16 @@ export function BackgroundStudioPanel() {
               format={(value) => `${value}px`}
               onChange={(value) => updateSettings({ customBackgroundAgentBubbleBlur: value })}
             />
+            <RangeControl
+              label="Bubble padding"
+              min={0}
+              max={MAX_AGENT_BUBBLE_PADDING}
+              step={1}
+              value={bubblePadding}
+              format={(value) => `${value}px`}
+              onChange={(value) => updateSettings({ customBackgroundAgentBubblePadding: value })}
+            />
           </>
-        ) : null}
-        {agentBubbles ? (
-          <RangeControl
-            label="Reply bubble padding"
-            min={0}
-            max={MAX_AGENT_BUBBLE_PADDING}
-            step={1}
-            value={bubblePadding}
-            format={(value) => `${value}px`}
-            onChange={(value) => updateSettings({ customBackgroundAgentBubblePadding: value })}
-          />
         ) : null}
         <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           Bolder, brighter reply text

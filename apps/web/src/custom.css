@@ -233,11 +233,12 @@ html[data-theme-id]:not([data-theme-id=""]) {
   }
 }
 
-/* Your messages share the reply bubbles' opacity and blur. Unlayered so it
+/* Your messages share the reply bubbles' padding, opacity, and blur. Unlayered so it
    beats the surface-glass utility; set on the bubble alone so the glass tiles
    inside it keep their own look. */
 [data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-user-bubbles])
   [data-user-message-bubble] {
+  padding: var(--agent-bubble-padding, 10px);
   background: color-mix(
     in srgb,
     var(--message-surface) var(--agent-bubble-opacity, 25%),
