@@ -65,3 +65,4 @@ export * from "./rpc.ts";
 export * from "./worktreeSetup.ts";
 export * from "./serverPush.ts";
 export * from "./secretRequest.ts";
+export * from "./clientRpcPermissions.ts";

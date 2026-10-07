@@ -8,6 +8,10 @@ const state = vi.hoisted(() => ({
   refreshProviders: vi.fn(),
   refreshingRef: { current: false },
 }));
+vi.mock("../../state/session", () => ({
+  useEnvironmentScope: () => true,
+  readEnvironmentScope: () => true,
+}));
 vi.mock("react", () => ({
   useState: (initial: unknown) => {
     const index = state.cursor++;
