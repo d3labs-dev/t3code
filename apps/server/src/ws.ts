@@ -1808,7 +1808,7 @@ const layerWsRpc = (
       });
 
       const handlers = ServerWsRpcGroup.of({
-        ...(yield* ServerPush.makeRpcHandlers(observeRpcEffect)),
+        ...(yield* ServerPush.makeRpcHandlers),
         ...(yield* VoiceRpc.makeRpcHandlers),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({

@@ -5,7 +5,6 @@
  * and the relay's Android delivery rules (serverPushPayloads).
  */
 import {
-  type EnvironmentAuthorizationError,
   type OrchestrationV2ThreadShell,
   type Project,
   type ServerPushDeviceRegistration,
@@ -386,27 +385,12 @@ export const make = Effect.gen(function* () {
 
 export const layer = Layer.effect(ServerPush, make);
 
-type ObserveRpcEffect = <A, E, R>(
-  method: string,
-  effect: Effect.Effect<A, E, R>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
-) => Effect.Effect<A, E | EnvironmentAuthorizationError, R>;
-
 /** The WebSocket handlers for this module's RPCs, spread into ws.ts's handler map. */
-export const makeRpcHandlers = (observeRpcEffect: ObserveRpcEffect) =>
-  ServerPush.pipe(
-    Effect.map((serverPush) => ({
-      [WS_METHODS.serverPushRegisterDevice]: (registration: ServerPushDeviceRegistration) =>
-        observeRpcEffect(
-          WS_METHODS.serverPushRegisterDevice,
-          serverPush.registerDevice(registration),
-          { "rpc.aggregate": "server" },
-        ),
-      [WS_METHODS.serverPushUnregisterDevice]: (input: { readonly deviceId: string }) =>
-        observeRpcEffect(
-          WS_METHODS.serverPushUnregisterDevice,
-          serverPush.unregisterDevice(input.deviceId),
-          { "rpc.aggregate": "server" },
-        ),
-    })),
-  );
+export const makeRpcHandlers = ServerPush.pipe(
+  Effect.map((serverPush) => ({
+    [WS_METHODS.serverPushRegisterDevice]: (registration: ServerPushDeviceRegistration) =>
+      serverPush.registerDevice(registration),
+    [WS_METHODS.serverPushUnregisterDevice]: (input: { readonly deviceId: string }) =>
+      serverPush.unregisterDevice(input.deviceId),
+  })),
+);
