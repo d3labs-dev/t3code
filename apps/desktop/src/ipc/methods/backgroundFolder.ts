@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Content ids must match the renderer's SHA-256 hex of the picture bytes.
 import { DesktopBackgroundFolderImage } from "@t3tools/contracts";
 import * as NodeCrypto from "node:crypto";
 import * as Effect from "effect/Effect";

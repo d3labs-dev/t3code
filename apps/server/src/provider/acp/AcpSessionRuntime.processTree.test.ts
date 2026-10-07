@@ -654,8 +654,10 @@ describe("terminatePosixOwnedProcessTree", () => {
 
   it.live("rotates more than 64 live parents without scanning retained tombstones", () =>
     Effect.gen(function* () {
+      // Fake PIDs start above the runner's real PID, which the fixture's server entry owns.
+      const firstFakePid = process.pid + 1;
       const parents = Array.from({ length: 130 }, (_, index) =>
-        identity(1_000 + index, 100, 1_000 + index, 1_000 + index),
+        identity(firstFakePid + index, 100, firstFakePid + index, firstFakePid + index),
       );
       let childListReads = 0;
       let identityCalls = 0;
@@ -683,7 +685,8 @@ describe("terminatePosixOwnedProcessTree", () => {
       const ledger = new Map<string, AcpOwnedPosixProcess>();
       const root: AcpPosixOwnershipRoot = { value: undefined };
       for (let index = 0; index < 5_000; index += 1) {
-        const tombstone = identity(100_000 + index, 1, 100_000 + index, 100_000 + index);
+        const tombstonePid = firstFakePid + 100_000 + index;
+        const tombstone = identity(tombstonePid, 1, tombstonePid, tombstonePid);
         ledger.set(`${tombstone.pid}:${tombstone.startTime}`, {
           ...tombstone,
           parentExecutable: undefined,
