@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Computes the expected SHA-256 hex ids independently of the implementation.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "node:crypto";
