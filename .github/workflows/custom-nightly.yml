@@ -159,14 +159,19 @@ jobs:
 
           ## Task
 
-          Before committing the merge, run \`pnpm exec vp fmt <file>...\` on the files you resolved. On every attempt, including the first, run the smallest relevant checks, such as changed-file lint or one test file. Fix failures and rerun the affected check before pushing. Spend at most one minute total on focused checks, including their extra tool or dependency setup. Leave checks that exceed that budget or cannot run locally to GitHub CI, and name them in your summary. Never run whole test suites, repository-wide typechecks, or builds locally: GitHub CI runs them on the pull request.
+          On every attempt, including the first, check your work locally before each push, because GitHub CI takes about 10 minutes to report:
+          - Set up once per worktree: \`pnpm install --ignore-scripts\`, then \`pnpm exec effect-tsgo patch\`, which adds the Effect diagnostics CI enforces.
+          - Run \`pnpm exec vp fmt <file>...\` and \`pnpm exec vp lint --report-unused-disable-directives <file>...\` on every file you resolved or changed.
+          - Run \`pnpm exec tsc --noEmit --checkers 1\` inside each of \`apps/desktop\` and \`packages/*\` whose files you resolved or changed.
+          - Fix failures and rerun the affected check before pushing. Spend at most five minutes on setup and checks together.
+          - Never typecheck \`apps/server\` or \`apps/web\`, run knip, test suites, or builds here: they need more than this machine's 4 GB, and GitHub CI runs them on the pull request. Name the checks you left to CI in your summary.
 
           1. Start \`${job_branch}\` from \`origin/${GITHUB_REF_NAME}\`, or continue it if an earlier attempt pushed it. Fetch the tag with \`git fetch --no-tags https://github.com/pingdotgg/t3code.git tag ${upstream_tag}\` and merge it with \`git merge --no-ff ${upstream_tag}\`. Never rebase, squash, or cherry-pick: the nightly decides what is new with \`git merge-base --is-ancestor ${upstream_tag} HEAD\`, so only a merge commit keeps the tag an ancestor.
           2. Resolve each conflicted hunk:
              - Classify it as disjoint (the sides changed different things, so keep both), same question with different answers (pick one side on the evidence), or superseded (one side's change makes the other's moot).
              - Touch only the conflicted regions, and leave every line git merged cleanly as it is.
              - Keep the fork's customizations and take upstream's changes. The fork's intent is in \`git log ${upstream_tag}..origin/${GITHUB_REF_NAME}\`; upstream's is in \`git log origin/${GITHUB_REF_NAME}..${upstream_tag}\` and its pull requests.
-             - Regenerate lockfiles and generated files instead of merging them by hand: take upstream's \`pnpm-lock.yaml\` and run \`pnpm install\` to reconcile it with the merged manifests.
+             - Regenerate lockfiles and generated files instead of merging them by hand: take upstream's \`pnpm-lock.yaml\` and run \`pnpm install --ignore-scripts\` to reconcile it with the merged manifests.
              - Leave no conflict markers: \`git grep -nE '^(<<<<<<<|>>>>>>>) '\` finds nothing.
           3. Commit the merge, push \`${job_branch}\`, and open a pull request into \`${GITHUB_REF_NAME}\`. Its body has a table with one row per conflicted hunk and the columns File:lines, Class, ${GITHUB_REF_NAME}, Upstream, Kept, and Why. If a push is refused for the workflows permission, change nothing and finish blocked with that reason.
           4. GitHub CI runs the fork's checks on the pull request. Chamaquita merges it as a merge commit once every check passes and GitHub finds it mergeable; if CI fails, Chamaquita hands the failures to the next attempt. The next run finds the tag merged, publishes the build, and closes this issue.
