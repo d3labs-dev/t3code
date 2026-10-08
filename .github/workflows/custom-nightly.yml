@@ -23,7 +23,7 @@ permissions:
   contents: write
   issues: write
   id-token: write
-  pull-requests: read
+  pull-requests: write
 
 # A push supersedes whatever is building, including the run whose upstream
 # merge push triggered it. Scheduled and manual runs queue instead, so a check
@@ -125,6 +125,16 @@ jobs:
             gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title \
               --jq ".[] | select(.title | endswith(\"${conflict_title_suffix}\")) | .number"
           }
+          # Every Job pull request but the current tag's is stale once its tag is merged or superseded.
+          close_stale_job_pull_requests() {
+            local keep_branch="$1" reason="$2"
+            for number in $(
+              gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$GITHUB_REF_NAME" --limit 100 --json number,headRefName \
+                --jq ".[] | select((.headRefName | startswith(\"chamaquita/upstream-\")) and .headRefName != \"${keep_branch}\") | .number"
+            ); do
+              gh pr close "$number" --repo "$GITHUB_REPOSITORY" --delete-branch --comment "$reason"
+            done
+          }
 
           if ! git merge-base --is-ancestor "$upstream_tag" HEAD; then
             if ! git merge --no-edit "$upstream_tag"; then
@@ -139,6 +149,7 @@ jobs:
                 for number in $(open_conflict_issues); do
                   gh issue close "$number" --repo "$GITHUB_REPOSITORY" --comment "Superseded by ${upstream_tag}."
                 done
+                close_stale_job_pull_requests "chamaquita/upstream-${upstream_tag}" "Superseded by ${upstream_tag}."
                 # Chamaquita works issues labeled chamaquita and merges the pull request of one labeled automerge.
                 gh label create chamaquita --repo "$GITHUB_REPOSITORY" --force --color 5319e7 \
                   --description "Chamaquita works this issue as a Job" ||
@@ -191,6 +202,7 @@ jobs:
           for number in $(open_conflict_issues); do
             gh issue close "$number" --repo "$GITHUB_REPOSITORY" --comment "Merged in $(git rev-parse --short HEAD)."
           done
+          close_stale_job_pull_requests "" "Superseded: ${GITHUB_REF_NAME} already includes ${upstream_tag} as of $(git rev-parse --short HEAD)."
 
           package_version="$(node -p "require('./apps/desktop/package.json').version")"
           stable_version="${package_version%%-*}"
