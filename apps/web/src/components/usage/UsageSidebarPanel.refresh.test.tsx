@@ -24,7 +24,9 @@ vi.mock("../../state/usage", () => ({
 vi.mock("../ui/sidebar", () => ({ SidebarContent: "div", SidebarGroup: "div" }));
 vi.mock("../chat/ProviderInstanceIcon", () => ({ ProviderInstanceIcon: () => null }));
 vi.mock("../settings/RedactedSensitiveText", () => ({ RedactedSensitiveText: "span" }));
-vi.mock("../settings/providerDriverMeta", () => ({ getDriverOption: () => ({ label: "Codex" }) }));
+vi.mock("../settings/providerDriverMeta", () => ({
+  providerClients: { get: () => ({ label: "Codex" }) },
+}));
 
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
 vi.mock("../sidebar/SidebarChrome", () => ({ SidebarChromeFooter: () => null }));
