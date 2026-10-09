@@ -79,6 +79,19 @@ html[data-theme-id]:not([data-theme-id=""]) {
   }
 }
 
+/* Message bubbles over a picture fill with the message surface. The default
+   dark theme's is a 4% white tint that only reads on the app's own background,
+   so over a picture it gets the opaque color that tint makes on that
+   background. Every other theme, the picture's own included, paints an opaque
+   surface. */
+:root {
+  --bubble-surface: var(--message-surface);
+}
+
+:is(html:not([data-theme-id]), html[data-theme-id=""]).dark {
+  --bubble-surface: color-mix(in srgb, var(--background) 96%, var(--color-white));
+}
+
 @layer components {
   /* BackgroundThemeSync sets the input box glass for new and ongoing threads. */
   [data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-chat-composer-stack] {
@@ -109,7 +122,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
     padding: var(--agent-bubble-padding, 10px);
     background-color: color-mix(
       in srgb,
-      var(--message-surface) var(--agent-bubble-opacity, 25%),
+      var(--bubble-surface) var(--agent-bubble-opacity, 25%),
       transparent
     );
     -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
@@ -241,7 +254,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
   padding: var(--agent-bubble-padding, 10px);
   background: color-mix(
     in srgb,
-    var(--message-surface) var(--agent-bubble-opacity, 25%),
+    var(--bubble-surface) var(--agent-bubble-opacity, 25%),
     transparent
   );
   -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
