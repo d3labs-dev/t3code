@@ -643,9 +643,13 @@ export const make = Effect.gen(function* () {
           return { accepted: false, completed: false, failed: false };
         }
 
-        yield* Ref.set(desktopState.quitting, true);
-
         return yield* Effect.gen(function* () {
+          // Squirrel.Mac reads the zip from electron-updater's cache only at
+          // install time, and that cache lives in purgeable ~/Library/Caches.
+          // downloadUpdate reuses the cached file when it is still there and
+          // fetches it again when it is not.
+          yield* electronUpdater.downloadUpdate;
+          yield* Ref.set(desktopState.quitting, true);
           yield* writeUpdateRestartMarker;
           // Stop every backend in the pool, not just the primary. With
           // parallel WSL + Windows backends, leaving the WSL instance up
@@ -667,6 +671,17 @@ export const make = Effect.gen(function* () {
           return { accepted: true, completed: false, failed: false };
         }).pipe(
           Effect.catchTags({
+            ElectronUpdaterDownloadUpdateError: Effect.fn(
+              "desktop.updates.handleInstallDownloadFailure",
+            )(function* (error) {
+              yield* recoverFailedInstall(error.message);
+              yield* logUpdaterError(error.message, {
+                errorTag: error._tag,
+                cause: prettyCause(error.cause),
+                channel: error.channel,
+              });
+              return { accepted: true, completed: false, failed: true };
+            }),
             ElectronUpdaterQuitAndInstallError: Effect.fn("desktop.updates.handleInstallFailure")(
               function* (error) {
                 yield* recoverFailedInstall(error.message);

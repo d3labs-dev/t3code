@@ -654,6 +654,59 @@ describe("DesktopUpdates", () => {
     }),
   );
 
+  it.effect("refetches the update before handing it to the installer", () => {
+    let quitAndInstallsAtDownload: number | undefined;
+    const harness = makeHarness({
+      downloadUpdate: Effect.sync(() => {
+        quitAndInstallsAtDownload = harness.quitAndInstalls();
+      }),
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        harness.emit("update-downloaded", { version: "1.2.4" });
+        yield* flushCallbacks;
+
+        assert.isTrue((yield* updates.install).accepted);
+        assert.equal(harness.downloadCount(), 1);
+        assert.equal(quitAndInstallsAtDownload, 0);
+        assert.equal(harness.quitAndInstalls(), 1);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("keeps the app running when the install cannot refetch the update", () => {
+    const harness = makeHarness({
+      downloadUpdate: Effect.fail(
+        new ElectronUpdater.ElectronUpdaterDownloadUpdateError({
+          channel: "latest",
+          cause: new Error("network unreachable"),
+        }),
+      ),
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const desktopState = yield* DesktopState.DesktopState;
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        harness.emit("update-downloaded", { version: "1.2.4" });
+        yield* flushCallbacks;
+
+        const result = yield* updates.install;
+        assert.isTrue(result.accepted);
+        assert.isFalse(result.completed);
+        assert.isFalse(yield* Ref.get(desktopState.quitting));
+        assert.equal(harness.quitAndInstalls(), 0);
+        assert.equal(harness.updateRestartMarkers.size, 0);
+        assert.equal(result.state.status, "downloaded");
+        assert.equal(result.state.errorContext, "install");
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
   it.effect("keeps windows and restarts backends when quitAndInstall fails", () => {
     const harness = makeHarness({
       quitAndInstall: Effect.fail(
