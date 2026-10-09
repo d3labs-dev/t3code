@@ -114,7 +114,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
      picture on each scrolled frame. BackgroundThemeSync sets both variables. */
   [data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-agent-bubbles])
     [data-assistant-reply]
-    > [data-assistant-citation-source] {
+    [data-assistant-citation-source] {
     width: fit-content;
     max-width: calc(100% + var(--agent-bubble-padding, 10px) * 2);
     margin-inline: calc(var(--agent-bubble-padding, 10px) * -1);
@@ -277,7 +277,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
    ChatMarkdown's text color utility. */
 [data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-reply-text-emphasis])
   [data-assistant-reply]
-  > [data-assistant-citation-source]
+  [data-assistant-citation-source]
   .chat-markdown {
   font-weight: 450;
 
@@ -293,7 +293,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
 
 [data-chat-background-pane]:has(> [data-chat-backdrop="source"])
   [data-assistant-reply]
-  > [data-assistant-citation-source]
+  [data-assistant-citation-source]
   .chat-markdown,
 [data-chat-background-pane]:has(> [data-chat-backdrop="source"]:not([data-user-bubbles]))
   [data-user-message-bubble] {
