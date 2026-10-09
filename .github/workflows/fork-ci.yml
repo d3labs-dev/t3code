@@ -4,22 +4,21 @@
 # conflict on it.
 name: Fork CI
 
+# Like upstream's ci.yml, pushes to the default branch run CI beside the
+# nightly build instead of gating it, so a direct push that breaks the branch
+# shows before a conflict Job's pull request inherits the failure.
 on:
   pull_request:
+  push:
+    branches: [custom-nightly]
   workflow_dispatch:
-  workflow_call:
-    inputs:
-      commit:
-        description: Exact commit selected for the custom nightly
-        required: true
-        type: string
 
 permissions:
   contents: read
 
 concurrency:
   group: fork-ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   check:
@@ -30,7 +29,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.commit || github.sha }}
           sparse-checkout: |
             /*
             !/.repos/
@@ -89,7 +87,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.commit || github.sha }}
           sparse-checkout: |
             /*
             !/.repos/
@@ -134,7 +131,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.commit || github.sha }}
           sparse-checkout: |
             /*
             !/.repos/
@@ -161,7 +157,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.commit || github.sha }}
           sparse-checkout: |
             /*
             !/.repos/
@@ -184,9 +179,9 @@ jobs:
             cargo test --locked --manifest-path "native/$crate/Cargo.toml"
           done
 
-  # Release verification and manual runs always lint. On a pull request, lint
-  # runs when native sources or their lint configuration change, and whenever
-  # the changed files cannot be listed in full.
+  # Pushes and manual runs always lint. On a pull request, lint runs when
+  # native sources or their lint configuration change, and whenever the
+  # changed files cannot be listed in full.
   mobile_native_changes:
     name: Mobile Native Changes
     runs-on: ubuntu-latest
@@ -246,7 +241,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.commit || github.sha }}
           sparse-checkout: |
             /*
             !/.repos/
@@ -275,7 +269,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.commit || github.sha }}
           sparse-checkout: |
             /*
             !/.repos/
