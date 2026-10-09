@@ -196,6 +196,16 @@ const {
   logError: logUpdaterError,
 } = DesktopObservability.makeComponentLogger("desktop-updater");
 
+// Updater errors embed feed and signed download URLs, whose credentials and
+// query strings carry tokens that must not reach the log files.
+const redactUrlSecrets = (text: string) =>
+  text
+    .replace(/(\w+:\/\/)[^\s/@]+@/g, "$1[redacted]@")
+    .replace(/(\w+:\/\/[^\s?#]+)\?[^\s#'"`)]+/g, "$1?[redacted]");
+
+const prettyCause = (cause: unknown) =>
+  redactUrlSecrets(Cause.pretty(Cause.isCause(cause) ? cause : Cause.die(cause)));
+
 function parseAppUpdateYml(raw: string): Effect.Effect<Option.Option<AppUpdateYmlConfig>> {
   const entries: Record<string, string> = {};
   for (const line of raw.split("\n")) {
@@ -442,6 +452,7 @@ export const make = Effect.gen(function* () {
             );
             yield* logUpdaterError(error.message, {
               errorTag: error._tag,
+              cause: prettyCause(error.cause),
               channel: error.channel,
             });
             return true;
@@ -485,6 +496,7 @@ export const make = Effect.gen(function* () {
             );
             yield* logUpdaterError(error.message, {
               errorTag: error._tag,
+              cause: prettyCause(error.cause),
               channel: error.channel,
             });
             return { accepted: true, completed: false };
@@ -507,6 +519,7 @@ export const make = Effect.gen(function* () {
           );
           yield* logUpdaterError(error.message, {
             errorTag: error._tag,
+            cause: prettyCause(error.cause),
             action: error.action,
           });
           return { accepted: true, completed: false };
@@ -568,11 +581,15 @@ export const make = Effect.gen(function* () {
       }).pipe(Effect.exit);
       yield* updateState((current) => reduceDesktopUpdateStateOnInstallFailure(current, message));
       if (Exit.isFailure(restartExit)) {
-        yield* logUpdaterError("Desktop update install recovery could not restart every backend.");
+        yield* logUpdaterError("Desktop update install recovery could not restart every backend.", {
+          cause: prettyCause(restartExit.cause),
+        });
       }
     }).pipe(
-      Effect.catchCause(() =>
-        logUpdaterError("Desktop update install recovery failed unexpectedly."),
+      Effect.catchCause((cause) =>
+        logUpdaterError("Desktop update install recovery failed unexpectedly.", {
+          cause: prettyCause(cause),
+        }),
       ),
       Effect.ensuring(finishUpdateAction("install-recovery")),
     );
@@ -655,6 +672,7 @@ export const make = Effect.gen(function* () {
                 yield* recoverFailedInstall(error.message);
                 yield* logUpdaterError(error.message, {
                   errorTag: error._tag,
+                  cause: prettyCause(error.cause),
                   channel: error.channel,
                   isSilent: error.isSilent,
                   isForceRunAfter: error.isForceRunAfter,
@@ -673,6 +691,7 @@ export const make = Effect.gen(function* () {
               yield* recoverFailedInstall(error.message);
               yield* logUpdaterError(error.message, {
                 errorTag: error._tag,
+                cause: prettyCause(error.cause),
                 action: error.action,
               });
               return { accepted: true, completed: false, failed: true };
@@ -717,6 +736,7 @@ export const make = Effect.gen(function* () {
         const error = new DesktopUpdatePollerError({ poller: "startup", cause });
         return logUpdaterError(error.message, {
           errorTag: error._tag,
+          cause: prettyCause(error.cause),
           poller: error.poller,
         });
       }),
@@ -732,6 +752,7 @@ export const make = Effect.gen(function* () {
         const error = new DesktopUpdatePollerError({ poller: "poll", cause });
         return logUpdaterError(error.message, {
           errorTag: error._tag,
+          cause: prettyCause(error.cause),
           poller: error.poller,
         });
       }),
@@ -787,6 +808,7 @@ export const make = Effect.gen(function* () {
         const error = new DesktopUpdateEventHandlingError({ event: "update-available", cause });
         return logUpdaterWarning(error.message, {
           errorTag: error._tag,
+          cause: prettyCause(error.cause),
           event: error.event,
         });
       }),
@@ -816,6 +838,7 @@ export const make = Effect.gen(function* () {
       yield* recoverFailedInstall(error.message);
       yield* logUpdaterError(error.message, {
         errorTag: error._tag,
+        cause: prettyCause(error.cause),
         operation: error.operation,
       });
       return;
@@ -836,6 +859,7 @@ export const make = Effect.gen(function* () {
 
     yield* logUpdaterError(error.message, {
       errorTag: error._tag,
+      cause: prettyCause(error.cause),
       operation: error.operation,
     });
   });
@@ -866,6 +890,7 @@ export const make = Effect.gen(function* () {
         const error = new DesktopUpdateEventHandlingError({ event: "download-progress", cause });
         return logUpdaterWarning(error.message, {
           errorTag: error._tag,
+          cause: prettyCause(error.cause),
           event: error.event,
         });
       }),
@@ -890,6 +915,7 @@ export const make = Effect.gen(function* () {
         const error = new DesktopUpdateEventHandlingError({ event: "update-downloaded", cause });
         return logUpdaterWarning(error.message, {
           errorTag: error._tag,
+          cause: prettyCause(error.cause),
           event: error.event,
         });
       }),

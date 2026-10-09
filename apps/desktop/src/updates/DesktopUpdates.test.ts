@@ -451,7 +451,7 @@ describe("DesktopUpdates", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
-  it.effect("logs bounded updater failure context without exposing the cause", () => {
+  it.effect("logs the updater failure cause with URL secrets redacted", () => {
     const cause = new Error(
       "request failed for https://user:secret@example.com/update?token=secret",
     );
@@ -481,6 +481,10 @@ describe("DesktopUpdates", () => {
         assert.equal(loggedAnnotation.errorTag, "ElectronUpdaterCheckForUpdatesError");
         assert.isNull(loggedAnnotation.channel);
         assert.notProperty(loggedAnnotation, "error");
+        assert.include(
+          String(loggedAnnotation.cause),
+          "request failed for https://[redacted]@example.com/update?[redacted]",
+        );
         assert.notInclude(Object.values(loggedAnnotation).map(String).join(" "), "secret");
         assert.equal(
           state.message,
