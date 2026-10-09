@@ -172,34 +172,6 @@ running is left alone.
 For Antigravity's Google callback on a remote host, see
 [remote sign-in](./providers-antigravity.md#sign-in-from-a-remote-device).
 
-## Keep your computer awake (serve mode)
-
-On a Mac or Windows PC, select the moon button at the bottom of the sidebar, next to the
-background button, or turn on **Settings → Connections → Serve mode**. On mobile, it's in **Settings →
-Maintenance**. While serve mode is on, the button shows a coffee cup and the computer
-doesn't go to sleep, so agents keep working and you can connect from your phone
-at any time. The display still sleeps and locks as usual; agents and connections
-keep working behind the lock screen. Turn it off and the computer sleeps normally
-again, with T3 Code still open.
-
-On a Windows laptop, closing the lid still follows your power settings. To keep it
-running lid-closed while plugged in, open **Control Panel → Power Options → Choose
-what closing the lid does** and set **Plugged in** to **Do nothing**.
-
-To save power on a Windows PC while serving, turn on **Power saving in serve mode** next
-to the serve mode setting. While serve mode is on, T3 Code switches **Power mode** to
-**Best power efficiency** for the power source in use, and switches it back when serve
-mode turns off or T3 Code quits. If you pick a different Power mode in the meantime,
-T3 Code leaves your choice alone.
-
-To keep the Mac running with the lid closed and in Low Power Mode, install the
-helper once from a checkout of T3 Code with `sudo scripts/serve-mode/install.sh`.
-Running with the lid closed only applies while the Mac is plugged in. On
-battery, closing the lid puts it to sleep as usual. About a minute after serve
-mode turns off or T3 Code quits, your previous Low Power Mode settings come back
-and closing the lid sleeps again. Remove the helper with
-`sudo scripts/serve-mode/install.sh uninstall`.
-
 ## Browser on a remote environment
 
 Browser tabs belong to the environment, so you and your agents see the same

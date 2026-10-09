@@ -85,7 +85,6 @@ import {
   useRelativeTimeTick,
 } from "./settingsLayout";
 import { LocalEnvironmentSetting } from "./LocalEnvironmentSetting";
-import { ServeModeRow } from "./ServeModeRow";
 import { searchableSetting } from "./settingsSearch";
 import { EnvironmentIconMenu } from "./EnvironmentIconPicker";
 import { EnvironmentRoutesList } from "./EnvironmentRoutesList";
@@ -3775,7 +3774,6 @@ export function ConnectionsSettings() {
                 ) : null}
               </>
             ) : null}
-            <ServeModeRow environment={primaryServerConfig?.environment} />
           </SettingsSection>
 
           {canReadAccess || canWriteAccess ? (

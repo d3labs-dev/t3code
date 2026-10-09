@@ -900,22 +900,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     localBackendManagementOnly: true,
   },
   {
-    id: "serve-mode",
-    title: "Serve mode",
-    to: "/settings/connections",
-    targetId: "connections-environment",
-    searchTerms: [
-      "keep awake sleep caffeinate lid closed clamshell low power mode phone battery windows pc",
-    ],
-  },
-  {
-    id: "serve-mode-power-saving",
-    title: "Power saving in serve mode",
-    to: "/settings/connections",
-    targetId: "connections-environment",
-    searchTerms: ["serve mode windows pc power mode best power efficiency energy saver battery"],
-  },
-  {
     id: "wsl-backend",
     title: "WSL backend",
     to: "/settings/connections",

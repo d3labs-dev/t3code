@@ -15,7 +15,6 @@ import * as Schema from "effect/Schema";
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
-import { SERVE_MODE_HELPER_PLIST } from "../background/ServeMode.ts";
 import { resolveServerInstallation } from "../cli/invocation.ts";
 import { readAgentActivityPublishingActive } from "../cloud/config.ts";
 import { resolveServerSelfUpdateCapability } from "../cloud/selfUpdate.ts";
@@ -183,7 +182,6 @@ const makeIdentity = Effect.gen(function* () {
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
-  const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const serverConfig = yield* ServerConfig.ServerConfig;
   const secrets = yield* ServerSecretStore.ServerSecretStore;
@@ -230,7 +228,6 @@ export const make = Effect.gen(function* () {
       threadSettlement: true,
       threadAutoSettlement: true,
       storageCleanup: true,
-      serveMode: true,
       projectWorktreeCleanup: true,
       worktreesDirectory: true,
       threadRestartContinuation: true,
@@ -268,24 +265,13 @@ export const make = Effect.gen(function* () {
 
   return ServerEnvironment.of({
     getEnvironmentId: Effect.succeed(environmentId),
-    // The publish opt-in, relay link, and serve-mode helper change at runtime
-    // (`t3 connect publish`, the client settings toggle, the helper install
-    // script), so those capabilities are read per descriptor request rather
-    // than baked in at startup.
-    getDescriptor: Effect.all({
-      agentActivityPublishing: readAgentActivityPublishingActive(secrets),
-      serveModeLidClosed:
-        hostPlatform === "darwin"
-          ? fileSystem.exists(SERVE_MODE_HELPER_PLIST).pipe(Effect.orElseSucceed(() => false))
-          : Effect.succeed(undefined),
-    }).pipe(
-      Effect.map(({ agentActivityPublishing, serveModeLidClosed }) => ({
+    // The publish opt-in and relay link change at runtime (`t3 connect
+    // publish`, the client settings toggle), so the capability is read per
+    // descriptor request rather than baked in at startup.
+    getDescriptor: readAgentActivityPublishingActive(secrets).pipe(
+      Effect.map((agentActivityPublishing) => ({
         ...descriptor,
-        capabilities: {
-          ...descriptor.capabilities,
-          agentActivityPublishing,
-          ...(serveModeLidClosed === undefined ? {} : { serveModeLidClosed }),
-        },
+        capabilities: { ...descriptor.capabilities, agentActivityPublishing },
       })),
     ),
   });

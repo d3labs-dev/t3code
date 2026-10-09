@@ -1,11 +1,6 @@
-import { useAtomValue } from "@effect/atom-react";
-import { serveModeComputerName } from "@t3tools/client-runtime/serve-mode";
-import type { UnifiedSettings } from "@t3tools/contracts";
 import {
-  CoffeeIcon,
   ImageIcon,
   ImagesIcon,
-  MoonIcon,
   SkipBackIcon,
   SkipForwardIcon,
   SlidersHorizontalIcon,
@@ -14,14 +9,7 @@ import {
 import { openBackgroundStudio } from "~/customBackground/backgroundStudioStore";
 import { stepBackgroundImage } from "~/customBackground/rotation";
 import { useActiveBackground } from "~/customBackground/useActiveBackground";
-import {
-  useClientSettings,
-  usePrimarySettings,
-  useUpdateClientSettings,
-  useUpdatePrimarySettings,
-} from "../../hooks/useSettings";
-import { usePrimaryEnvironmentId } from "../../state/environments";
-import { serverEnvironment } from "../../state/server";
+import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
 import {
   Menu,
   MenuItem,
@@ -43,7 +31,6 @@ export function SidebarFooterExtras() {
   return (
     <>
       <SidebarBackgroundMenu />
-      <SidebarServeModeItem />
     </>
   );
 }
@@ -104,53 +91,6 @@ function SidebarBackgroundMenu() {
           </MenuItem>
         </MenuPopup>
       </Menu>
-    </SidebarMenuItem>
-  );
-}
-
-const selectServeMode = (settings: UnifiedSettings) => settings.serveMode;
-
-/** Serve mode for this computer's server, on the platforms that act on it. */
-function SidebarServeModeItem() {
-  const primaryConfig = useAtomValue(serverEnvironment.configValueAtom(usePrimaryEnvironmentId()));
-  const serveMode = usePrimarySettings(selectServeMode);
-  const updateSettings = useUpdatePrimarySettings();
-  const computer = primaryConfig
-    ? serveModeComputerName(primaryConfig.environment.platform.os)
-    : null;
-  if (!primaryConfig || !computer || primaryConfig.environment.capabilities.serveMode !== true) {
-    return null;
-  }
-  const sleepsWithLidClosed =
-    serveMode && primaryConfig.environment.capabilities.serveModeLidClosed === false;
-  return (
-    <SidebarMenuItem className="shrink-0">
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <SidebarMenuButton
-              aria-label="Serve mode"
-              aria-pressed={serveMode}
-              isActive={serveMode}
-              onClick={() => updateSettings({ serveMode: !serveMode })}
-              size="icon"
-            >
-              {serveMode ? (
-                <CoffeeIcon className={sleepsWithLidClosed ? "text-warning" : undefined} />
-              ) : (
-                <MoonIcon />
-              )}
-            </SidebarMenuButton>
-          }
-        />
-        <TooltipPopup side="top">
-          {sleepsWithLidClosed
-            ? "Serve mode on, but closing the lid still sleeps this Mac. Run sudo scripts/serve-mode/install.sh to keep it running lid-closed."
-            : serveMode
-              ? `Serve mode on: this ${computer} stays awake for agents and your phone`
-              : `Serve mode off: this ${computer} can sleep`}
-        </TooltipPopup>
-      </Tooltip>
     </SidebarMenuItem>
   );
 }

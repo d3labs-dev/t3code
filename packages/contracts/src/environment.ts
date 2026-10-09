@@ -212,14 +212,6 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       `voice.createTranscriptionUrl`. Absent on older servers, so clients
       only offer environment-backed voice input when this is true. */
   voiceTranscription: Schema.optionalKey(Schema.Boolean),
-  /** macOS servers report whether the root helper from scripts/serve-mode is
-      installed. Without it, serve mode only stops idle sleep and closing the
-      lid still sleeps the Mac. Absent on other platforms and older servers,
-      so clients only warn on an explicit false. */
-  serveModeLidClosed: Schema.optionalKey(Schema.Boolean),
-  /** Servers that act on the `serveMode` setting. Absent on servers without
-      serve mode, so clients hide its switch there. */
-  serveMode: Schema.optionalKey(Schema.Boolean),
   /** Server hosts preview tabs in its own headless Chromium (`runtime:
       "server"`) and streams them over `/api/preview-stream`. Clients
       without a local browser runtime open server tabs here. */

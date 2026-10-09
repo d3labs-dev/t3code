@@ -1,8 +1,4 @@
 import { useNavigation } from "@react-navigation/native";
-import {
-  serveModeComputerName,
-  WINDOWS_POWER_SAVING_DESCRIPTION,
-} from "@t3tools/client-runtime/serve-mode";
 import { SettingsRow } from "./components/SettingsRow";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
 import { readEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
@@ -233,19 +229,6 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
   const supportsContinuation = targets.every(
     (target) =>
       target.environment.serverConfig.environment.capabilities.threadRestartContinuation === true,
-  );
-  const serveModeComputers = new Set(
-    targets.map(({ environment }) =>
-      environment.serverConfig.environment.capabilities.serveMode === true
-        ? serveModeComputerName(environment.serverConfig.environment.platform.os)
-        : null,
-    ),
-  );
-  const serveModeComputer =
-    (serveModeComputers.size === 1 ? [...serveModeComputers][0] : null) ?? "computer";
-  const someMacSleepsWithLidClosed = targets.some(
-    (target) =>
-      target.environment.serverConfig.environment.capabilities.serveModeLidClosed === false,
   );
   const disabledFor = (key: string) =>
     disabled ||
@@ -499,39 +482,6 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                     </View>
                   </SettingsSection>
                 </>
-              ) : null}
-
-              {props.page === "maintenance" && !serveModeComputers.has(null) ? (
-                <SettingsSection title="Power">
-                  <SettingsSwitchRow
-                    icon="bolt.circle"
-                    label="Serve mode"
-                    subtitle={
-                      projectSelected
-                        ? "Environment-wide setting. Select All projects to change it."
-                        : someMacSleepsWithLidClosed
-                          ? "Keeps the Mac awake with the lid open. Closing the lid still sleeps it until you run sudo scripts/serve-mode/install.sh on it."
-                          : `Keep the ${serveModeComputer} awake so agents keep working and you can connect.`
-                    }
-                    value={uniform("serveMode")}
-                    disabled={disabledFor("serveMode")}
-                    onValueChange={(value) => write({ serveMode: value })}
-                  />
-                  {serveModeComputer === "PC" ? (
-                    <SettingsSwitchRow
-                      icon="leaf"
-                      label="Power saving in serve mode"
-                      subtitle={
-                        projectSelected
-                          ? "Environment-wide setting. Select All projects to change it."
-                          : WINDOWS_POWER_SAVING_DESCRIPTION
-                      }
-                      value={uniform("serveModePowerSaving")}
-                      disabled={disabledFor("serveModePowerSaving")}
-                      onValueChange={(value) => write({ serveModePowerSaving: value })}
-                    />
-                  ) : null}
-                </SettingsSection>
               ) : null}
             </>
           )}

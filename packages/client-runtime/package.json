@@ -107,10 +107,6 @@
       "types": "./src/voice-input/index.ts",
       "default": "./src/voice-input/index.ts"
     },
-    "./serve-mode": {
-      "types": "./src/serveMode.ts",
-      "default": "./src/serveMode.ts"
-    },
     "./t3ToolSummary": {
       "types": "./src/t3ToolSummary.ts",
       "default": "./src/t3ToolSummary.ts"

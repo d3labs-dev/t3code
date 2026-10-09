@@ -1,7 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ORCHESTRATION_PROTOCOL_VERSION } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
-import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -20,7 +19,6 @@ import {
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
-import { SERVE_MODE_HELPER_PLIST } from "../background/ServeMode.ts";
 import {
   PUBLISH_AGENT_ACTIVITY_SECRET,
   RELAY_ENVIRONMENT_CREDENTIAL_SECRET,
@@ -276,41 +274,6 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
         const disabled = yield* serverEnvironment.getDescriptor;
         expect(disabled.capabilities.agentActivityPublishing).toBe(false);
       }).pipe(Effect.provide(layerTest));
-    }),
-  );
-
-  it.effect("reports the serve-mode helper from the current macOS install state", () =>
-    Effect.gen(function* () {
-      const fileSystem = yield* FileSystem.FileSystem;
-      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-server-environment-serve-mode-test-",
-      });
-      let helperInstalled = false;
-      const helperFileSystemLayer = Layer.succeed(FileSystem.FileSystem, {
-        ...fileSystem,
-        exists: (path) =>
-          path === SERVE_MODE_HELPER_PLIST
-            ? Effect.sync(() => helperInstalled)
-            : fileSystem.exists(path),
-      });
-      const describeOn = (platform: NodeJS.Platform) =>
-        Layer.build(
-          ServerEnvironment.layer.pipe(
-            Layer.provide(helperFileSystemLayer),
-            Layer.provide(Layer.succeed(HostProcessPlatform, platform)),
-            Layer.provide(ServerSecretStore.layer),
-            Layer.provide(ServerConfig.layerTest(process.cwd(), baseDir)),
-          ),
-        ).pipe(Effect.map((context) => Context.get(context, ServerEnvironment.ServerEnvironment)));
-
-      const mac = yield* describeOn("darwin");
-      expect((yield* mac.getDescriptor).capabilities.serveModeLidClosed).toBe(false);
-      helperInstalled = true;
-      expect((yield* mac.getDescriptor).capabilities.serveModeLidClosed).toBe(true);
-
-      const linux = yield* describeOn("linux");
-      expect((yield* linux.getDescriptor).capabilities.serveModeLidClosed).toBeUndefined();
-      expect((yield* linux.getDescriptor).capabilities.serveMode).toBe(true);
     }),
   );
 
