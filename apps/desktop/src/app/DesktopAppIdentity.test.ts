@@ -261,10 +261,15 @@ describe("DesktopAppIdentity", () => {
 
         const runtimeName = calls.setName[0];
         assert.isDefined(runtimeName);
-        assert.equal(runtimeName, `T3 Code ${stage}`);
+        // This fork brands its nightly builds as "D3 Code".
+        const baseName = stage === "Nightly" ? "D3 Code" : "T3 Code";
+        assert.equal(runtimeName, `${baseName} ${stage}`);
         // RFC 9110's token grammar, after Electron removes ASCII spaces.
         assert.match(runtimeName.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, `T3 Code (${stage})`);
+        assert.equal(
+          calls.setAboutPanelOptions[0]?.applicationName,
+          stage === "Nightly" ? "D3 Code" : `T3 Code (${stage})`,
+        );
       }),
       { calls, environment },
     );

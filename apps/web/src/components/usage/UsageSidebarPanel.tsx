@@ -34,7 +34,7 @@ import { serverEnvironment } from "../../state/server";
 import { useUsage } from "../../state/usage";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
-import { getDriverOption } from "../settings/providerDriverMeta";
+import { providerClients } from "../settings/providerDriverMeta";
 import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
 import { SidebarHeaderIconButton } from "../sidebar/SidebarThreadHeader";
 import { RefreshIcon } from "../ui/refresh-icon";
@@ -71,7 +71,7 @@ interface ProviderCard {
 }
 
 function poolLabel(pool: LimitPool): string {
-  return getDriverOption(pool.driver)?.label ?? String(pool.driver);
+  return providerClients.get(pool.driver)?.label ?? String(pool.driver);
 }
 
 /** The plan every account in the pool is on, or null when they disagree. */
