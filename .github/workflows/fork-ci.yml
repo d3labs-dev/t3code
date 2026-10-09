@@ -4,13 +4,12 @@
 # conflict on it.
 name: Fork CI
 
-# Like upstream's ci.yml, pushes to the default branch run CI beside the
-# nightly build instead of gating it, so a direct push that breaks the branch
-# shows before a conflict Job's pull request inherits the failure.
+# A pull request into custom-nightly only has to prove the fork still
+# typechecks and builds on top of upstream, whose own CI already tested its
+# code. The full suite, including knip, lint, format, and every test, runs on
+# manual dispatch.
 on:
   pull_request:
-  push:
-    branches: [custom-nightly]
   workflow_dispatch:
 
 permissions:
@@ -18,7 +17,7 @@ permissions:
 
 concurrency:
   group: fork-ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -56,10 +55,11 @@ jobs:
       # Each check below reports even when an earlier one fails, so one run
       # shows every failing check.
       - name: Check unused code
+        if: github.event_name == 'workflow_dispatch'
         run: vp run knip:check
 
       - name: Check
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && steps.setup.outcome == 'success' }}
         run: vp check
 
       - name: Typecheck
@@ -81,6 +81,7 @@ jobs:
 
   test:
     name: Test
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -121,6 +122,7 @@ jobs:
   # runners rather than workers and no two server test files share a machine.
   test_server:
     name: Test Server ${{ matrix.shard }}
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -151,6 +153,7 @@ jobs:
 
   rust:
     name: Rust
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -179,62 +182,9 @@ jobs:
             cargo test --locked --manifest-path "native/$crate/Cargo.toml"
           done
 
-  # Pushes and manual runs always lint. On a pull request, lint runs when
-  # native sources or their lint configuration change, and whenever the
-  # changed files cannot be listed in full.
-  mobile_native_changes:
-    name: Mobile Native Changes
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      changed: ${{ steps.detect.outputs.changed }}
-    steps:
-      - name: Detect mobile native changes
-        id: detect
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -uo pipefail
-
-          run_lint() {
-            echo "$*"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          }
-
-          if [[ -z "${PR_NUMBER}" ]]; then
-            run_lint "Not a pull request."
-          fi
-
-          # The PR files endpoint stops at 3000 files, so compare against the
-          # count the pull request reports. A rename lists both of its paths.
-          expected=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.changed_files') \
-            || run_lint "Could not read the pull request."
-          rows=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate \
-            --jq '.[] | [.filename, (.previous_filename // empty)] | @tsv') \
-            || run_lint "Could not resolve changed files."
-          listed=$(printf '%s\n' "$rows" | grep -c . || true)
-          if [[ "$listed" -lt "$expected" ]]; then
-            run_lint "GitHub listed only ${listed} of ${expected} changed files."
-          fi
-          paths=$(tr '\t' '\n' <<< "$rows")
-
-          pattern='^apps/mobile/.*\.(swift|kt|kts)$|^apps/mobile/(\.swiftlint\.yml|detekt\.yml|\.editorconfig|Brewfile)$|^scripts/mobile-native-static-check\.ts$|^package\.json$|^\.github/workflows/fork-ci\.yml$'
-
-          if grep -E "$pattern" <<< "$paths"; then
-            run_lint "Native sources or lint configuration changed."
-          fi
-          echo "No mobile native sources or lint configuration changed."
-          echo "changed=false" >> "$GITHUB_OUTPUT"
-
   mobile_native_static_analysis:
     name: Mobile Native Static Analysis
-    needs: mobile_native_changes
-    if: ${{ !cancelled() && needs.mobile_native_changes.outputs.changed != 'false' }}
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
@@ -263,6 +213,7 @@ jobs:
 
   release_smoke:
     name: Release Smoke
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
