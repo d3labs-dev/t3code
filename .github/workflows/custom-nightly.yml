@@ -512,6 +512,22 @@ jobs:
           path: release
           merge-multiple: true
 
+      # `t3 service install`, `t3 update` and SSH remotes download the CLI
+      # archive for their exact version and verify it against SHA256SUMS.
+      - name: Download CLI archive
+        uses: actions/download-artifact@v8
+        with:
+          name: cli-linux-x64
+          path: release
+
+      - name: Write CLI archive checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum t3-*.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
       # upstream's workflow suffixes the Windows feed by arch for its two-arch
       # merge; with x64 alone it is the channel's feed as is.
       - name: Attach to the custom nightly
@@ -525,6 +541,8 @@ jobs:
             release/*.AppImage \
             release/*.blockmap \
             release/!(builder-debug).yml \
+            release/t3-*.tar.gz \
+            release/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY"
 
   android:
