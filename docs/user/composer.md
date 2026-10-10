@@ -181,6 +181,13 @@ this is stored on the environment, so every device connected to it benefits.
   transcription works offline for that language. Other iPhones use the
   environment like Android.
 
+On iPhone, voice input records from the first connected microphone in **Settings → Microphone**.
+The list mixes kinds (built-in, other wired, other Bluetooth, CarPlay) with wired and
+Bluetooth devices you have dictated with, listed by name. Drag to rank them together:
+for example, put **Other Bluetooth** above your AirPods so a new headset is preferred
+while the AirPods microphone stays low. By default, CarPlay comes after the built-in
+microphone.
+
 Recordings can be up to five minutes long. Canceling, leaving the screen, or an
 audio interruption discards the recording and preserves your existing draft.
 
