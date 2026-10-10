@@ -2,7 +2,7 @@ import { DesktopMascotMoodSchema } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as DesktopAssets from "../../app/DesktopAssets.ts";
 import * as ElectronApp from "../../electron/ElectronApp.ts";
@@ -14,7 +14,7 @@ export const setDockMood = DesktopIpc.makeIpcMethod({
   payload: DesktopMascotMoodSchema,
   result: Schema.Void,
   handler: Effect.fn("desktop.ipc.setDockMood")(function* (mood) {
-    if ((yield* HostProcessPlatform) !== "darwin") return;
+    if ((yield* HostProcess.Platform) !== "darwin") return;
     const assets = yield* DesktopAssets.DesktopAssets;
     const iconPath = yield* assets
       .resolveResourcePath(`mascot/${mood}.png`)

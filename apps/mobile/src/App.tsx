@@ -29,6 +29,7 @@ import { useUiRuntimeMemoryWarningGc } from "./lib/useUiRuntimeMemoryWarningGc";
 import { SubscriptionUsageCoordinator } from "./widgets/SubscriptionUsageCoordinator";
 import { VoiceInputProvider } from "./features/voice-input/VoiceInputProvider";
 import { GlobalVoiceInputControl } from "./features/voice-input/GlobalVoiceInputControl";
+import { NativeLayoutMetricsProvider } from "./native/native-layout-metrics";
 
 import "../global.css";
 
@@ -95,12 +96,14 @@ function AppContent() {
               <View style={{ flex: 1 }}>
                 <PhoneBackgroundLayer />
                 <GlobalVoiceInputControl>
-                  <IncomingShareProvider>
-                    <Navigation linking={appLinking} theme={navigationTheme} />
-                  </IncomingShareProvider>
-                  <PhoneBackgroundQuickAdjust />
-                  <ConfirmDialogHost />
-                  <ThreadArrangementHost />
+                  <NativeLayoutMetricsProvider>
+                    <IncomingShareProvider>
+                      <Navigation linking={appLinking} theme={navigationTheme} />
+                    </IncomingShareProvider>
+                    <PhoneBackgroundQuickAdjust />
+                    <ConfirmDialogHost />
+                    <ThreadArrangementHost />
+                  </NativeLayoutMetricsProvider>
                 </GlobalVoiceInputControl>
               </View>
               {/* Anchored-menu overlays render here — in-window, so the
