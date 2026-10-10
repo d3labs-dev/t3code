@@ -5,7 +5,7 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
 import { describe, expect, it, vi } from "@effect/vitest";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -155,7 +155,7 @@ describe("terminatePosixOwnedProcessTree", () => {
 
   it.live("preserves exact argv and strips wrapper-only environment before exec", () =>
     Effect.gen(function* () {
-      if ((yield* HostProcessPlatform) !== "linux") return;
+      if ((yield* HostProcess.Platform) !== "linux") return;
       const lease = AcpSessionRuntime.makeLinuxCgroupController().create();
       if (lease === undefined) return;
       const scratchRoot = NodePath.join(process.cwd(), "tmp");
@@ -235,7 +235,7 @@ describe("terminatePosixOwnedProcessTree", () => {
   );
 
   it("contains a packaged-runtime command without requiring cgroup delegation", () => {
-    if (HostProcessPlatform.defaultValue() !== "linux") return;
+    if (HostProcess.Platform.defaultValue() !== "linux") return;
     const scratchRoot = NodePath.join(process.cwd(), "tmp");
     NodeFS.mkdirSync(scratchRoot, { recursive: true });
     const scratch = NodeFS.mkdtempSync(NodePath.join(scratchRoot, "acp-cgroup-wrapper-fake-"));
@@ -316,7 +316,7 @@ describe("terminatePosixOwnedProcessTree", () => {
 
   it.live("kills a post-TERM detached double fork without touching an unrelated sentinel", () =>
     Effect.gen(function* () {
-      if ((yield* HostProcessPlatform) !== "linux") return;
+      if ((yield* HostProcess.Platform) !== "linux") return;
       const controller = AcpSessionRuntime.makeLinuxCgroupController();
       const lease = controller.create();
       if (lease === undefined) return;
@@ -531,7 +531,7 @@ describe("terminatePosixOwnedProcessTree", () => {
 
   it.live("finds a child forked by a non-leader pthread", () =>
     Effect.gen(function* () {
-      if ((yield* HostProcessPlatform) !== "linux") return;
+      if ((yield* HostProcess.Platform) !== "linux") return;
       const scratchRoot = NodePath.join(process.cwd(), "tmp");
       NodeFS.mkdirSync(scratchRoot, { recursive: true });
       const scratch = NodeFS.mkdtempSync(NodePath.join(scratchRoot, "acp-pthread-spawn-"));
@@ -655,10 +655,11 @@ describe("terminatePosixOwnedProcessTree", () => {
 
   it.live("rotates more than 64 live parents without scanning retained tombstones", () =>
     Effect.gen(function* () {
-      // Fake PIDs start above the runner's real PID, which the fixture's server entry owns.
-      const firstFakePid = process.pid + 1;
+      // The server fixture's process group is the runner's real pid, so a synthetic
+      // parent sharing it would be skipped as the server's own group.
+      const parentPidBase = process.pid < 500_000 ? 500_000 : 1_000;
       const parents = Array.from({ length: 130 }, (_, index) =>
-        identity(firstFakePid + index, 100, firstFakePid + index, firstFakePid + index),
+        identity(parentPidBase + index, 100, parentPidBase + index, parentPidBase + index),
       );
       let childListReads = 0;
       let identityCalls = 0;
@@ -686,7 +687,7 @@ describe("terminatePosixOwnedProcessTree", () => {
       const ledger = new Map<string, AcpSessionRuntime.AcpOwnedPosixProcess>();
       const root: AcpSessionRuntime.AcpPosixOwnershipRoot = { value: undefined };
       for (let index = 0; index < 5_000; index += 1) {
-        const tombstonePid = firstFakePid + 100_000 + index;
+        const tombstonePid = parentPidBase + 100_000 + index;
         const tombstone = identity(tombstonePid, 1, tombstonePid, tombstonePid);
         ledger.set(`${tombstone.pid}:${tombstone.startTime}`, {
           ...tombstone,
