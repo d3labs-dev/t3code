@@ -15,6 +15,10 @@
       "types": "./src/customBackgroundRotation.ts",
       "import": "./src/customBackgroundRotation.ts"
     },
+    "./githubMarkdownLinks": {
+      "types": "./src/githubMarkdownLinks.ts",
+      "import": "./src/githubMarkdownLinks.ts"
+    },
     "./authScopeOptions": {
       "types": "./src/authScopeOptions.ts",
       "import": "./src/authScopeOptions.ts"
