@@ -36,6 +36,7 @@ import { ThreadNotificationCoordinator } from "../components/ThreadNotificationC
 import { MascotMoodCoordinator } from "../components/MascotMoodCoordinator";
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
+import { PullRequestGuideRunCoordinator } from "../components/pullRequest/guide/PullRequestGuideRunCoordinator";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
 import { BackgroundStudioHost } from "../components/background/BackgroundStudioHost";
 import { BackgroundFolderSync } from "../components/background/BackgroundFolderSync";
@@ -250,6 +251,7 @@ function RootRouteView() {
           <PermissionUpdateNotice />
           {primaryEnvironmentAuthenticated ? <LegacyThreadMigrationToast /> : null}
           <ProjectCloneToastCoordinator />
+          <PullRequestGuideRunCoordinator />
           <HostedStaticEnvironmentBootstrap />
           {primaryEnvironmentAuthenticated ? (
             <EventRouter skipInitialBootstrapNavigation={returningFromWelcomeRef.current} />
