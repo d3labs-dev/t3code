@@ -77,5 +77,6 @@ export function usageKindForDriver(
   if (driver === "codex") return "codex";
   if (driver === "claudeAgent") return "claude";
   if (driver === "grok") return "grok";
+  if (driver === "antigravity") return "antigravity";
   return undefined;
 }
