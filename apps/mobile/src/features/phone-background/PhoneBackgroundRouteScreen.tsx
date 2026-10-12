@@ -18,11 +18,11 @@ import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { showTextInputDialog } from "../../components/ConfirmDialogHost";
 import { ControlPillMenu } from "../../components/ControlPillMenu";
+import { ListRowLayout } from "../../components/ListRowLayout";
 import { ScreenScrollView } from "../../components/ScreenScrollView";
 import { updateMobilePreferencesAtom } from "../../state/preferences";
 import { SettingsActionRow } from "../settings/components/SettingsActionRow";
 import { SettingsChoiceRow } from "../settings/components/SettingsChoiceRow";
-import { SettingsControlRow } from "../settings/components/SettingsControlRow";
 import { SettingsScreen } from "../settings/components/SettingsScreen";
 import { SettingsSection } from "../settings/components/SettingsSection";
 import { SettingsSwitchRow } from "../settings/components/SettingsSwitchRow";
@@ -84,28 +84,34 @@ function ChoiceRow<Value extends string | number>(props: {
 }) {
   const current = props.options.find((option) => option.value === props.value)?.label ?? "";
   return (
-    <SettingsControlRow icon={props.icon} label={props.label}>
-      <ControlPillMenu
-        title={props.label}
-        actions={props.options.map((option) => ({
-          id: String(option.value),
-          title: option.label,
-          state: option.value === props.value ? "on" : "off",
-        }))}
-        onPressAction={({ nativeEvent }) => {
-          const match = props.options.find((option) => String(option.value) === nativeEvent.event);
-          if (match) props.onChange(match.value);
-        }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${props.label}: ${current}`}
-          className="rounded-full bg-subtle px-3 py-2 active:opacity-70"
+    <ListRowLayout
+      icon={props.icon}
+      label={props.label}
+      accessory={
+        <ControlPillMenu
+          title={props.label}
+          actions={props.options.map((option) => ({
+            id: String(option.value),
+            title: option.label,
+            state: option.value === props.value ? "on" : "off",
+          }))}
+          onPressAction={({ nativeEvent }) => {
+            const match = props.options.find(
+              (option) => String(option.value) === nativeEvent.event,
+            );
+            if (match) props.onChange(match.value);
+          }}
         >
-          <Text className="text-sm font-t3-medium text-foreground">{current}</Text>
-        </Pressable>
-      </ControlPillMenu>
-    </SettingsControlRow>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${props.label}: ${current}`}
+            className="rounded-full bg-subtle px-3 py-2 active:opacity-70"
+          >
+            <Text className="text-sm font-t3-medium text-foreground">{current}</Text>
+          </Pressable>
+        </ControlPillMenu>
+      }
+    />
   );
 }
 
@@ -426,9 +432,11 @@ function RotationSection(props: { readonly source: CustomBackgroundImageSource }
           </Text>
         </View>
       ) : (
-        <SettingsControlRow icon="photo" label="Showing now">
-          <PhoneBackgroundStepButtons />
-        </SettingsControlRow>
+        <ListRowLayout
+          icon="photo"
+          label="Showing now"
+          accessory={<PhoneBackgroundStepButtons />}
+        />
       )}
       <ChoiceRow
         icon="clock"
