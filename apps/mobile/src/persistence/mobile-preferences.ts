@@ -6,7 +6,11 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import {
+  EnvironmentId,
   PhoneBackground,
+  PullRequestInvolvement,
+  PullRequestListFilters,
+  PullRequestListState,
   type ProviderInstanceId,
   type PullRequestMergeMethod,
   type SidebarProjectGroupingMode,
@@ -22,6 +26,33 @@ import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-sto
 const PREFERENCES_KEY = "t3code.preferences";
 const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
 const decodePhoneBackground = Schema.decodeUnknownOption(PhoneBackground);
+
+/** The pull request list's filters and sort for one environment scope. */
+export const PullRequestListControls = Schema.Struct({
+  state: PullRequestListState,
+  involvement: PullRequestInvolvement,
+  filters: PullRequestListFilters,
+  projectId: Schema.optional(Schema.String),
+  projectEnvironmentId: Schema.optional(Schema.String),
+  sort: Schema.Literals(["updated", "created", "oldest"]),
+});
+export type PullRequestListControls = typeof PullRequestListControls.Type;
+
+const ThreadListFilters = Schema.Struct({
+  environmentId: Schema.NullOr(EnvironmentId),
+  projectKey: Schema.NullOr(Schema.String),
+});
+export type ThreadListFilters = typeof ThreadListFilters.Type;
+
+/** Controls are keyed by environment id, with "" for all environments. */
+const PullRequestListPreferences = Schema.Struct({
+  environmentId: Schema.NullOr(Schema.String),
+  controls: Schema.Record(Schema.String, PullRequestListControls),
+});
+export type PullRequestListPreferences = typeof PullRequestListPreferences.Type;
+
+const isThreadListFilters = Schema.is(ThreadListFilters);
+const isPullRequestListPreferences = Schema.is(PullRequestListPreferences);
 
 export interface Preferences {
   readonly pullRequestHideTestFiles?: boolean;
@@ -71,6 +102,9 @@ export interface Preferences {
   readonly phoneBackgroundQuickAdjust?: boolean;
   /** Where the user dragged that button, as fractions of the screen's width and height. */
   readonly phoneBackgroundQuickAdjustPosition?: PhoneBackgroundQuickAdjustPosition;
+  /** Home list filters, restored on the next launch. */
+  readonly threadListFilters?: ThreadListFilters;
+  readonly pullRequestListFilters?: PullRequestListPreferences;
 }
 
 export interface PhoneBackgroundQuickAdjustPosition {
@@ -153,6 +187,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     phoneBackgroundEnabled?: boolean;
     phoneBackgroundQuickAdjust?: boolean;
     phoneBackgroundQuickAdjustPosition?: PhoneBackgroundQuickAdjustPosition;
+    threadListFilters?: ThreadListFilters;
+    pullRequestListFilters?: PullRequestListPreferences;
   } = {};
 
   if (typeof parsed.pullRequestHideTestFiles === "boolean") {
@@ -280,6 +316,12 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   const quickAdjustPosition = decodeQuickAdjustPosition(parsed.phoneBackgroundQuickAdjustPosition);
   if (quickAdjustPosition) {
     preferences.phoneBackgroundQuickAdjustPosition = quickAdjustPosition;
+  }
+  if (isThreadListFilters(parsed.threadListFilters)) {
+    preferences.threadListFilters = parsed.threadListFilters;
+  }
+  if (isPullRequestListPreferences(parsed.pullRequestListFilters)) {
+    preferences.pullRequestListFilters = parsed.pullRequestListFilters;
   }
   return preferences;
 }
