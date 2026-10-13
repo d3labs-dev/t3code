@@ -5,6 +5,7 @@ import { MOBILE_THEME_IDS } from "../../lib/mobileTheme";
 import { getMobileThemeRuntimeVariables } from "../../lib/mobileThemeVariables";
 import { materialYouPaletteToMobileThemeVariables } from "../../lib/materialYouTheme.android";
 import type { MaterialYouPalette } from "../../lib/materialYouPalette";
+import { phoneBackgroundThemeVariables } from "../phone-background/phoneBackground.logic";
 import { androidWorkspaceNavigationColors } from "./android-workspace-navigation-colors";
 
 function luminance(hex: string) {
@@ -42,7 +43,9 @@ describe("Android workspace navigation colors", () => {
         const variables = getMobileThemeRuntimeVariables(themeId, appearance, "android");
         const snapshot = { ...variables };
         for (const rail of [false, true]) {
-          expectVisibleSelection(androidWorkspaceNavigationColors(variables, rail));
+          expectVisibleSelection(
+            androidWorkspaceNavigationColors({ colors: variables, rail, phoneBackdropColor: null }),
+          );
         }
         expect(variables).toEqual(snapshot);
       }
@@ -92,7 +95,9 @@ describe("Android workspace navigation colors", () => {
           getMobileThemeRuntimeVariables("material-you", appearance, "android"),
         );
         for (const rail of [false, true]) {
-          expectVisibleSelection(androidWorkspaceNavigationColors(variables, rail));
+          expectVisibleSelection(
+            androidWorkspaceNavigationColors({ colors: variables, rail, phoneBackdropColor: null }),
+          );
         }
       }
     },
@@ -100,11 +105,30 @@ describe("Android workspace navigation colors", () => {
 
   it("preserves an already visible tonal fill", () => {
     const variables = getMobileThemeRuntimeVariables("t3-chat", "light", "android");
-    const colors = androidWorkspaceNavigationColors(
-      { ...variables, "--color-secondary": "#e091cf" },
-      true,
-    );
+    const colors = androidWorkspaceNavigationColors({
+      colors: { ...variables, "--color-secondary": "#e091cf" },
+      rail: true,
+      phoneBackdropColor: null,
+    });
     expect(colors.indicatorColor).toBe("#e091cf");
     expectVisibleSelection(colors);
+  });
+
+  it("stays clear over a phone background with selection visible against its backdrop", () => {
+    const variables = getMobileThemeRuntimeVariables("t3-chat", "dark", "android");
+    const { backdropColor, variables: phoneVariables } = phoneBackgroundThemeVariables({
+      variables,
+      appearance: "dark",
+      sourceColor: null,
+    });
+    for (const rail of [false, true]) {
+      const colors = androidWorkspaceNavigationColors({
+        colors: phoneVariables,
+        rail,
+        phoneBackdropColor: backdropColor,
+      });
+      expect(colors.containerColor).toBe("transparent");
+      expectVisibleSelection({ ...colors, containerColor: backdropColor });
+    }
   });
 });

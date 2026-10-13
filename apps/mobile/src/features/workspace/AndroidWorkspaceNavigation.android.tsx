@@ -46,11 +46,15 @@ export function AndroidWorkspaceNavigation(props: {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
-  const { themeAppearance, themeVariables: colors } = useAppearancePreferences();
+  const {
+    themeAppearance,
+    themeVariables: colors,
+    phoneBackdropColor,
+  } = useAppearancePreferences();
   const { scale } = useAndroidControlSizing();
   const rail = Boolean(props.rail);
   const { containerColor, indicatorColor, selectedColor, unselectedColor } =
-    androidWorkspaceNavigationColors(colors, rail);
+    androidWorkspaceNavigationColors({ colors, rail, phoneBackdropColor });
   if (!rail && keyboardVisible) return null;
 
   return (
