@@ -123,7 +123,7 @@ describe("searchSettings", () => {
     ]);
   });
 
-  it.each(["usage providers", "CLIProxyAPI", "CLI proxy hub", "management key"])(
+  it.each(["usage providers", "CLIProxyAPI", "CLI proxy hub", "management key", "claude-swap"])(
     "finds usage-provider management by %s",
     (query) => {
       expect(searchSettings(query)[0]).toMatchObject({

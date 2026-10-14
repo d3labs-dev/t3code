@@ -1,10 +1,12 @@
 import {
   AntigravitySettings,
   ClaudeSettings,
+  CliproxyUsageLimitSourceConfig,
   CodexSettings,
+  CswapUsageLimitSourceConfig,
   DictationSettings,
   type ServerSettings,
-  UsageLimitSourceConfig,
+  type UsageLimitSourceConfig,
   secretSettingsFields,
 } from "@t3tools/contracts";
 import { acpRegistryClient } from "@t3tools/provider-acp-registry/client";
@@ -31,7 +33,10 @@ const providerSecretFields = new Map([
       [definition.driverKind, secretSettingsFields(definition.settingsSchema)] as const,
   ),
 ]);
-const usageLimitSecretFields = secretSettingsFields(UsageLimitSourceConfig);
+const usageLimitSecretFields: Record<UsageLimitSourceConfig["kind"], ReadonlyArray<string>> = {
+  cliproxy: secretSettingsFields(CliproxyUsageLimitSourceConfig),
+  cswap: secretSettingsFields(CswapUsageLimitSourceConfig),
+};
 const dictationSecretFields = secretSettingsFields(DictationSettings);
 const encode = (value: string) => Buffer.from(value, "utf8").toString("base64url");
 
@@ -138,7 +143,7 @@ export function mapSettingsSecrets(
       id,
       mapFields(
         source,
-        usageLimitSecretFields,
+        usageLimitSecretFields[source.kind],
         (field, serverHost) =>
           `usage-limit-source-${encode(id)}` +
           (field === "managementKey" && serverHost === null

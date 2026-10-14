@@ -1,4 +1,4 @@
-import type { EnvironmentId, UnifiedSettings } from "@t3tools/contracts";
+import type { EnvironmentId, UnifiedSettings, UsageLimitSourceConfig } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { PlusIcon } from "lucide-react";
 import { useState } from "react";
@@ -71,7 +71,7 @@ export function UsageProviderSettings({
           !readOnly ? (
             <Button size="xs" variant="outline" onClick={() => setAdding(true)}>
               <PlusIcon className="size-3" aria-hidden />
-              Add hub
+              Add source
             </Button>
           ) : null
         }
@@ -92,23 +92,29 @@ export function UsageProviderSettings({
           />
         ) : null}
         {entries.length === 0 ? (
-          <SettingsRow title="No hubs configured." />
+          <SettingsRow title="No usage sources configured." />
         ) : (
           entries.map(([id, source]) => {
-            const label = source.label?.trim() || source.url;
+            const { kindLabel, location } =
+              source.kind === "cswap"
+                ? { kindLabel: "claude-swap", location: source.binaryPath }
+                : { kindLabel: "CLI Proxy", location: source.url };
+            const label = source.label?.trim() || location;
             return (
               <SettingsRow
                 key={id}
                 title={label}
                 description={
                   <span className="break-all">
-                    CLI Proxy{source.enabled ? "" : " · Disabled"}
-                    {label !== source.url ? ` · ${source.url}` : ""}
+                    {kindLabel}
+                    {source.enabled ? "" : " · Disabled"}
+                    {label !== location ? ` · ${location}` : ""}
                   </span>
                 }
                 control={
                   !readOnly ? (
                     <RemoveUsageProviderButton
+                      kind={source.kind}
                       label={label}
                       onConfirm={() => updateSettings({ usageLimitSources: { [id]: null } })}
                     />
@@ -133,9 +139,11 @@ export function UsageProviderSettings({
 
 /** Removing a hub deletes its stored management key, so it requires confirmation. */
 function RemoveUsageProviderButton({
+  kind,
   label,
   onConfirm,
 }: {
+  readonly kind: UsageLimitSourceConfig["kind"];
   readonly label: string;
   readonly onConfirm: () => void;
 }) {
@@ -150,9 +158,9 @@ function RemoveUsageProviderButton({
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {label}?</AlertDialogTitle>
             <AlertDialogDescription>
-              The hub's management key is deleted from this server. Its accounts leave the Limits
-              view; the hub itself is untouched. Add it again with the URL and key to bring them
-              back.
+              {kind === "cswap"
+                ? "Its accounts leave the Limits view; claude-swap itself is untouched."
+                : "The hub's management key is deleted from this server. Its accounts leave the Limits view; the hub itself is untouched. Add it again with the URL and key to bring them back."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -164,7 +172,7 @@ function RemoveUsageProviderButton({
                 onConfirm();
               }}
             >
-              Remove hub
+              Remove
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>
