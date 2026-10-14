@@ -57,10 +57,11 @@ export class UsageLimitSources extends Context.Service<
 function sourceLabel(id: string, config: UsageLimitSourceConfig): string {
   if (config.label) return config.label;
   if (config.kind === "cswap") return "claude-swap";
+  const fallback = id.trim() || "Usage limit source";
   try {
-    return new URL(config.url).host;
+    return new URL(config.url).host || fallback;
   } catch {
-    return id;
+    return fallback;
   }
 }
 
