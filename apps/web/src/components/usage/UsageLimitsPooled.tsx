@@ -101,7 +101,7 @@ function AccountAvatar({
  * is one, else a two-letter chip. The address itself is revealed on demand in
  * the segment's popover.
  */
-function AccountName({
+export function AccountName({
   account,
   className,
 }: {

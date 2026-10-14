@@ -122,3 +122,41 @@ it("waits for connection and does not refresh on ordinary renders", async () => 
   expect(state.refreshUsage).toHaveBeenCalledTimes(1);
   expect(state.refreshProviders).not.toHaveBeenCalled();
 });
+
+it("shows each pooled account's own meter under the pool's share", async () => {
+  const [id, presentation] = [...state.presentations][0]!;
+  const [provider] = presentation.serverConfig.providers;
+  const account = (name: string, usedPercent: number) => ({
+    ...provider,
+    instanceId: ProviderInstanceId.make(name),
+    auth: { status: "authenticated", email: `${name}@example.com` },
+    usageLimits: {
+      ...provider.usageLimits,
+      windows: [{ ...provider.usageLimits.windows[0], usedPercent }],
+    },
+  });
+  state.presentations = new Map([
+    [
+      id,
+      {
+        ...presentation,
+        serverConfig: {
+          providers: [account("work", 40), account("personal", 80)],
+        },
+      },
+    ],
+  ]);
+  await act(() => {
+    renderer = create(<UsageSidebarPanel />);
+  });
+  const meters = renderer.root
+    .findAll((node) => node.type === "div" && node.props.role === "img")
+    .map((node) => node.props["aria-label"]);
+  expect(meters).toEqual([
+    "personal@example.com: 20% left, resets in 2h 0m",
+    "work@example.com: 60% left, resets in 2h 0m",
+  ]);
+  expect(
+    renderer.root.findAll((node) => node.type === "span" && node.children.join("") === "40% left"),
+  ).toHaveLength(1);
+});

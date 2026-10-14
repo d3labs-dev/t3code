@@ -12,13 +12,16 @@ import {
   collectLimitNotices,
   collectLimitPools,
   formatDuration,
+  formatResetsIn,
   type LimitPool,
   type LimitPoolWindow,
+  remainingPercent,
 } from "@t3tools/shared/usageLimits";
 import { enumerateDays, formatTokens, formatUsd, makeWindow } from "@t3tools/shared/usageFormat";
 import type { DailyTotals } from "@t3tools/shared/usageMerge";
 import { ChartNoAxesColumnIcon } from "lucide-react";
 import {
+  Fragment,
   type ReactNode,
   useEffect,
   useEffectEvent,
@@ -40,6 +43,7 @@ import { SidebarHeaderIconButton } from "../sidebar/SidebarThreadHeader";
 import { RefreshIcon } from "../ui/refresh-icon";
 import { SidebarContent, SidebarGroup } from "../ui/sidebar";
 import { barColor } from "./UsageLimits";
+import { AccountName } from "./UsageLimitsPooled";
 import { PROVIDER_ORDER, PROVIDER_PRESENTATION, usageKindForDriver } from "./usageProviders";
 import { useSidebarPanelStore } from "../sidebar/sidebarPanelStore";
 
@@ -351,8 +355,9 @@ function ProviderUsageCard({ card, now }: { readonly card: ProviderCard; readonl
 }
 
 /**
- * One pooled window: quota left as a bar, and when the soonest account resets.
- * The percentage is the pool's, so two accounts on one plan read as one tank.
+ * One pooled window. Several accounts get a row each under the pool's share,
+ * so a drained account is visible behind a healthy total; a lone account keeps
+ * the single bar with its reset.
  */
 function WindowMeter({
   window,
@@ -363,6 +368,19 @@ function WindowMeter({
   readonly color: string;
   readonly now: number;
 }) {
+  if (window.columns.length > 1) {
+    return (
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <span className="flex min-w-0 items-baseline gap-2 text-xs">
+          <span className="truncate font-medium text-sidebar-foreground">{window.label}</span>
+          <span className="ms-auto shrink-0 text-2xs font-medium text-sidebar-foreground tabular-nums">
+            {window.remainingPercent}% left
+          </span>
+        </span>
+        <AccountMeters window={window} color={color} now={now} />
+      </div>
+    );
+  }
   const nextReset = window.resets[0];
   const resetsIn =
     nextReset === undefined
@@ -373,22 +391,78 @@ function WindowMeter({
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <span className="truncate text-xs font-medium text-sidebar-foreground">{window.label}</span>
-      <div
-        role="img"
-        aria-label={`${window.label}: ${window.remainingPercent}% left${resetsIn ? `, ${resetsIn.toLowerCase()}` : ""}`}
-        className="h-1.5 w-full overflow-hidden rounded-full bg-sidebar-border/70"
-      >
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${window.remainingPercent}%`, backgroundColor: color }}
-        />
-      </div>
+      <Meter
+        label={`${window.label}: ${window.remainingPercent}% left${resetsIn ? `, ${resetsIn.toLowerCase()}` : ""}`}
+        remaining={window.remainingPercent}
+        color={color}
+      />
       <div className="flex min-w-0 items-baseline gap-2 text-2xs leading-normal tabular-nums">
         <span className="shrink-0 font-medium text-sidebar-foreground">
           {window.remainingPercent}% left
         </span>
         <span className="ms-auto truncate text-sidebar-muted-foreground">{resetsIn ?? ""}</span>
       </div>
+    </div>
+  );
+}
+
+/** One row per account, in the same order on every window, each with its own countdown. */
+function AccountMeters({
+  window,
+  color,
+  now,
+}: {
+  readonly window: LimitPoolWindow;
+  readonly color: string;
+  readonly now: number;
+}) {
+  return (
+    <div className="grid grid-cols-[fit-content(4rem)_minmax(2rem,1fr)_auto_auto] items-center gap-x-2 gap-y-1 text-2xs leading-normal tabular-nums">
+      {window.columns.map(({ account, window: accountWindow }) => {
+        if (!accountWindow) return null;
+        const remaining = remainingPercent(accountWindow);
+        const resetsIn = formatResetsIn(accountWindow, now);
+        return (
+          <Fragment key={account.key}>
+            <AccountName
+              account={account}
+              className="min-w-0 truncate text-sidebar-muted-foreground"
+            />
+            <Meter
+              label={`${account.displayName ?? account.email ?? window.label}: ${remaining}% left${resetsIn ? `, ${resetsIn}` : ""}`}
+              remaining={remaining}
+              color={color}
+            />
+            <span className="text-end font-medium text-sidebar-foreground">{remaining}%</span>
+            <span className="text-end text-sidebar-muted-foreground">
+              {resetsIn?.replace("resets in ", "↻ ") ?? ""}
+            </span>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function Meter({
+  label,
+  remaining,
+  color,
+}: {
+  readonly label: string;
+  readonly remaining: number;
+  readonly color: string;
+}) {
+  return (
+    <div
+      role="img"
+      aria-label={label}
+      className="h-1.5 w-full overflow-hidden rounded-full bg-sidebar-border/70"
+    >
+      <div
+        className="h-full rounded-full"
+        style={{ width: `${remaining}%`, backgroundColor: color }}
+      />
     </div>
   );
 }
