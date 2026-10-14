@@ -28,7 +28,7 @@ export function backgroundStudioFieldClass(className?: string): string {
     "relative inline-flex h-7.5 min-w-0 w-full flex-1 items-center rounded-lg border border-input bg-background text-sm text-foreground shadow-xs/5 outline-none not-dark:bg-clip-padding ring-ring/24 transition-shadow sm:h-6.5",
     "before:pointer-events-none before:absolute before:inset-0 before:rounded-studio-field-inner",
     "not-has-disabled:not-has-focus-visible:not-focus-visible:before:shadow-studio-field dark:not-has-disabled:not-has-focus-visible:not-focus-visible:before:shadow-studio-field-dark",
-    "has-focus-visible:border-ring has-focus-visible:ring-3 focus-visible:border-ring focus-visible:ring-3",
+    "has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-inset focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-inset",
     "has-[:disabled,:focus-visible]:shadow-none focus-visible:shadow-none",
     "has-disabled:opacity-64 disabled:opacity-64",
     "dark:bg-input/32",
@@ -38,7 +38,7 @@ export function backgroundStudioFieldClass(className?: string): string {
 
 export function backgroundPickerTileClass(selected: boolean): string {
   return cn(
-    "block w-full overflow-hidden rounded-lg border outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    "block w-full overflow-hidden rounded-lg border outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
     selected ? "border-primary ring-2 ring-primary/40" : "border-border/60 hover:border-border",
   );
 }
@@ -46,7 +46,7 @@ export function backgroundPickerTileClass(selected: boolean): string {
 export const backgroundPickerMenuGridClass = "grid max-h-72 grid-cols-3 overflow-y-auto p-2";
 
 const uploadTileClass =
-  "flex min-h-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border px-2 text-center text-xs text-muted-foreground outline-none hover:border-foreground/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 data-[dragging=true]:border-primary data-[dragging=true]:bg-primary/10";
+  "flex min-h-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border px-2 text-center text-xs text-muted-foreground outline-none hover:border-foreground/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-50 data-[dragging=true]:border-primary data-[dragging=true]:bg-primary/10";
 
 type DropTarget = "input" | "files" | "folder";
 

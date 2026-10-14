@@ -1,5 +1,6 @@
 import { lazy, memo, Suspense, useLayoutEffect, useState } from "react";
 
+import { observeResize } from "~/lib/observeResize";
 import { useClientSettings } from "~/hooks/useSettings";
 import type { CustomBackgroundRouteKind } from "~/customBackground/records";
 import { useChatBackdrop } from "~/customBackground/useChatBackdrop";
@@ -70,11 +71,7 @@ export const ChatBackdropTopFade = memo(function ChatBackdropTopFade() {
         height: paneRect.height,
       });
     };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(strip);
-    observer.observe(pane);
-    return () => observer.disconnect();
+    return observeResize([strip, pane], measure);
   }, [strip]);
   if (!backdrop) return null;
   return (
