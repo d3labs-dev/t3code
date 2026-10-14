@@ -1,6 +1,7 @@
 /**
- * UsageLimitSources — quota from places this environment cannot run turns
- * on, today a CLIProxyAPI hub pooling several subscription accounts.
+ * UsageLimitSources — quota from accounts this environment cannot run turns
+ * on: a CLIProxyAPI hub pooling several subscription accounts, or the Claude
+ * accounts claude-swap keeps beside the signed-in one.
  *
  * Each configured `settings.usageLimitSources` entry is polled on the
  * provider health-check interval and on every settings change, then
@@ -34,8 +35,10 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
+import * as ProcessRunner from "../processRunner.ts";
 import * as Settings from "../serverSettings.ts";
 import { makeCliproxyApi } from "./cliproxyApi.ts";
+import { makeCswap } from "./cswap.ts";
 
 export class UsageLimitSources extends Context.Service<
   UsageLimitSources,
@@ -53,6 +56,7 @@ export class UsageLimitSources extends Context.Service<
 
 function sourceLabel(id: string, config: UsageLimitSourceConfig): string {
   if (config.label) return config.label;
+  if (config.kind === "cswap") return "claude-swap";
   try {
     return new URL(config.url).host;
   } catch {
@@ -63,6 +67,7 @@ function sourceLabel(id: string, config: UsageLimitSourceConfig): string {
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const api = yield* makeCliproxyApi;
+  const cswap = yield* makeCswap;
   const settingsService = yield* Settings.ServerSettingsService;
   const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
   const stateRef = yield* Ref.make<ReadonlyArray<UsageLimitSourceSnapshot>>([]);
@@ -77,10 +82,12 @@ export const make = Effect.gen(function* () {
   ) {
     const checkedAt = DateTime.formatIso(yield* DateTime.now);
     const base = { id, kind: config.kind, label: sourceLabel(id, config), checkedAt } as const;
-    if (config.managementKey.length === 0) {
+    if (config.kind === "cliproxy" && config.managementKey.length === 0) {
       return { ...base, accounts: [], error: "No management key configured." };
     }
-    const accounts = yield* api.readAccounts(config).pipe(Effect.result);
+    const accounts = yield* (
+      config.kind === "cliproxy" ? api.readAccounts(config) : cswap.readAccounts(config)
+    ).pipe(Effect.result);
     if (accounts._tag === "Failure") {
       yield* Effect.logDebug("usage limit source read failed", { id, cause: accounts.failure });
       return { ...base, accounts: [], error: accounts.failure.detail };
@@ -124,6 +131,11 @@ export const make = Effect.gen(function* () {
         ),
       );
       const config = settings.usageLimitSources[input.sourceId];
+      if (config?.kind === "cswap") {
+        return yield* new UsageLimitSourceError({
+          detail: "claude-swap accounts cannot redeem reset credits.",
+        });
+      }
       if (!config?.enabled || !config.managementKey) {
         return yield* new UsageLimitSourceError({
           detail: "The usage limit source is missing or disabled.",
@@ -182,4 +194,4 @@ export const make = Effect.gen(function* () {
   } satisfies UsageLimitSources["Service"];
 });
 
-export const layer = Layer.effect(UsageLimitSources, make);
+export const layer = Layer.effect(UsageLimitSources, make).pipe(Layer.provide(ProcessRunner.layer));

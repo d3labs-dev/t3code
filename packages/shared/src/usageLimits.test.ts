@@ -632,6 +632,51 @@ describe("pools", () => {
     ]);
   });
 
+  it("merges the signed-in claude-swap account into the native login of the same organization", () => {
+    const native = provider({
+      driver: claude,
+      instanceId: ProviderInstanceId.make("claude"),
+      auth: { status: "authenticated", email: "Work@example.com", workspaceId: "org-a" },
+      usageLimits: { checkedAt, windows: [window] },
+    });
+    const cswapAccount = (id: string, email: string) => ({
+      id,
+      driver: claude,
+      email,
+      workspaceId: "org-a",
+      usageLimits: { checkedAt, windows: [window] },
+    });
+    const input = new Map([
+      [
+        EnvironmentId.make("env-a"),
+        {
+          ...laptop,
+          serverConfig: {
+            providers: [native],
+            usageLimitSources: [
+              {
+                ...source,
+                id: UsageLimitSourceId.make("cswap"),
+                kind: "cswap" as const,
+                label: "claude-swap",
+                accounts: [
+                  cswapAccount("1", "work@example.com"),
+                  cswapAccount("2", "personal@example.com"),
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    ]);
+    expect(
+      collectLimitAccounts(input).map((account) => [account.key, account.sourceLabel]),
+    ).toEqual([
+      ["env-a:claude", null],
+      ["cswap:2:org-a", "claude-swap"],
+    ]);
+  });
+
   it("names an environment once however many of its instances share the account", () => {
     const shared = provider({
       auth: { status: "authenticated", email: "same@example.com" },

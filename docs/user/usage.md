@@ -131,8 +131,9 @@ using a proxy through `ANTHROPIC_AUTH_TOKEN`.
 
 ## Connect a CLIProxyAPI hub
 
-To see pooled accounts, open **Settings → Providers → Usage providers → Add hub**. Choose the
-environment that will connect to the hub and enter its URL and management key.
+To see pooled accounts, open **Settings → Providers → Usage providers → Add source** and choose
+**CLIProxyAPI hub**. Choose the environment that will connect to the hub and enter its URL and
+management key.
 
 The accounts appear under **Usage → Limits**. Codex accounts show banked reset credits; select an
 account and choose **Use reset** to redeem one. No hub plugin is required.
@@ -140,6 +141,13 @@ account and choose **Use reset** to redeem one. No hub plugin is required.
 This connection supplies usage information; configure
 the provider separately to send agent requests through the hub. Remove the hub from the same
 settings section when you no longer need it.
+
+### Show every claude-swap account
+
+If you switch Claude accounts with [claude-swap](https://github.com/realiti4/claude-swap), choose
+**claude-swap** under **Add source** instead. **Usage → Limits** then shows every account
+claude-swap manages, not only the one currently signed in. Set the binary path if `cswap` is not
+on the environment's `PATH`. claude-swap accounts do not offer **Use reset**.
 
 ## Subscription usage widget
 
