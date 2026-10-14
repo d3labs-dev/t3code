@@ -37,6 +37,7 @@ const CswapWindow = Schema.Struct({
 const CswapAccount = Schema.Struct({
   number: Schema.Number,
   email: Schema.String,
+  alias: Schema.optional(Schema.String),
   organizationUuid: Schema.optional(Schema.String),
   usageStatus: Schema.String,
   usage: Schema.NullOr(
@@ -76,10 +77,12 @@ function cswapAccountToSource(input: {
     onSome: DateTime.formatIso,
   });
   const organizationUuid = account.organizationUuid?.trim();
+  const alias = account.alias?.trim();
   const base = {
     id: String(account.number),
     driver: ProviderDriverKind.make("claudeAgent"),
     email: account.email,
+    ...(alias ? { label: alias } : {}),
     plan: "Claude Subscription",
     ...(organizationUuid ? { workspaceId: organizationUuid } : {}),
   };

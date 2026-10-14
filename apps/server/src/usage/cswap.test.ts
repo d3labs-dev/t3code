@@ -38,6 +38,7 @@ describe("cswap usage source", () => {
           id: "1",
           driver: "claudeAgent",
           email: "work@example.com",
+          label: "work",
           plan: "Claude Subscription",
           workspaceId: "4033dbf0-1a34-4d32-8d86-a5c84aabe105",
           usageLimits: {
@@ -70,7 +71,7 @@ describe("cswap usage source", () => {
             ],
           },
         },
-        expect.objectContaining({ id: "2", email: "personal@example.com" }),
+        expect.objectContaining({ id: "2", email: "personal@example.com", label: "personal" }),
       ]);
       expect(accounts[1]?.usageLimits.windows[0]).toEqual({
         id: "five_hour",
