@@ -632,17 +632,19 @@ describe("pools", () => {
     ]);
   });
 
-  it("merges the signed-in claude-swap account into the native login of the same organization", () => {
+  it("merges the signed-in claude-swap account into the native login, named by its alias", () => {
     const native = provider({
       driver: claude,
       instanceId: ProviderInstanceId.make("claude"),
+      displayName: "Claude",
       auth: { status: "authenticated", email: "Work@example.com", workspaceId: "org-a" },
       usageLimits: { checkedAt, windows: [window] },
     });
-    const cswapAccount = (id: string, email: string) => ({
+    const cswapAccount = (id: string, email: string, label: string) => ({
       id,
       driver: claude,
       email,
+      label,
       workspaceId: "org-a",
       usageLimits: { checkedAt, windows: [window] },
     });
@@ -660,8 +662,8 @@ describe("pools", () => {
                 kind: "cswap" as const,
                 label: "claude-swap",
                 accounts: [
-                  cswapAccount("1", "work@example.com"),
-                  cswapAccount("2", "personal@example.com"),
+                  cswapAccount("1", "work@example.com", "work"),
+                  cswapAccount("2", "personal@example.com", "personal"),
                 ],
               },
             ],
@@ -670,10 +672,14 @@ describe("pools", () => {
       ],
     ]);
     expect(
-      collectLimitAccounts(input).map((account) => [account.key, account.sourceLabel]),
+      collectLimitAccounts(input).map((account) => [
+        account.key,
+        account.displayName,
+        account.sourceLabel,
+      ]),
     ).toEqual([
-      ["env-a:claude", null],
-      ["cswap:2:org-a", "claude-swap"],
+      ["env-a:claude", "work", null],
+      ["cswap:2:org-a", "personal", "claude-swap"],
     ]);
   });
 
@@ -853,6 +859,7 @@ describe("pools", () => {
           key: "go",
           driver: claude,
           displayName: "Go",
+          label: null,
           email: undefined,
           plan: undefined,
           accentColor: undefined,
@@ -899,6 +906,7 @@ describe("pooled account columns", () => {
     key,
     driver: ProviderDriverKind.make("claudeAgent"),
     displayName: key,
+    label: null,
     email: undefined,
     plan: undefined,
     accentColor: undefined,
@@ -983,6 +991,7 @@ describe("Cursor limit presentation", () => {
     key: "cursor",
     driver: ProviderDriverKind.make("cursor"),
     displayName: "Cursor",
+    label: null,
     email: undefined,
     plan: undefined,
     accentColor: undefined,
