@@ -5,7 +5,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeModule from "node:module";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import type { Browser, BrowserContext, CDPSession } from "playwright-core";
+import type { Browser, BrowserContext, CDPSession, LaunchOptions } from "playwright-core";
 
 import { sandboxDisabled } from "./PreviewBrowserHost.ts";
 
@@ -16,6 +16,7 @@ const loadPlaywright = () =>
 
 interface Options {
   readonly profilesDir: string;
+  readonly platform: NodeJS.Platform;
   /** The shared headless browser's executable, installing it on first use. */
   readonly executable: () => Promise<string>;
   /** Replaces a failed launch's error with the host setup it is missing, if any. */
@@ -23,6 +24,14 @@ interface Options {
   readonly env?: NodeJS.ProcessEnv;
   readonly onContextClose?: (context: BrowserContext) => void;
 }
+
+const SOFTWARE_RENDERING = ["--disable-gpu"];
+/**
+ * ANGLE on the host's EGL driver. Chrome does not fall back to SwiftShader
+ * from it: with no usable GPU it lands on Mesa's llvmpipe, which it
+ * blocklists, and WebGL turns off. Only a probe launch tells the two apart.
+ */
+const GPU_RENDERING = ["--use-angle=gl-egl"];
 
 const UA_PLATFORMS: Partial<Record<NodeJS.Platform, string>> = {
   darwin: "macOS",
@@ -89,6 +98,7 @@ export class ServerBrowserContexts {
   /** Profile clears in progress; a context for that profile opens after its storage is gone. */
   private readonly clearing = new Map<string, Promise<void>>();
   private browser: Promise<Browser> | undefined;
+  private rendering: Promise<ReadonlyArray<string>> | undefined;
   private closing: Promise<void> | undefined;
 
   constructor(options: Options) {
@@ -98,20 +108,45 @@ export class ServerBrowserContexts {
   private async launchOptions() {
     const executablePath = await this.options.executable();
     const env = this.options.env ?? process.env;
-    return {
+    const options = {
       executablePath,
       env,
       // People drive these tabs, so they must not announce automation (navigator.webdriver).
-      args: [
-        "--disable-gpu",
-        "--force-device-scale-factor=2",
-        "--disable-blink-features=AutomationControlled",
-      ],
+      args: ["--force-device-scale-factor=2", "--disable-blink-features=AutomationControlled"],
       ignoreDefaultArgs: ["--enable-automation"],
       headless: true,
       // Only an explicit operator opt-out disables sandboxing. Launch errors never do.
       chromiumSandbox: !sandboxDisabled(env),
     };
+    return { ...options, args: [...(await this.renderingArgs(options)), ...options.args] };
+  }
+
+  /** Decided once per server: the GPU when it composites, otherwise software compositing. */
+  private renderingArgs(options: LaunchOptions & { readonly executablePath: string }) {
+    if (this.options.platform !== "linux") return Promise.resolve(SOFTWARE_RENDERING);
+    if (!this.rendering) {
+      const probing = this.probeGpu(options);
+      this.rendering = probing;
+      void probing.catch(() => {
+        if (this.rendering === probing) this.rendering = undefined;
+      });
+    }
+    return this.rendering;
+  }
+
+  private async probeGpu(options: LaunchOptions & { readonly executablePath: string }) {
+    const { chromium } = loadPlaywright();
+    const launchOptions = { ...options, args: [...GPU_RENDERING, ...(options.args ?? [])] };
+    const browser = await this.launch(options, () => chromium.launch(launchOptions));
+    try {
+      const cdp = await browser.newBrowserCDPSession();
+      const { gpu } = await cdp.send("SystemInfo.getInfo");
+      return gpu.featureStatus?.["gpu_compositing"] === "enabled"
+        ? GPU_RENDERING
+        : SOFTWARE_RENDERING;
+    } finally {
+      await browser.close().catch(constVoid);
+    }
   }
 
   private async launch<A>(options: { readonly executablePath: string }, start: () => Promise<A>) {
