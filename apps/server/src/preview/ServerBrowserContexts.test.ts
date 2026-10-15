@@ -1,10 +1,16 @@
 import * as NodeEvents from "node:events";
 
 import { INCOGNITO_BROWSER_PROFILE_ID } from "@t3tools/contracts";
-import { chromium, type Browser, type BrowserContext, type BrowserType } from "playwright-core";
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type BrowserType,
+  type CDPSession,
+} from "playwright-core";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { ServerBrowserContexts } from "./ServerBrowserContexts.ts";
+import { presentAsChrome, ServerBrowserContexts } from "./ServerBrowserContexts.ts";
 
 const launches = vi.hoisted(() => ({
   launch: vi.fn<BrowserType["launch"]>(),
@@ -240,5 +246,49 @@ describe("ServerBrowserContexts", () => {
     await pool.close();
     expect(browser.close).toHaveBeenCalledTimes(1);
     expect(browser.contexts[0]?.close).toHaveBeenCalled();
+  });
+});
+
+describe("presentAsChrome", () => {
+  const linuxUserAgent = (version: string) =>
+    `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ${version} Safari/537.36`;
+
+  it.each([
+    {
+      browser: "the headless shell",
+      version: {
+        product: "HeadlessChrome/154.0.8037.92",
+        userAgent: linuxUserAgent("HeadlessChrome/154.0.8037.92"),
+      },
+      major: "154",
+      build: "154.0.8037.92",
+    },
+    {
+      browser: "a full browser, whose user agent is already reduced",
+      version: {
+        product: "Chrome/152.0.7977.82",
+        userAgent: linuxUserAgent("HeadlessChrome/152.0.0.0"),
+      },
+      major: "152",
+      build: "152.0.7977.82",
+    },
+  ])("presents $browser as Chrome with its full build in client hints", async (input) => {
+    const send = vi.fn(async (method: string) =>
+      method === "Browser.getVersion" ? input.version : {},
+    );
+    await presentAsChrome({ send } as unknown as CDPSession, { platform: "linux", arch: "x64" });
+    expect(send).toHaveBeenLastCalledWith(
+      "Emulation.setUserAgentOverride",
+      expect.objectContaining({
+        userAgent: linuxUserAgent(`Chrome/${input.major}.0.0.0`),
+        userAgentMetadata: expect.objectContaining({
+          fullVersionList: [
+            { brand: "Chromium", version: input.build },
+            { brand: "Google Chrome", version: input.build },
+            { brand: "Not A(Brand", version: "99.0.0.0" },
+          ],
+        }),
+      }),
+    );
   });
 });

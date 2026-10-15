@@ -21,9 +21,9 @@ import * as NodeCrypto from "node:crypto";
 import * as ServerConfig from "../config.ts";
 import { openZipArchive } from "../zipArchive.ts";
 
-// The one browser T3 installs on a host. HTML render previews and server
-// browser tabs both run this pinned Chrome for Testing headless shell, so a host
-// downloads it once; neither uses a browser the user installed. To bump the pin, pick a version
+// The one browser T3 installs on a host. HTML render previews run this pinned
+// Chrome for Testing headless shell, and so do server browser tabs on a host
+// without its own Chrome (SystemBrowser.ts), so a host downloads it at most once. To bump the pin, pick a version
 // from https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json,
 // download each platform's chrome-headless-shell zip, and replace the version
 // and every byte count and SHA-256 below. Hosts drop the old build after the

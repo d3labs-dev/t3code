@@ -31,18 +31,19 @@ const UA_PLATFORMS: Partial<Record<NodeJS.Platform, string>> = {
 };
 
 /**
- * The headless shell's identity as the Chrome it is built from: its user agent
+ * A headless browser's identity as the Chrome it is built from: its user agent
  * without `HeadlessChrome`, and client hints whose brands agree with it. Sites
  * block a user agent that disagrees with `Sec-CH-UA`, so both change together.
  */
 const chromeIdentity = (
-  headlessUserAgent: string,
+  browserVersion: { readonly userAgent: string; readonly product: string },
   host: { readonly platform: NodeJS.Platform; readonly arch: string; readonly release: string },
 ) => {
-  const version = /HeadlessChrome\/((\d+)[\d.]*)/.exec(headlessUserAgent);
-  const fullVersion = version?.[1];
-  const major = version?.[2];
-  if (!version || !fullVersion || !major) return null;
+  const version = /HeadlessChrome\/(\d+)[\d.]*/.exec(browserVersion.userAgent);
+  const major = version?.[1];
+  // A full browser reduces its user agent to `major.0.0.0`; the product keeps the build.
+  const fullVersion = /\/([\d.]+)$/.exec(browserVersion.product)?.[1];
+  if (!version || !major || !fullVersion?.startsWith(`${major}.`)) return null;
   // Chrome's GREASE brand and order for this major version, as the shell reports them.
   const brands = (names: (version: string) => string) => [
     { brand: "Chromium", version: names(major) },
@@ -51,7 +52,7 @@ const chromeIdentity = (
   ];
   return {
     // Chrome reduces its user agent to the major version.
-    userAgent: headlessUserAgent.replace(version[0], `Chrome/${major}.0.0.0`),
+    userAgent: browserVersion.userAgent.replace(version[0], `Chrome/${major}.0.0.0`),
     userAgentMetadata: {
       brands: brands((value) => value),
       fullVersionList: brands((value) => (value === major ? fullVersion : `${value}.0.0.0`)),
@@ -74,8 +75,10 @@ export const presentAsChrome = async (
   cdp: CDPSession,
   host: { readonly platform: NodeJS.Platform; readonly arch: string },
 ) => {
-  const { userAgent } = await cdp.send("Browser.getVersion");
-  const identity = chromeIdentity(userAgent, { ...host, release: NodeOS.release() });
+  const identity = chromeIdentity(await cdp.send("Browser.getVersion"), {
+    ...host,
+    release: NodeOS.release(),
+  });
   if (identity) await cdp.send("Emulation.setUserAgentOverride", identity);
 };
 
