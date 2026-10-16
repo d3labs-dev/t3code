@@ -44,9 +44,7 @@ export class UsageLimitSources extends Context.Service<
   UsageLimitSources,
   {
     readonly current: Effect.Effect<ReadonlyArray<UsageLimitSourceSnapshot>>;
-    /** The current set followed by every change, with repeats dropped. */
     readonly streamChanges: Stream.Stream<ReadonlyArray<UsageLimitSourceSnapshot>>;
-    /** Re-read every source now. Never fails; failures land on the snapshot. */
     readonly refresh: Effect.Effect<void>;
     readonly consumeResetCredit: (
       input: UsageLimitSourceConsumeResetCreditInput,
@@ -149,8 +147,6 @@ export const make = Effect.gen(function* () {
       return result;
     }).pipe(refreshLock.withPermits(1));
 
-  // Settings edits re-read straight away so a new hub shows up without
-  // waiting for the interval, and a removed one leaves the list.
   yield* settingsService.streamChanges.pipe(
     Stream.map((settings) => settings.usageLimitSources),
     Stream.changes,

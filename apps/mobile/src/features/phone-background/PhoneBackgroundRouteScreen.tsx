@@ -14,12 +14,12 @@ import { type ComponentProps, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text } from "../../components/AppText";
-import { showTextInputDialog } from "../../components/ConfirmDialogHost";
-import { ControlPillMenu } from "../../components/ControlPillMenu";
-import { ListRowLayout } from "../../components/ListRowLayout";
-import { ScreenScrollView } from "../../components/ScreenScrollView";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
+import * as Dialog from "../../components/ui/Dialog";
+import { Menu } from "../../components/ui/Menu";
+import { ListRowLayout } from "../../components/ui/ListRowLayout";
+import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
 import { updateMobilePreferencesAtom } from "../../state/preferences";
 import { SettingsActionRow } from "../settings/components/SettingsActionRow";
 import { SettingsChoiceRow } from "../settings/components/SettingsChoiceRow";
@@ -88,7 +88,7 @@ function ChoiceRow<Value extends string | number>(props: {
       icon={props.icon}
       label={props.label}
       accessory={
-        <ControlPillMenu
+        <Menu
           title={props.label}
           actions={props.options.map((option) => ({
             id: String(option.value),
@@ -109,7 +109,7 @@ function ChoiceRow<Value extends string | number>(props: {
           >
             <Text className="text-sm font-t3-medium text-foreground">{current}</Text>
           </Pressable>
-        </ControlPillMenu>
+        </Menu>
       }
     />
   );
@@ -303,7 +303,7 @@ function renamePlaylist(name: string, onRename: (name: string) => void): void {
     );
     return;
   }
-  showTextInputDialog({
+  Dialog.prompt({
     title: "Rename playlist",
     initialValue: name,
     confirmText: "Rename",
