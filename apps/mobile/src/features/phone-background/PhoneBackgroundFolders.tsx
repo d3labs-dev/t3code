@@ -5,8 +5,8 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { type ComponentProps, useState } from "react";
 import { Alert, Linking, View } from "react-native";
 
-import type { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text } from "../../components/AppText";
+import type { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
 import { SettingsActionRow } from "../settings/components/SettingsActionRow";
 import { SettingsRow } from "../settings/components/SettingsRow";
 import { usePhoneFolderRead } from "./phoneBackground";

@@ -58,7 +58,6 @@ function subscriptionUsageProps(
         const sortedWindows = [...pool.windows].sort(
           (a, b) => a.remainingPercent - b.remainingPercent,
         );
-        // Keep a session and weekly limit when scoped limits fill the storage budget.
         const selectedWindows = [
           ...new Set([
             sortedWindows.find((window) => window.kind === "session"),
@@ -98,13 +97,11 @@ function subscriptionUsageProps(
   };
 }
 
-/** Deduplicate accounts before pooling, and only publish display data to the OS. */
 export function buildSubscriptionUsageSnapshot(
   presentations: LimitPresentations,
   url: string,
   maxWindowsPerProvider = 6,
 ): SubscriptionUsageSnapshot {
-  // Freshness is evaluated at publication/render time, not on unrelated config emissions.
   const configuredDrivers = new Set(
     [...presentations.values()].flatMap((presentation) =>
       (presentation.serverConfig?.providers ?? [])
