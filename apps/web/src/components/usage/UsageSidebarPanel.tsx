@@ -97,6 +97,7 @@ export function UsageSidebarPanel() {
   const navigate = useNavigate();
   const closeSidebarPanel = useSidebarPanelStore((store) => store.closeSidebarPanel);
   const presentations = useAtomValue(environmentPresentations.presentationsAtom);
+  const limitPresentations = useAtomValue(environmentPresentations.presentationsWithProvidersAtom);
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -167,10 +168,10 @@ export function UsageSidebarPanel() {
   }, [connectedEnvironments]);
 
   const pools = useMemo(
-    () => collectLimitPools(collectLimitAccounts(presentations), now),
-    [presentations, now],
+    () => collectLimitPools(collectLimitAccounts(limitPresentations), now),
+    [limitPresentations, now],
   );
-  const notices = useMemo(() => collectLimitNotices(presentations), [presentations]);
+  const notices = useMemo(() => collectLimitNotices(limitPresentations), [limitPresentations]);
 
   const cards = useMemo<readonly ProviderCard[]>(() => {
     const days = enumerateDays(window.sinceDay, window.untilDay);

@@ -360,26 +360,22 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const insets = useSafeAreaInsets();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const liveKeyboardHeight = useKeyboardState((state) => state.height);
-  // Android can swallow the IME hide callbacks when the app is backgrounded
-  // mid keyboard-hide (the reported repro: send — which blurs and starts the
-  // hide — then Home within a second). The keyboard library's height AND
-  // visibility then stay frozen open, so gating the sticky translation on
-  // visibility alone still strands the composer after resume. Quarantine the
-  // translation on every Android resume instead; any sign of a live keyboard
-  // stream — an owned input gaining focus, or any visibility/height movement —
-  // lifts it. A healthy resume sees no visual difference (the translation is
-  // already zero while the keyboard is closed). A composer that stayed focused
-  // keeps its keyboard: the microphone permission check pauses the activity
-  // mid-dictation, and quarantining then dropped the composer under the IME.
+  // Android can swallow the IME hide callbacks when the app is backgrounded mid keyboard-hide
+  // (the reported repro: send — which blurs and starts the hide — then Home within a second). The
+  // keyboard library's height AND visibility then stay frozen open, so gating the sticky
+  // translation on visibility alone still strands the composer after resume. An input that kept
+  // focus through the switch is exempt: Android restores its keyboard unchanged, so no keyboard
+  // or focus event would ever lift the quarantine. Hiding the keyboard with Back keeps focus, so
+  // Back then Home mid-hide takes the exemption and can still strand the composer.
   const [keyboardStateSuspect, setKeyboardStateSuspect] = useState(false);
-  const composerFocusedRef = useRef(false);
+  const ownedInputFocusedRef = useRef(false);
   useEffect(() => {
     if (Platform.OS !== "android") {
       return;
     }
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active" && !composerFocusedRef.current) {
-        setKeyboardStateSuspect(true);
+      if (state === "active") {
+        setKeyboardStateSuspect(!ownedInputFocusedRef.current);
       }
     });
     return () => {
@@ -390,6 +386,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     setKeyboardStateSuspect(false);
   }, [isKeyboardVisible, liveKeyboardHeight]);
   const handleOwnedInputFocusChange = useCallback((focused: boolean) => {
+    ownedInputFocusedRef.current = focused;
     if (focused) {
       setKeyboardStateSuspect(false);
     }
@@ -429,7 +426,6 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const [composerFocused, setComposerFocused] = useState(false);
   const handleComposerFocusChange = useCallback(
     (focused: boolean) => {
-      composerFocusedRef.current = focused;
       setComposerFocused(focused);
       handleOwnedInputFocusChange(focused);
     },
