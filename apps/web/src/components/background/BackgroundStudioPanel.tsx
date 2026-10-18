@@ -54,7 +54,7 @@ import {
   upsertBackground,
   withFilterKind,
 } from "~/customBackground/records";
-import { getClientSettings, useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
+import { getClientSettings, useClientSettings, updateClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { cn, randomUUID } from "~/lib/utils";
 import { ensureLocalApi } from "~/localApi";
@@ -585,7 +585,6 @@ export function BackgroundStudioPanel() {
   );
   const composerOpacity = useClientSettings((settings) => settings.customBackgroundComposerOpacity);
   const composerBlur = useClientSettings((settings) => settings.customBackgroundComposerBlur);
-  const updateSettings = useUpdateClientSettings();
 
   const selectedId = activeId;
   const liveRecord = useBackgroundStudioStore((store) => store.preview);
@@ -607,7 +606,7 @@ export function BackgroundStudioPanel() {
   const record = liveRecord && liveRecord.id === selectedId ? liveRecord : storedRecord;
   const persistLibrary = useCallback(
     (next: CustomBackgroundLibrary, nextActiveId?: string | null) => {
-      updateSettings(
+      updateClientSettings(
         nextActiveId === undefined
           ? { customBackgrounds: next }
           : {
@@ -616,7 +615,7 @@ export function BackgroundStudioPanel() {
             },
       );
     },
-    [updateSettings],
+    [],
   );
 
   const flushPending = useCallback(() => {
@@ -647,7 +646,7 @@ export function BackgroundStudioPanel() {
   const selectRow = (id: string | null) => {
     flushPending();
     setRenaming(false);
-    if (id !== activeId) updateSettings({ activeCustomBackgroundId: id });
+    if (id !== activeId) updateClientSettings({ activeCustomBackgroundId: id });
   };
 
   const addRecord = (next: CustomBackgroundRecord) => {
@@ -744,7 +743,7 @@ export function BackgroundStudioPanel() {
         Enable custom background
         <Switch
           checked={enabled}
-          onCheckedChange={(checked) => updateSettings({ customBackgroundEnabled: checked })}
+          onCheckedChange={(checked) => updateClientSettings({ customBackgroundEnabled: checked })}
         />
       </label>
       <div className="flex flex-col gap-2">
@@ -994,21 +993,21 @@ export function BackgroundStudioPanel() {
           Theme from image colors
           <Switch
             checked={dynamicTheme}
-            onCheckedChange={(checked) => updateSettings({ customBackgroundDynamicTheme: checked })}
+            onCheckedChange={(checked) => updateClientSettings({ customBackgroundDynamicTheme: checked })}
           />
         </label>
         <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           Bubbles behind agent replies
           <Switch
             checked={agentBubbles}
-            onCheckedChange={(checked) => updateSettings({ customBackgroundAgentBubbles: checked })}
+            onCheckedChange={(checked) => updateClientSettings({ customBackgroundAgentBubbles: checked })}
           />
         </label>
         <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           Bubbles behind your messages
           <Switch
             checked={userBubbles}
-            onCheckedChange={(checked) => updateSettings({ customBackgroundUserBubbles: checked })}
+            onCheckedChange={(checked) => updateClientSettings({ customBackgroundUserBubbles: checked })}
           />
         </label>
         {agentBubbles || userBubbles ? (
@@ -1020,7 +1019,7 @@ export function BackgroundStudioPanel() {
               step={1}
               value={bubbleOpacity}
               format={(value) => `${value}%`}
-              onChange={(value) => updateSettings({ customBackgroundAgentBubbleOpacity: value })}
+              onChange={(value) => updateClientSettings({ customBackgroundAgentBubbleOpacity: value })}
             />
             <RangeControl
               label="Bubble blur"
@@ -1029,7 +1028,7 @@ export function BackgroundStudioPanel() {
               step={1}
               value={bubbleBlur}
               format={(value) => `${value}px`}
-              onChange={(value) => updateSettings({ customBackgroundAgentBubbleBlur: value })}
+              onChange={(value) => updateClientSettings({ customBackgroundAgentBubbleBlur: value })}
             />
             <RangeControl
               label="Bubble padding"
@@ -1038,7 +1037,7 @@ export function BackgroundStudioPanel() {
               step={1}
               value={bubblePadding}
               format={(value) => `${value}px`}
-              onChange={(value) => updateSettings({ customBackgroundAgentBubblePadding: value })}
+              onChange={(value) => updateClientSettings({ customBackgroundAgentBubblePadding: value })}
             />
           </>
         ) : null}
@@ -1047,7 +1046,7 @@ export function BackgroundStudioPanel() {
           <Switch
             checked={replyTextEmphasis}
             onCheckedChange={(checked) =>
-              updateSettings({ customBackgroundReplyTextEmphasis: checked })
+              updateClientSettings({ customBackgroundReplyTextEmphasis: checked })
             }
           />
         </label>
@@ -1058,7 +1057,7 @@ export function BackgroundStudioPanel() {
           step={1}
           value={textShadow}
           format={(value) => (value === 0 ? "Off" : `${value}%`)}
-          onChange={(value) => updateSettings({ customBackgroundReplyTextShadow: value })}
+          onChange={(value) => updateClientSettings({ customBackgroundReplyTextShadow: value })}
         />
       </StudioSection>
       <StudioSection title="Input box">
@@ -1069,7 +1068,7 @@ export function BackgroundStudioPanel() {
           step={1}
           value={heroComposerOpacity}
           format={(value) => `${value}%`}
-          onChange={(value) => updateSettings({ customBackgroundHeroComposerOpacity: value })}
+          onChange={(value) => updateClientSettings({ customBackgroundHeroComposerOpacity: value })}
         />
         <RangeControl
           label="New thread blur"
@@ -1078,7 +1077,7 @@ export function BackgroundStudioPanel() {
           step={1}
           value={heroComposerBlur}
           format={(value) => `${value}px`}
-          onChange={(value) => updateSettings({ customBackgroundHeroComposerBlur: value })}
+          onChange={(value) => updateClientSettings({ customBackgroundHeroComposerBlur: value })}
         />
         <RangeControl
           label="Ongoing chat opacity"
@@ -1087,7 +1086,7 @@ export function BackgroundStudioPanel() {
           step={1}
           value={composerOpacity}
           format={(value) => `${value}%`}
-          onChange={(value) => updateSettings({ customBackgroundComposerOpacity: value })}
+          onChange={(value) => updateClientSettings({ customBackgroundComposerOpacity: value })}
         />
         <RangeControl
           label="Ongoing chat blur"
@@ -1096,7 +1095,7 @@ export function BackgroundStudioPanel() {
           step={1}
           value={composerBlur}
           format={(value) => `${value}px`}
-          onChange={(value) => updateSettings({ customBackgroundComposerBlur: value })}
+          onChange={(value) => updateClientSettings({ customBackgroundComposerBlur: value })}
         />
       </StudioSection>
     </div>

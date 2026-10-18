@@ -1,6 +1,6 @@
 import { openBackgroundStudio } from "~/customBackground/backgroundStudioStore";
 import { useActiveBackground } from "~/customBackground/useActiveBackground";
-import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
+import { useClientSettings, updateClientSettings } from "~/hooks/useSettings";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { SettingResetButton, SettingsRow, SettingsSection } from "./settingsLayout";
@@ -11,7 +11,6 @@ export function CustomBackgroundSettings() {
   const active = useActiveBackground();
   const enabled = useClientSettings((settings) => settings.customBackgroundEnabled);
   const libraryCount = useClientSettings((settings) => settings.customBackgrounds.length);
-  const updateSettings = useUpdateClientSettings();
 
   return (
     <SettingsSection id="appearance-background" title="Background">
@@ -29,7 +28,7 @@ export function CustomBackgroundSettings() {
           active ? (
             <SettingResetButton
               label="custom background"
-              onClick={() => updateSettings({ activeCustomBackgroundId: null })}
+              onClick={() => updateClientSettings({ activeCustomBackgroundId: null })}
             />
           ) : null
         }
@@ -41,7 +40,7 @@ export function CustomBackgroundSettings() {
             <Switch
               checked={enabled}
               onCheckedChange={(checked) =>
-                updateSettings({ customBackgroundEnabled: Boolean(checked) })
+                updateClientSettings({ customBackgroundEnabled: Boolean(checked) })
               }
               aria-label="Enable custom background"
             />
