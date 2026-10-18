@@ -6,21 +6,21 @@ import {
 } from "../../lib/mobileTheme";
 
 /**
- * Both navigation positions keep a visible tonal selection against their actual surface.
+ * The selection stays visible against the bar's actual surface.
  * Over a phone background the bar stays clear so the picture runs to the bottom edge,
  * and its selection is measured against the backdrop color the picture fades into.
  */
 export function androidWorkspaceNavigationColors(input: {
   readonly colors: MobileThemeVariables;
-  readonly rail: boolean;
   readonly phoneBackdropColor: string | null;
 }) {
-  const { colors, rail, phoneBackdropColor } = input;
+  const { colors, phoneBackdropColor } = input;
   const header =
     phoneBackdropColor ?? flattenThemeColor(colors["--color-header"], colors["--color-screen"]);
-  const surfaceColor = rail
-    ? header
-    : flattenThemeColor(themeColorWithAlpha(colors["--color-header-foreground"], 0.05), header);
+  const surfaceColor = flattenThemeColor(
+    themeColorWithAlpha(colors["--color-header-foreground"], 0.05),
+    header,
+  );
   const indicatorColor = themeColorWithContrast(
     flattenThemeColor(colors["--color-secondary"], surfaceColor),
     surfaceColor,

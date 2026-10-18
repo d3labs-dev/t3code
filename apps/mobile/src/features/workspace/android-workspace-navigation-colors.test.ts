@@ -35,21 +35,16 @@ function expectVisibleSelection(colors: ReturnType<typeof androidWorkspaceNaviga
 }
 
 describe("Android workspace navigation colors", () => {
-  it.each(MOBILE_THEME_IDS)(
-    "keeps %s selection visible in both navigation positions",
-    (themeId) => {
-      for (const appearance of ["light", "dark"] as const) {
-        const variables = getMobileThemeRuntimeVariables(themeId, appearance, "android");
-        const snapshot = { ...variables };
-        for (const rail of [false, true]) {
-          expectVisibleSelection(
-            androidWorkspaceNavigationColors({ colors: variables, rail, phoneBackdropColor: null }),
-          );
-        }
-        expect(variables).toEqual(snapshot);
-      }
-    },
-  );
+  it.each(MOBILE_THEME_IDS)("keeps %s selection visible", (themeId) => {
+    for (const appearance of ["light", "dark"] as const) {
+      const variables = getMobileThemeRuntimeVariables(themeId, appearance, "android");
+      const snapshot = { ...variables };
+      expectVisibleSelection(
+        androidWorkspaceNavigationColors({ colors: variables, phoneBackdropColor: null }),
+      );
+      expect(variables).toEqual(snapshot);
+    }
+  });
 
   it.each(["#6750a4", "#006a6a", "#9c4146"])(
     "keeps Material You selection visible for system seed %s",
@@ -93,11 +88,9 @@ describe("Android workspace navigation colors", () => {
           appearance,
           getMobileThemeRuntimeVariables("material-you", appearance, "android"),
         );
-        for (const rail of [false, true]) {
-          expectVisibleSelection(
-            androidWorkspaceNavigationColors({ colors: variables, rail, phoneBackdropColor: null }),
-          );
-        }
+        expectVisibleSelection(
+          androidWorkspaceNavigationColors({ colors: variables, phoneBackdropColor: null }),
+        );
       }
     },
   );
@@ -106,7 +99,6 @@ describe("Android workspace navigation colors", () => {
     const variables = getMobileThemeRuntimeVariables("t3-chat", "light", "android");
     const colors = androidWorkspaceNavigationColors({
       colors: { ...variables, "--color-secondary": "#e091cf" },
-      rail: true,
       phoneBackdropColor: null,
     });
     expect(colors.indicatorColor).toBe("#e091cf");
@@ -120,14 +112,11 @@ describe("Android workspace navigation colors", () => {
       appearance: "dark",
       sourceColor: null,
     });
-    for (const rail of [false, true]) {
-      const colors = androidWorkspaceNavigationColors({
-        colors: phoneVariables,
-        rail,
-        phoneBackdropColor: backdropColor,
-      });
-      expect(colors.containerColor).toBe("transparent");
-      expectVisibleSelection({ ...colors, containerColor: backdropColor });
-    }
+    const colors = androidWorkspaceNavigationColors({
+      colors: phoneVariables,
+      phoneBackdropColor: backdropColor,
+    });
+    expect(colors.containerColor).toBe("transparent");
+    expectVisibleSelection({ ...colors, containerColor: backdropColor });
   });
 });
