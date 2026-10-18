@@ -38,7 +38,7 @@ import {
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
-import { PROVIDER_PRESENTATION, usageKindForDriver } from "./usageProviders";
+import { PROVIDER_PRESENTATION } from "./usageProviders";
 
 const PACE: Record<LimitPace, { readonly label: string; readonly icon: typeof GaugeIcon }> = {
   ahead: { label: "Ahead of pace: spending faster than the window elapses", icon: TrendingUpIcon },
@@ -47,8 +47,10 @@ const PACE: Record<LimitPace, { readonly label: string; readonly icon: typeof Ga
 };
 
 export function barColor(driver: ServerProvider["driver"]): string {
-  const kind = usageKindForDriver(driver);
-  return kind ? PROVIDER_PRESENTATION[kind].color : "var(--foreground)";
+  const presentation = Object.values(PROVIDER_PRESENTATION).find(
+    (entry) => entry.driverKind === driver,
+  );
+  return presentation?.color ?? "var(--foreground)";
 }
 
 export function PaceIcon({ pace }: { readonly pace: LimitPace }) {
