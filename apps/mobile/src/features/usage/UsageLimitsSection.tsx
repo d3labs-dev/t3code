@@ -303,25 +303,21 @@ export function useRefreshLimits(selectedEnvironmentIds: ReadonlySet<Environment
         presentation.connection.phase === "connected" &&
         (selectedEnvironmentIds === null || selectedEnvironmentIds.has(environmentId)),
     );
-    try {
-      await Promise.all(
-        connected.map(async ([environmentId, presentation]) => {
-          const result = await refreshUsageLimits({
-            environmentId,
-            refresh: () => refreshProviders({ environmentId, input: {} }),
-            afterPending,
-          });
-          setFailedEnvironments((previous) => [
-            ...previous.filter((failed) => failed.environmentId !== environmentId),
-            ...(result._tag === "Failure"
-              ? [{ environmentId, label: presentation.entry.target.label }]
-              : []),
-          ]);
-        }),
-      );
-    } finally {
-      setNow(Date.now());
-    }
+    await Promise.all(
+      connected.map(async ([environmentId, presentation]) => {
+        const result = await refreshUsageLimits({
+          environmentId,
+          refresh: () => refreshProviders({ environmentId, input: {} }),
+          afterPending,
+        });
+        setFailedEnvironments((previous) => [
+          ...previous.filter((failed) => failed.environmentId !== environmentId),
+          ...(result._tag === "Failure"
+            ? [{ environmentId, label: presentation.entry.target.label }]
+            : []),
+        ]);
+      }),
+    ).finally(() => setNow(Date.now()));
   };
   // Always toggles `refreshing`, even with nothing to probe: Android's
   // RefreshControl keeps its spinner up until it sees true then false.
@@ -329,12 +325,10 @@ export function useRefreshLimits(selectedEnvironmentIds: ReadonlySet<Environment
     if (refreshingRef.current) return;
     refreshingRef.current = true;
     setRefreshing(true);
-    try {
-      await refresh();
-    } finally {
+    await refresh().finally(() => {
       refreshingRef.current = false;
       setRefreshing(false);
-    }
+    });
   };
 
   const failedLabels = failedEnvironments
