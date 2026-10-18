@@ -9,7 +9,7 @@ import {
 import { openBackgroundStudio } from "~/customBackground/backgroundStudioStore";
 import { stepBackgroundImage } from "~/customBackground/rotation";
 import { useActiveBackground } from "~/customBackground/useActiveBackground";
-import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
+import { useClientSettings, updateClientSettings } from "../../hooks/useSettings";
 import {
   Menu,
   MenuItem,
@@ -39,7 +39,6 @@ function SidebarBackgroundMenu() {
   const active = useActiveBackground();
   const playlists = useClientSettings((settings) => settings.customBackgrounds);
   const enabled = useClientSettings((settings) => settings.customBackgroundEnabled);
-  const updateSettings = useUpdateClientSettings();
   const rotating = active?.source.kind === "image" && active.source.imageIds.length > 1;
   if (!enabled) return null;
   return (
@@ -74,7 +73,7 @@ function SidebarBackgroundMenu() {
                     <MenuRadioItem
                       key={playlist.id}
                       value={playlist.id}
-                      onClick={() => updateSettings({ activeCustomBackgroundId: playlist.id })}
+                      onClick={() => updateClientSettings({ activeCustomBackgroundId: playlist.id })}
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="min-w-0 flex-1 truncate">{playlist.name}</span>

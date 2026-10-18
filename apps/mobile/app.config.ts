@@ -453,8 +453,7 @@ const config: ExpoConfig = {
     ...(!isIosPersonalTeamBuild ? ["./plugins/withWidgetLogoAsset.cjs", widgetsPlugin] : []),
     "./plugins/withAndroidCleartextTraffic.cjs",
     "./plugins/withAndroidGradleHeap.cjs",
-    // Fork-only stopgap: delete once an upstream merge fixes pingdotgg/t3code#13710.
-    "./plugins/withAndroidFbjniPin.cjs",
+    "./plugins/withAndroidFbjniVersion.cjs",
     "./plugins/withAndroidInputBackground.cjs",
     "./plugins/withAndroidModernPopupMenu.cjs",
     "./plugins/withAndroidModernAlertDialog.cjs",

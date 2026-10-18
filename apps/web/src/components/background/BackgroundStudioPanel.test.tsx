@@ -27,7 +27,7 @@ vi.mock("~/hooks/useSettings", async () => {
   };
   return {
     getClientSettings,
-    useUpdateClientSettings: () => update,
+    updateClientSettings: update,
     useClientSettings: (select: (settings: ClientSettings) => unknown) =>
       select(
         useSyncExternalStore((listener) => {
