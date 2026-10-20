@@ -131,6 +131,7 @@ describe("Android workspace navigation colors", () => {
     const colors = androidWorkspaceNavigationColors({
       colors: phoneVariables,
       phoneBackdropColor: backdropColor,
+      rail: false,
     });
     expect(colors.containerColor).toBe("transparent");
     expectVisibleSelection({ ...colors, containerColor: backdropColor });
