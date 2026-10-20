@@ -45,6 +45,8 @@ import * as DesktopBackendConfiguration from "../backend/DesktopBackendConfigura
 import * as DesktopLocalEnvironmentAuth from "../backend/DesktopLocalEnvironmentAuth.ts";
 import * as DesktopCliCommand from "../app/DesktopCliCommand.ts";
 import * as DesktopConnectionCatalogStore from "../app/DesktopConnectionCatalogStore.ts";
+import * as DesktopDictationKey from "../dictation/DesktopDictationKey.ts";
+import * as MacFnKeySetup from "../dictation/MacFnKeySetup.ts";
 import * as DesktopWebLinks from "../app/DesktopWebLinks.ts";
 import * as DesktopSshEnvironment from "../ssh/DesktopSshEnvironment.ts";
 import * as DesktopSshPasswordPrompts from "../ssh/DesktopSshPasswordPrompts.ts";
@@ -544,6 +546,8 @@ describe("DesktopWindow", () => {
         Layer.mock(DesktopBackendConfiguration.DesktopBackendConfiguration)({}),
         Layer.mock(DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth)({}),
         Layer.mock(DesktopCliCommand.DesktopCliCommand)({}),
+        Layer.mock(DesktopDictationKey.DesktopDictationKey)({}),
+        Layer.mock(MacFnKeySetup.MacFnKeySetup)({}),
         Layer.mock(DesktopConnectionCatalogStore.DesktopConnectionCatalogStore)({}),
         Layer.mock(DesktopWebLinks.DesktopWebLinks)({}),
         Layer.mock(DesktopSshEnvironment.DesktopSshEnvironment)({}),
