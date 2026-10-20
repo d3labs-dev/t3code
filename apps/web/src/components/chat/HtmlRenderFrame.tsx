@@ -9,6 +9,7 @@ import { Maximize2Icon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useAssetUrlRefresh, useAssetUrlState } from "~/assets/assetUrls";
+import { useChatBackdrop } from "~/customBackground/useChatBackdrop";
 
 import { HtmlRenderDocument } from "../files/BrowserDocumentFrame";
 import { Button } from "../ui/button";
@@ -40,6 +41,7 @@ export function HtmlRenderFrame(props: {
   // left short would scroll inside the thread and take the reader's scroll.
   const [contentHeight, setContentHeight] = useState<number>();
   const height = htmlRenderFrameHeight(props.htmlRender, width, contentHeight);
+  const overBackdrop = useChatBackdrop("conversation") !== null;
   const fileName = htmlRenderFileName(title);
   const resource = {
     _tag: "attachment" as const,
@@ -100,6 +102,7 @@ export function HtmlRenderFrame(props: {
             className="block size-full"
             onContentHeight={setContentHeight}
             onFullscreenChange={onFullscreenChange}
+            overBackdrop={overBackdrop}
           />
           <div className="absolute end-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/html-render:opacity-100 pointer-coarse:opacity-100">
             <Tooltip>

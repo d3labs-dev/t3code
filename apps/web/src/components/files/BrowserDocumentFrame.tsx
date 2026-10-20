@@ -121,8 +121,10 @@ export function HtmlRenderDocument(props: {
   readonly onContentHeight?: (height: number) => void;
   /** Reports the image viewer opening and closing, so a virtualized row can stay mounted. */
   readonly onFullscreenChange?: ((fullscreen: boolean) => void) | undefined;
+  /** The frame sits on the chat's custom background rather than the theme's canvas. */
+  readonly overBackdrop?: boolean;
 }) {
-  const theme = useHtmlRenderTheme();
+  const theme = useHtmlRenderTheme({ overBackdrop: props.overBackdrop ?? false });
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [src] = useState(() => `${props.src.split("#", 1)[0]}${htmlRenderThemeFragment(theme)}`);
   const [loaded, setLoaded] = useState(false);

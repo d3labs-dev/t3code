@@ -27,7 +27,8 @@ function resolveActiveThemeColors(
     : (getThemeColorsForMode(definition, appearance) ?? definition.colors);
 }
 
-export function useHtmlRenderTheme() {
+/** Over a chat backdrop the page background is transparent, so the picture shows through. */
+export function useHtmlRenderTheme(options?: { readonly overBackdrop?: boolean }) {
   const { theme, resolvedTheme, themeHalves } = useTheme();
   // Custom and published palettes can be edited in place, under an unchanged preference.
   const colors = useSyncExternalStore(
@@ -37,7 +38,7 @@ export function useHtmlRenderTheme() {
   );
   const sans = useClientSettings((settings) => settings.fontFamilySans);
   const mono = useClientSettings((settings) => settings.fontFamilyCode);
-  return htmlRenderTheme(
+  const rendered = htmlRenderTheme(
     Object.fromEntries(
       Object.entries(colors).map(([role, color]) => [role, themeColorToHex(color) ?? color]),
     ) as typeof colors,
@@ -47,4 +48,7 @@ export function useHtmlRenderTheme() {
       mono: appearanceFontStack(mono, HTML_RENDER_DEFAULT_FONTS.mono),
     },
   );
+  return options?.overBackdrop
+    ? { ...rendered, variables: { ...rendered.variables, "--background": "transparent" } }
+    : rendered;
 }
