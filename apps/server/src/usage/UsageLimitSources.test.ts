@@ -198,6 +198,7 @@ it.effect.each([
               ),
             ),
           ),
+          fakeCswapRunner({ stdout: "", code: 0 }).layer,
           NodeCrypto.layer,
         ]),
       );
