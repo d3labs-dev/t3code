@@ -13,26 +13,26 @@ import {
 export function androidWorkspaceNavigationColors(input: {
   readonly colors: MobileThemeVariables;
   readonly phoneBackdropColor: string | null;
+  readonly rail: boolean;
 }) {
-  const { colors, phoneBackdropColor } = input;
+  const { colors, phoneBackdropColor, rail } = input;
   const header =
     phoneBackdropColor ?? flattenThemeColor(colors["--color-header"], colors["--color-screen"]);
-  const surfaceColor = flattenThemeColor(
-    themeColorWithAlpha(colors["--color-header-foreground"], 0.05),
-    header,
-  );
+  const containerColor = rail
+    ? header
+    : flattenThemeColor(themeColorWithAlpha(colors["--color-header-foreground"], 0.05), header);
   const indicatorColor = themeColorWithContrast(
-    flattenThemeColor(colors["--color-secondary"], surfaceColor),
-    surfaceColor,
+    flattenThemeColor(colors["--color-secondary"], containerColor),
+    containerColor,
     1.5,
   );
   return {
-    containerColor: phoneBackdropColor === null ? surfaceColor : "transparent",
+    containerColor: rail || phoneBackdropColor === null ? containerColor : "transparent",
     indicatorColor,
     selectedColor: themeColorWithContrast(
       flattenThemeColor(colors["--color-secondary-foreground"], indicatorColor),
-      [indicatorColor, surfaceColor],
+      [indicatorColor, containerColor],
     ),
-    unselectedColor: flattenThemeColor(colors["--color-header-foreground"], surfaceColor),
+    unselectedColor: flattenThemeColor(colors["--color-header-foreground"], containerColor),
   };
 }
