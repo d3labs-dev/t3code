@@ -370,3 +370,34 @@ html[data-theme-id="t3-chat"] {
 [data-slot="alert-dialog-viewport"] {
   z-index: 150;
 }
+
+/* SidebarPeek floats the collapsed sidebar as a card over the main pane and
+   above the sidebar toggle, without reflowing the pane. The slide length
+   matches SLIDE_MS in SidebarPeek.tsx. */
+[data-app-sidebar][data-peek] {
+  top: --spacing(2);
+  bottom: --spacing(2);
+  left: --spacing(2);
+  z-index: 51;
+  height: auto;
+  overflow: hidden;
+  border-width: 1px;
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 20px 25px -5px --theme(--color-black/15%),
+    0 8px 10px -6px --theme(--color-black/15%);
+  translate: calc(-100% - 2rem) 0;
+  transition: translate 200ms cubic-bezier(0, 0, 0.2, 1);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+[data-app-sidebar][data-peek="entering"] {
+  transition: none;
+}
+
+[data-app-sidebar][data-peek="shown"] {
+  translate: none;
+}

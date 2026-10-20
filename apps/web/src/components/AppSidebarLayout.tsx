@@ -47,6 +47,7 @@ const BackgroundStudioSidebar = lazy(() =>
   })),
 );
 import { SidebarBrandWidthProbe, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarPeek } from "./sidebar/SidebarPeek";
 import { MainAppLocationTracker } from "./sidebar/mainAppLocation";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
@@ -382,6 +383,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         </Sidebar>
         {children}
         <SidebarControl />
+        <SidebarPeek />
         <NavigationHistoryShortcuts />
         <MainAppLocationTracker />
       </SidebarProvider>
