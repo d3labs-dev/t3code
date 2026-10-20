@@ -5,6 +5,7 @@ import {
   CodexSettings,
   CswapUsageLimitSourceConfig,
   DictationSettings,
+  EasDeviceHostConfig,
   type ServerSettings,
   type UsageLimitSourceConfig,
   secretSettingsFields,
@@ -38,6 +39,7 @@ const usageLimitSecretFields: Record<UsageLimitSourceConfig["kind"], ReadonlyArr
   cswap: secretSettingsFields(CswapUsageLimitSourceConfig),
 };
 const dictationSecretFields = secretSettingsFields(DictationSettings);
+const easDeviceHostSecretFields = secretSettingsFields(EasDeviceHostConfig);
 const encode = (value: string) => Buffer.from(value, "utf8").toString("base64url");
 
 export interface SettingsSecret {
@@ -156,5 +158,23 @@ export function mapSettingsSecrets(
     () => "dictation-api-key",
   ) as ServerSettings["dictation"];
 
-  return { ...settings, providerInstances, sourceControlHosts, usageLimitSources, dictation };
+  const easDeviceHosts = settings.easDeviceHosts.map(
+    (host) =>
+      mapFields(
+        host,
+        easDeviceHostSecretFields,
+        (field, serverHost) =>
+          `device-host-${encode(host.id)}-${encode(field)}` +
+          (serverHost === null ? "" : `-${encode(serverHost)}`),
+      ) as EasDeviceHostConfig,
+  );
+
+  return {
+    ...settings,
+    providerInstances,
+    sourceControlHosts,
+    usageLimitSources,
+    dictation,
+    easDeviceHosts,
+  };
 }
