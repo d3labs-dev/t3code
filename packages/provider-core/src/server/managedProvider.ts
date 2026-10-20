@@ -294,7 +294,8 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     resolveMaintenance: input.resolveMaintenance,
     getSnapshot: Ref.get(snapshotStateRef).pipe(Effect.map((state) => state.snapshot)),
     // An on-demand probe counts as the interval's probe, so the timer restarts.
-    refresh: refreshSnapshot().pipe(
+    refresh: input.resolveMaintenance({ fresh: true }).pipe(
+      Effect.andThen(refreshSnapshot),
       Effect.tap(() => Queue.offer(restartRefreshTimer, undefined)),
       Effect.tapError(Effect.logError),
       Effect.orDie,
