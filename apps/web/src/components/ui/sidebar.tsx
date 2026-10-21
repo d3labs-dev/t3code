@@ -19,6 +19,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useResizeDrag } from "~/hooks/useResizeDrag";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { getLocalStorageItem, setLocalStorageItem } from "~/hooks/useLocalStorage";
+import { useSidebarPeek } from "./sidebarPeek";
 import { resolveSidebarState, type ResponsiveSidebarState } from "./sidebarState";
 import * as Schema from "effect/Schema";
 
@@ -216,22 +217,26 @@ function Sidebar({
 }) {
   const { isMobile, state, openMobile, setOpenMobile, setMobileSheetElement } = useSidebar();
   const desktopSidebarRef = React.useRef<HTMLDivElement>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
   const offcanvasCollapsed = !isMobile && collapsible === "offcanvas" && state === "collapsed";
+  const peekEnabled = offcanvasCollapsed && side === "left";
+  const { peek, onEdgePointerEnter } = useSidebarPeek({ enabled: peekEnabled, containerRef });
+  const inert = offcanvasCollapsed && peek !== "shown";
 
   React.useLayoutEffect(() => {
     const sidebar = desktopSidebarRef.current;
     if (!sidebar) return;
 
     // Transfer focus before inert causes the browser to clear the focused descendant.
-    if (offcanvasCollapsed && sidebar.contains(document.activeElement)) {
+    if (inert && sidebar.contains(document.activeElement)) {
       const wrapper = sidebar.closest('[data-slot="sidebar-wrapper"]');
       const trigger = Array.from(
         wrapper?.querySelectorAll<HTMLElement>('[data-sidebar="trigger"]') ?? [],
       ).find((element) => !sidebar.contains(element));
       trigger?.focus({ preventScroll: true });
     }
-    sidebar.toggleAttribute("inert", offcanvasCollapsed);
-  }, [offcanvasCollapsed]);
+    sidebar.toggleAttribute("inert", inert);
+  }, [inert]);
 
   const resolvedResizable = resolveSidebarResizable({ collapsible, isMobile, resizable });
   const instanceContextValue: SidebarInstanceContextProps = { side, resizable: resolvedResizable };
@@ -327,9 +332,16 @@ function Sidebar({
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
               : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            // Peeking floats the card over the pane and the sidebar trigger
+            // without moving `left`, which panel animations transition.
+            "data-peek:inset-y-2 data-peek:z-51 data-peek:h-auto data-peek:overflow-hidden data-peek:rounded-xl data-peek:border data-peek:shadow-xl",
+            "data-[peek=entering]:-translate-x-8 data-[peek=leaving]:-translate-x-8 data-[peek=shown]:translate-x-[calc(100%+--spacing(2))]",
+            "data-[peek=entering]:transition-none! data-[peek=leaving]:transition-transform! data-[peek=shown]:transition-transform! data-peek:duration-200! data-peek:ease-out! motion-reduce:data-peek:transition-none!",
             className,
           )}
+          data-peek={peek === "hidden" ? undefined : peek}
           data-slot="sidebar-container"
+          ref={containerRef}
           {...props}
         >
           <div
@@ -341,6 +353,14 @@ function Sidebar({
           </div>
         </div>
       </div>
+      {peekEnabled && peek !== "shown" ? (
+        <div
+          aria-hidden
+          className="fixed inset-y-0 left-0 z-10 hidden w-2 md:block"
+          data-slot="sidebar-peek-edge"
+          onPointerEnter={onEdgePointerEnter}
+        />
+      ) : null}
     </SidebarInstanceContext>
   );
 }
