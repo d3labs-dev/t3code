@@ -14,7 +14,7 @@ function findAppSidebar(): HTMLElement | null {
 
 /**
  * Slides the collapsed sidebar out as a floating card while the mouse rests
- * on the window's left edge, and back once the mouse leaves it. custom.css
+ * on the window's left edge, and back once the mouse moves past it. custom.css
  * draws the card from the data-peek attribute this sets on the sidebar.
  */
 export function SidebarPeek() {
@@ -41,32 +41,27 @@ export function SidebarPeek() {
     const sidebar = findAppSidebar();
     if (!sidebar) return;
     let hideTimer: number | undefined;
-    // Menus opened from the sidebar render in portals outside it, so an open
-    // menu or the pointer over a popup keeps the sidebar out.
-    const holdsPeekOpen = (target: EventTarget | null) =>
+    // Decided by where the pointer is rather than which element it hits:
+    // Electron on macOS reports leave events and hit targets that a browser
+    // would not. The offset box ignores the slide transform, so the card
+    // counts from its first frame. Menus opened from the sidebar render in
+    // portals outside it, so an open menu or a hovered popup also holds it.
+    const holdsPeekOpen = (event: PointerEvent) =>
+      event.clientX < sidebar.offsetLeft + sidebar.offsetWidth ||
       sidebar.querySelector("[data-popup-open]") !== null ||
-      (target instanceof Element &&
-        (sidebar.contains(target) || target.closest('[data-slot$="popup"]') !== null));
-    const scheduleHide = () => {
-      hideTimer ??= window.setTimeout(() => setPeek("leaving"), HIDE_DELAY_MS);
-    };
+      (event.target instanceof Element && event.target.closest('[data-slot$="popup"]') !== null);
     const onPointerMove = (event: PointerEvent) => {
-      if (!holdsPeekOpen(event.target)) {
-        scheduleHide();
+      if (holdsPeekOpen(event)) {
+        window.clearTimeout(hideTimer);
+        hideTimer = undefined;
         return;
       }
-      window.clearTimeout(hideTimer);
-      hideTimer = undefined;
-    };
-    const onPointerLeaveWindow = () => {
-      if (!holdsPeekOpen(null)) scheduleHide();
+      hideTimer ??= window.setTimeout(() => setPeek("leaving"), HIDE_DELAY_MS);
     };
     document.addEventListener("pointermove", onPointerMove, { passive: true });
-    document.documentElement.addEventListener("pointerleave", onPointerLeaveWindow);
     return () => {
       window.clearTimeout(hideTimer);
       document.removeEventListener("pointermove", onPointerMove);
-      document.documentElement.removeEventListener("pointerleave", onPointerLeaveWindow);
     };
   }, [peek]);
 
