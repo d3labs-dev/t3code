@@ -129,6 +129,15 @@ html[data-theme-id]:not([data-theme-id=""]) {
     backdrop-filter: var(--agent-bubble-backdrop, none);
   }
 
+  /* Each row clips its overflow at the lane's padding edge, which would cut the
+     bubble's sides where it reaches past the column. Widen the lane by the
+     bubble padding and pad it back, so text stays put and the clip moves out. */
+  [data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-agent-bubbles])
+    .chat-content-lane[data-timeline-root] {
+    max-width: calc(var(--chat-content-max-width) + var(--agent-bubble-padding, 10px) * 2);
+    padding-inline: var(--agent-bubble-padding, 10px);
+  }
+
   /* Stands in for the timeline's top mask over a background; ChatBackdropTopFade
      explains why. The mask's alpha, inverted: opaque picture at the top edge. */
   .chat-backdrop-top-fade {
