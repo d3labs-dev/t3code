@@ -28,6 +28,13 @@ export function SidebarPeek() {
     if (!sidebar) return;
     if (peek === "hidden") delete sidebar.dataset.peek;
     else sidebar.dataset.peek = peek;
+    // ui/sidebar makes the collapsed sidebar inert, which also lets the pointer
+    // pass through it to the pane behind. Expanding never goes through
+    // "leaving", so this cannot leave an expanded sidebar inert.
+    const root = sidebar.closest<HTMLElement>('[data-slot="sidebar"]');
+    if (!root) return;
+    if (peek === "shown") root.inert = false;
+    else if (peek === "leaving") root.inert = true;
   }, [peek]);
 
   useEffect(() => {
@@ -41,11 +48,9 @@ export function SidebarPeek() {
     const sidebar = findAppSidebar();
     if (!sidebar) return;
     let hideTimer: number | undefined;
-    // Decided by where the pointer is rather than which element it hits:
-    // Electron on macOS reports leave events and hit targets that a browser
-    // would not. The offset box ignores the slide transform, so the card
-    // counts from its first frame. Menus opened from the sidebar render in
-    // portals outside it, so an open menu or a hovered popup also holds it.
+    // The offset box ignores the slide transform, so the card counts from its
+    // first frame. Menus opened from the sidebar render in portals outside
+    // it, so an open menu or a hovered popup also holds it.
     const holdsPeekOpen = (event: PointerEvent) =>
       event.clientX < sidebar.offsetLeft + sidebar.offsetWidth ||
       sidebar.querySelector("[data-popup-open]") !== null ||
