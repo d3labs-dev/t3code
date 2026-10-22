@@ -1172,9 +1172,6 @@ export interface DesktopBridge {
   readFnKeySetup?: () => Promise<DesktopFnKeySetup>;
   /** Sets "Press 🌐 key to" to Do Nothing and moves Apple Dictation off the fn key. */
   applyFnKeySetup?: () => Promise<DesktopFnKeySetup>;
-  isClerkOAuthPending?: () => boolean;
-  onClerkOAuthPendingChange?: (listener: (pending: boolean) => void) => () => void;
-  cancelClerkOAuth?: () => void;
   getWindowFullscreenState: () => boolean;
   onWindowFullscreenStateChange: (listener: (fullscreen: boolean) => void) => () => void;
   /** App window zoom; older desktop shells omit this method. */
