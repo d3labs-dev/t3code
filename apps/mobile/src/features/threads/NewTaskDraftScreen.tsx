@@ -22,7 +22,8 @@ import {
   type NavigationAction,
 } from "@react-navigation/native";
 import { type ReactNode, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
-import { Platform, Pressable, ScrollView, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
+import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import {
   KeyboardController,
   KeyboardStickyView,
@@ -1559,8 +1560,8 @@ export function NewTaskDraftScreen(props: {
       <ScrollView
         alwaysBounceVertical={isKeyboardVisible}
         className="flex-1"
-        contentInsetAdjustmentBehavior="never"
-        contentContainerClassName="grow items-center pb-[236px] pt-12 ios:pt-[72px]"
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerClassName="grow items-center pb-[236px] pt-12"
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -1856,6 +1857,7 @@ export function NewTaskDraftScreen(props: {
           headerBackVisible: false,
           headerShadowVisible: false,
           title: "New thread",
+          unstable_navigationItemStyle: "editor",
         }}
       />
       <SheetHeader
