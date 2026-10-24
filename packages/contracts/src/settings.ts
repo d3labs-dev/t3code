@@ -940,11 +940,6 @@ export const DictationSettings = Schema.Struct({
 });
 export type DictationSettings = typeof DictationSettings.Type;
 
-/** A GitHub host name, lowercased on decode so `GitHub.com` and `github.com` are one entry. */
-export const GitHubHost = TrimmedNonEmptyString.pipe(
-  Schema.decodeTo(Schema.String, SchemaTransformation.toLowerCase()),
-);
-
 export const SourceControlHostSettings = Schema.Record(Schema.String, Schema.Unknown);
 export type SourceControlHostSettings = typeof SourceControlHostSettings.Type;
 
