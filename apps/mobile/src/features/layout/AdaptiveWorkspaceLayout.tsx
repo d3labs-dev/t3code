@@ -907,7 +907,9 @@ function AdaptiveWorkspaceLayoutContent(
                       <View className="flex-1">{props.children}</View>
                     </SafeAreaInsetsContext>
                     {compactAndroidSettings ? (
-                      <AndroidWorkspaceNavigation onNewThread={handleStartNewTask} />
+                      <View className="bg-sheet-solid">
+                        <AndroidWorkspaceNavigation onNewThread={handleStartNewTask} />
+                      </View>
                     ) : null}
                   </WorkspaceSettledContentWidthContext>
                 </WorkspaceContentWidthContext>
