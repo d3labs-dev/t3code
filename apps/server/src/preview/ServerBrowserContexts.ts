@@ -38,11 +38,7 @@ const UA_PLATFORMS: Partial<Record<NodeJS.Platform, string>> = {
   win32: "Windows",
 };
 
-/**
- * A headless browser's identity as the Chrome it is built from: its user agent
- * without `HeadlessChrome`, and client hints whose brands agree with it. Sites
- * block a user agent that disagrees with `Sec-CH-UA`, so both change together.
- */
+/** Change user agent and Sec-CH-UA together; sites block mismatches. */
 const chromeIdentity = (
   browserVersion: { readonly userAgent: string; readonly product: string },
   host: { readonly platform: NodeJS.Platform; readonly arch: string; readonly release: string },

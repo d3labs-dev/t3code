@@ -133,11 +133,7 @@ export class PreviewBrowserUnsupportedError extends Schema.TaggedError<PreviewBr
 export class PreviewBrowser extends Context.Service<
   PreviewBrowser,
   {
-    /**
-     * Path to the installed headless shell. The first call starts the
-     * install; callers wait for it up to a bound and then get its progress
-     * instead, while the install keeps running.
-     */
+    /** Starts installation on first call; returns progress after a bounded wait while installation continues. */
     readonly executable: Effect.Effect<
       string,
       PreviewBrowserInstallError | PreviewBrowserInstallingError | PreviewBrowserUnsupportedError
@@ -332,8 +328,7 @@ export const makePreviewBrowser = Effect.fn("PreviewBrowser.make")(function* (
         yield* fs.remove(destination, { recursive: true, force: true });
         yield* fs.rename(unpacked, destination);
       }).pipe(Effect.scoped);
-      // Two servers can share a home, so a staging directory touched within the
-      // last hour may be another server's install in progress and stays.
+      // Shared homes may have another server installing; preserve staging directories touched within the last hour.
       const entries = yield* fs.readDirectory(installRoot);
       const now = yield* Clock.currentTimeMillis;
       yield* Effect.forEach(

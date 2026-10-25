@@ -350,8 +350,7 @@ export function useRefreshLimits(selectedEnvironmentIds: ReadonlySet<Environment
       }),
     ).finally(() => setNow(Date.now()));
   };
-  // Always toggles `refreshing`, even with nothing to probe: Android's
-  // RefreshControl keeps its spinner up until it sees true then false.
+  // Android RefreshControl needs a true-to-false cycle to stop, even with nothing to probe.
   const refreshManually = async () => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
