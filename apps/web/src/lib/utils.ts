@@ -5,10 +5,14 @@ import * as Hex from "effect/encoding/Hex";
 import { extendTailwindMerge } from "tailwind-merge";
 import { DraftId } from "../composerDraftStore";
 
-// The theme's extra font sizes (index.css and custom.css). Unregistered,
-// tailwind-merge reads text-2xs as a colour and drops it next to text-muted-foreground.
+// The theme's extra font sizes (index.css and custom.css) and background images.
+// Unregistered, tailwind-merge reads text-2xs as a colour and drops it next to
+// text-muted-foreground, and bg-composer-seam-below as a colour too.
 const twMerge = extendTailwindMerge({
-  extend: { theme: { text: ["2xs", "3xs", "4xs", "5xs", "studio"] } },
+  extend: {
+    theme: { text: ["2xs", "3xs", "4xs", "5xs", "studio"] },
+    classGroups: { "bg-image": [{ bg: ["composer-seam-below", "composer-seam-above"] }] },
+  },
 });
 
 export function cn(...inputs: CxOptions) {
