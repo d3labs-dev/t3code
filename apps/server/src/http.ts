@@ -503,23 +503,22 @@ const VOICE_TRANSCRIPTION_FAILURE_STATUS = {
   provider: 502,
 } satisfies Record<VoiceTranscription.VoiceTranscriptionFailureReason, number>;
 
-const readBoundedRequestBody = (
+const readBoundedRequestBody = Effect.fn("readBoundedRequestBody")(function* (
   stream: HttpServerRequest.HttpServerRequest["stream"],
   expectedBytes: number,
-) =>
-  Effect.gen(function* () {
-    const body = new Uint8Array(expectedBytes);
-    let receivedBytes = 0;
-    yield* Stream.runForEach(
-      stream.pipe(Stream.takeWhile((chunk) => receivedBytes + chunk.byteLength <= expectedBytes)),
-      (chunk) =>
-        Effect.sync(() => {
-          body.set(chunk, receivedBytes);
-          receivedBytes += chunk.byteLength;
-        }),
-    );
-    return receivedBytes === expectedBytes ? body : null;
-  });
+) {
+  const body = new Uint8Array(expectedBytes);
+  let receivedBytes = 0;
+  yield* Stream.runForEach(
+    stream.pipe(Stream.takeWhile((chunk) => receivedBytes + chunk.byteLength <= expectedBytes)),
+    (chunk) =>
+      Effect.sync(() => {
+        body.set(chunk, receivedBytes);
+        receivedBytes += chunk.byteLength;
+      }),
+  );
+  return receivedBytes === expectedBytes ? body : null;
+});
 
 export const voiceTranscriptionRouteLayer = HttpRouter.add(
   "POST",
