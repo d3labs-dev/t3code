@@ -377,8 +377,12 @@ export const make = Effect.gen(function* () {
   );
 
   return ServerPush.of({
-    registerDevice: (registration) => enqueue({ _tag: "register", registration }),
-    unregisterDevice: (deviceId) => enqueue({ _tag: "unregister", deviceId }),
+    registerDevice: Effect.fn("ServerPush.registerDevice")((registration) =>
+      enqueue({ _tag: "register", registration }),
+    ),
+    unregisterDevice: Effect.fn("ServerPush.unregisterDevice")((deviceId) =>
+      enqueue({ _tag: "unregister", deviceId }),
+    ),
     drain: worker.drain,
   });
 });

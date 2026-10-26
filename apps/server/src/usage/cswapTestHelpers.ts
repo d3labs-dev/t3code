@@ -97,7 +97,7 @@ export function fakeCswapRunner(output: { readonly stdout: string; readonly code
   const layer = Layer.succeed(
     ProcessRunner.ProcessRunner,
     ProcessRunner.ProcessRunner.of({
-      run: (input) =>
+      run: Effect.fn("ProcessRunner.run")((input) =>
         Effect.sync(() => {
           runs.push(input);
           return {
@@ -111,6 +111,7 @@ export function fakeCswapRunner(output: { readonly stdout: string; readonly code
             stderrInvalidUtf8: false,
           };
         }),
+      ),
     }),
   );
   return { runs, layer };
