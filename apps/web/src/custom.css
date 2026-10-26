@@ -129,6 +129,22 @@ html[data-theme-id]:not([data-theme-id=""]) {
     backdrop-filter: var(--agent-bubble-backdrop, none);
   }
 
+  /* An agent's HTML render page is transparent over a background, so it takes
+     the reply bubble's look; the padding sits outside the measured frame. */
+  [data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-agent-bubbles])
+    [data-html-render-bubble] {
+    margin-inline: calc(var(--agent-bubble-padding, 10px) * -1);
+    border-radius: var(--radius-2xl);
+    padding: var(--agent-bubble-padding, 10px);
+    background-color: color-mix(
+      in srgb,
+      var(--bubble-surface) var(--agent-bubble-opacity, 25%),
+      transparent
+    );
+    -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
+    backdrop-filter: var(--agent-bubble-backdrop, none);
+  }
+
   /* Each row clips its overflow at the lane's padding edge, which would cut the
      bubble's sides where it reaches past the column. Widen the lane by the
      bubble padding and pad it back, so text stays put and the clip moves out. */

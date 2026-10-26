@@ -68,61 +68,63 @@ export function HtmlRenderFrame(props: {
   }, [expanded, onFullscreenChange]);
 
   return (
-    <div ref={observeBox} className="group/html-render relative" style={{ height }}>
-      {src !== null ? (
-        <>
-          <HtmlRenderDocument
-            src={src}
-            title={title}
-            threadRef={props.threadRef}
-            className="block size-full"
-            onContentHeight={setContentHeight}
-            onFullscreenChange={onFullscreenChange}
-            overBackdrop={overBackdrop}
-          />
-          <div className="absolute end-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/html-render:opacity-100 pointer-coarse:opacity-100">
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    aria-label="Open full screen"
-                    size="icon-xs"
-                    variant="glass"
-                    onClick={async () => {
-                      const url =
-                        loaded !== null && loaded.expiresAt - Date.now() > MIN_URL_LIFE_MS
-                          ? src
-                          : await refresh().catch(() => null);
-                      if (url !== null) setExpandedSrc(url);
-                      else
-                        toastManager.add({
-                          type: "error",
-                          title: "Page unavailable",
-                          description: "Reconnect to the environment and try again.",
-                        });
-                    }}
-                  />
-                }
-              >
-                <Maximize2Icon className="size-3.5" />
-              </TooltipTrigger>
-              <TooltipPopup side="left">Open full screen</TooltipPopup>
-            </Tooltip>
-          </div>
-          {expandedSrc !== null ? (
-            <HtmlRenderDialog
-              src={expandedSrc}
+    <div data-html-render-bubble>
+      <div ref={observeBox} className="group/html-render relative" style={{ height }}>
+        {src !== null ? (
+          <>
+            <HtmlRenderDocument
+              src={src}
               title={title}
               threadRef={props.threadRef}
-              onClose={() => setExpandedSrc(null)}
+              className="block size-full"
+              onContentHeight={setContentHeight}
+              onFullscreenChange={onFullscreenChange}
+              overBackdrop={overBackdrop}
             />
-          ) : null}
-        </>
-      ) : failed ? (
-        <p className="flex size-full items-center justify-center text-muted-foreground text-xs">
-          Unable to load {title}
-        </p>
-      ) : null}
+            <div className="absolute end-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/html-render:opacity-100 pointer-coarse:opacity-100">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      aria-label="Open full screen"
+                      size="icon-xs"
+                      variant="glass"
+                      onClick={async () => {
+                        const url =
+                          loaded !== null && loaded.expiresAt - Date.now() > MIN_URL_LIFE_MS
+                            ? src
+                            : await refresh().catch(() => null);
+                        if (url !== null) setExpandedSrc(url);
+                        else
+                          toastManager.add({
+                            type: "error",
+                            title: "Page unavailable",
+                            description: "Reconnect to the environment and try again.",
+                          });
+                      }}
+                    />
+                  }
+                >
+                  <Maximize2Icon className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipPopup side="left">Open full screen</TooltipPopup>
+              </Tooltip>
+            </div>
+            {expandedSrc !== null ? (
+              <HtmlRenderDialog
+                src={expandedSrc}
+                title={title}
+                threadRef={props.threadRef}
+                onClose={() => setExpandedSrc(null)}
+              />
+            ) : null}
+          </>
+        ) : failed ? (
+          <p className="flex size-full items-center justify-center text-muted-foreground text-xs">
+            Unable to load {title}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
