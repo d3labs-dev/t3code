@@ -626,7 +626,7 @@ function clearThemeHalves(): boolean {
   return true;
 }
 
-function refreshTheme({ preservePreview = false, suppressTransitions = true } = {}): void {
+export function refreshTheme({ preservePreview = false, suppressTransitions = true } = {}): void {
   if (typeof window === "undefined") return;
   lastAppliedTheme = null;
   applyTheme(getStored(), { suppressTransitions, preservePreview });
