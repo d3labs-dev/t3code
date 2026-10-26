@@ -77,6 +77,7 @@ import { resolveRootCliCommand } from "../cli/invocation.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as PreviewAutomationBroker from "../mcp/PreviewAutomationBroker.ts";
 import * as DesktopBrowserChannel from "./DesktopBrowserChannel.ts";
+import * as PreviewAgentActivity from "./PreviewAgentActivity.ts";
 import * as PreviewManager from "./Manager.ts";
 import * as ServerBrowserPage from "./ServerBrowserPage.ts";
 import * as PreviewBrowser from "./PreviewBrowser.ts";
@@ -455,6 +456,7 @@ const make = Effect.gen(function* () {
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const previewBrowser = yield* PreviewBrowser.PreviewBrowser;
   const desktopChannel = yield* DesktopBrowserChannel.DesktopBrowserChannel;
+  const agentTurns = yield* (yield* PreviewAgentActivity.PreviewAgentActivity).changes;
   const runFork = Effect.runForkWith(yield* Effect.context<never>());
   const launchServices = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner>();
   const setupCommand = yield* resolveRootCliCommand(PreviewBrowserHost.SETUP_SUBCOMMAND);
@@ -1754,7 +1756,7 @@ const make = Effect.gen(function* () {
             ? await Effect.runPromise(
                 findTab(request.threadId, request.tabId).pipe(
                   Effect.catchTags({
-                    ServerBrowserTabNotFoundError: () => Effect.succeed(undefined),
+                    ServerBrowserTabNotFoundError: () => Effect.void,
                   }),
                 ),
               )
@@ -2468,6 +2470,11 @@ const make = Effect.gen(function* () {
         if (tab?.desktop) dropTab(tab, false);
       }),
     ),
+    Effect.forkScoped,
+  );
+  // The desktop keeps the tabs an agent uses focused until its turn ends, not just per command.
+  yield* Stream.fromSubscription(agentTurns).pipe(
+    Stream.runForEach((change) => desktopChannel.turn(change.threadId, change.active)),
     Effect.forkScoped,
   );
   // Reconnect returned pages immediately so all clients keep receiving URL and title changes.
