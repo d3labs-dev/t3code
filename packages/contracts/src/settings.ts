@@ -878,33 +878,18 @@ export const AntigravitySettings = makeProviderSettingsSchema(
 export type AntigravitySettings = typeof AntigravitySettings.Type;
 
 /**
- * A CLIProxyAPI hub, whose management API reports the windows of every
- * pooled account. The key travels in settings for now, like provider
- * environment secrets; it is redacted before reaching a client.
+ * A read-only quota source outside this environment's provider CLIs. The
+ * only kind today is a CLIProxyAPI hub, whose management API reports the
+ * windows of every pooled account. The key travels in settings for now, like
+ * provider environment secrets; it is redacted before reaching a client.
  */
-export const CliproxyUsageLimitSourceConfig = Schema.Struct({
+export const UsageLimitSourceConfig = Schema.Struct({
   kind: Schema.Literal("cliproxy"),
   label: Schema.optional(TrimmedNonEmptyString),
   url: TrimmedNonEmptyString,
   managementKey: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("")), secretSetting),
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });
-export type CliproxyUsageLimitSourceConfig = typeof CliproxyUsageLimitSourceConfig.Type;
-
-/** The claude-swap CLI on this environment, which reports every Claude account it manages. */
-export const CswapUsageLimitSourceConfig = Schema.Struct({
-  kind: Schema.Literal("cswap"),
-  label: Schema.optional(TrimmedNonEmptyString),
-  binaryPath: TrimmedNonEmptyString.pipe(Schema.withDecodingDefault(Effect.succeed("cswap"))),
-  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-});
-export type CswapUsageLimitSourceConfig = typeof CswapUsageLimitSourceConfig.Type;
-
-/** A read-only quota source outside this environment's provider CLIs. */
-export const UsageLimitSourceConfig = Schema.Union([
-  CliproxyUsageLimitSourceConfig,
-  CswapUsageLimitSourceConfig,
-]);
 export type UsageLimitSourceConfig = typeof UsageLimitSourceConfig.Type;
 
 /**

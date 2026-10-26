@@ -59,9 +59,6 @@ export const UsageLimitSourceAccount = Schema.Struct({
   id: TrimmedNonEmptyString,
   driver: ProviderDriverKind,
   email: Schema.optional(TrimmedNonEmptyString),
-  /** The name the user gave this account in the source, like a claude-swap alias. */
-  label: Schema.optional(TrimmedNonEmptyString),
-  /** Plan as the matching provider would label it (`ChatGPT Pro 20x Subscription`). */
   plan: Schema.optional(TrimmedNonEmptyString),
   workspaceId: Schema.optional(TrimmedNonEmptyString),
   usageLimits: ServerProviderUsageLimits,
@@ -70,7 +67,7 @@ export type UsageLimitSourceAccount = typeof UsageLimitSourceAccount.Type;
 
 export const UsageLimitSourceSnapshot = Schema.Struct({
   id: UsageLimitSourceId,
-  kind: Schema.Literals(["cliproxy", "cswap"]),
+  kind: Schema.Literal("cliproxy"),
   label: TrimmedNonEmptyString,
   checkedAt: IsoDateTime,
   accounts: ForwardCompatibleArray(UsageLimitSourceAccount),

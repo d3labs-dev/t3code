@@ -85,7 +85,7 @@ describe("searchSettings", () => {
     ).toEqual(["network-access", "connections-environment"]);
   });
 
-  it.each(["usage providers", "CLIProxyAPI", "CLI proxy hub", "management key", "claude-swap"])(
+  it.each(["usage providers", "CLIProxyAPI", "CLI proxy hub", "management key"])(
     "finds usage-provider management by %s",
     (query) => {
       expect(searchSettings(query)[0]).toMatchObject({
