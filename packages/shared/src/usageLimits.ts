@@ -152,14 +152,7 @@ function accountKeyResolver(reports: Iterable<AccountReport>) {
 export interface LimitAccount {
   readonly key: string;
   readonly driver: ServerProvider["driver"];
-  /**
-   * What to call the account: its source label when it has one, since an
-   * instance name only names the slot any account can sign in to; else the
-   * instance's configured name, which is not sensitive.
-   */
   readonly displayName: string | null;
-  /** The name the user gave the account in a usage source, like a claude-swap alias. */
-  readonly label: string | null;
   readonly email: string | undefined;
   readonly plan: string | undefined;
   readonly accentColor: string | undefined;
@@ -212,11 +205,9 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
     ];
     const winner = fresher ? next : previous;
     const creditSource = creditSources.get(key);
-    const label = previous.label ?? next.label;
     accounts.set(key, {
       ...previous,
-      displayName: label ?? previous.displayName ?? next.displayName,
-      label,
+      displayName: previous.displayName ?? next.displayName,
       plan: previous.plan ?? next.plan,
       accentColor: previous.accentColor ?? next.accentColor,
       environments,
@@ -248,7 +239,6 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
         key: `${environmentId}:${provider.instanceId}`,
         driver: provider.driver,
         displayName: provider.displayName?.trim() || null,
-        label: null,
         email: provider.auth.email,
         plan: provider.auth.label,
         accentColor: provider.accentColor,
@@ -271,8 +261,7 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
         merge(resolveKey(account) ?? key, {
           key,
           driver: account.driver,
-          displayName: account.label ?? (account.email ? null : account.id.replace(/\.json$/i, "")),
-          label: account.label ?? null,
+          displayName: account.email ? null : account.id.replace(/\.json$/i, ""),
           email: account.email,
           plan: account.plan,
           accentColor: undefined,
@@ -762,7 +751,7 @@ export function collectProviderUsageLimits(
       accounts.push({
         id: `${source.id}:${account.id}`,
         driver: account.driver,
-        label: `${source.label} · ${account.label ?? account.id}`,
+        label: `${source.label} · ${account.id}`,
         sourceLabel: "CLI Proxy",
         ...(account.usageLimits.resetCredits?.nextCreditId
           ? {
