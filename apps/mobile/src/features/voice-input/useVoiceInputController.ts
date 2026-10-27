@@ -54,6 +54,7 @@ export function useVoiceInputController(input: {
   transcriptionEnvironmentIdRef.current = transcriptionEnvironmentId;
   const [sendRequestCount, setSendRequestCount] = useState(0);
   const mounted = useRef(true);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tracks mount so async transcription results skip a composer that has unmounted
   useEffect(() => {
     mounted.current = true;
     return () => {
