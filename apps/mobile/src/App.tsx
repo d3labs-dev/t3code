@@ -26,6 +26,7 @@ import { CloudAuthProvider } from "./features/cloud/CloudAuthProvider";
 import { PhoneBackgroundLayer } from "./features/phone-background/PhoneBackgroundLayer";
 import { PhoneBackgroundQuickAdjust } from "./features/phone-background/PhoneBackgroundQuickAdjust";
 import { prepareNativeShowcaseCapture } from "./features/showcase/nativeShowcaseScene";
+import { installShowcaseCapture } from "./features/showcase/ShowcaseCaptureCoordinator";
 import {
   presentPendingIncomingShare,
   pruneIncomingShareImports,
@@ -44,7 +45,7 @@ import {
   installAppearanceRuntime,
   useAppearancePreferences,
 } from "./features/settings/appearance/AppearancePreferencesProvider";
-import { RootStack, workspaceLocationFromState } from "./Stack";
+import { RootStack, rootPathnameFromState, workspaceLocationFromState } from "./Stack";
 import { appAtomRegistry } from "./state/atom-registry";
 import { subscribeComposerDraftModelReconciliation } from "./state/use-composer-drafts";
 import { environmentThreadShells } from "./state/threads";
@@ -53,6 +54,7 @@ import { OverlayPortalHost } from "./components/ui/OverlayPortal";
 import { shouldHandleAppLink, restoreDraftLinkState } from "./lib/appLinking";
 import { hasCloudPublicConfig } from "./features/cloud/publicConfig";
 import { takeScheduledTaskNewLink } from "./features/settings/scheduled-task-editor-state";
+import { startDevAutoConnect } from "./features/connection/devAutoConnect";
 import {
   resolvePendingNewTaskPromptLink,
   takeNewTaskPromptLink,
@@ -86,6 +88,8 @@ import {
 } from "./lib/rootNavigation";
 import { pruneNewTaskFlowStates } from "./features/threads/new-task-flow-state";
 import { pruneNewTaskBranchCheckouts } from "./features/threads/NewTaskDraftRouteScreen";
+import { installAppUpdateChecks } from "./features/updates/app-updates";
+import { installApkUpdateChecks } from "./features/updates/apk-updates";
 
 import "../global.css";
 
@@ -103,11 +107,13 @@ const linkingConfig = {
 
 function getAppStateFromPath(path: string, options: Parameters<typeof getStateFromPath>[1]) {
   return takeScheduledTaskNewLink(
-    takeNewTaskPromptLink(
-      takeThreadPromptLink(
-        restoreSettingsLinkState(
-          restoreDraftLinkState(getStateFromPath(path, options), path),
-          settingsLinkPage(),
+    startDevAutoConnect(
+      takeNewTaskPromptLink(
+        takeThreadPromptLink(
+          restoreSettingsLinkState(
+            restoreDraftLinkState(getStateFromPath(path, options), path),
+            settingsLinkPage(),
+          ),
         ),
       ),
     ),
@@ -176,6 +182,9 @@ const appServiceDisposers = [
   startIncomingShareInbox(),
   installAgentNotificationNavigation(linkToAppPath),
   installAppShortcuts(linkToAppPath),
+  installAppUpdateChecks(),
+  installApkUpdateChecks(),
+  installShowcaseCapture(rootPathnameFromState),
 ];
 disposeOnFoundationReplace(typeof module === "undefined" ? undefined : module.hot, () => {
   for (const dispose of appServiceDisposers) dispose();
