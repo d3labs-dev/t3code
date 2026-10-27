@@ -35,25 +35,27 @@ function expectVisibleSelection(colors: ReturnType<typeof androidWorkspaceNaviga
 }
 
 describe("Android workspace navigation colors", () => {
-  it.each(MOBILE_THEME_IDS)(
-    "keeps %s selection visible in both navigation positions",
-    (themeId) => {
-      for (const appearance of ["light", "dark"] as const) {
-        const variables = getMobileThemeRuntimeVariables(themeId, appearance, "android");
-        const snapshot = { ...variables };
-        for (const rail of [false, true]) {
-          expectVisibleSelection(
-            androidWorkspaceNavigationColors({
-              colors: variables,
-              phoneBackdropColor: null,
-              rail,
-            }),
-          );
-        }
-        expect(variables).toEqual(snapshot);
+  it.each(MOBILE_THEME_IDS)("keeps %s selection visible in every navigation layout", (themeId) => {
+    for (const appearance of ["light", "dark"] as const) {
+      const variables = getMobileThemeRuntimeVariables(themeId, appearance, "android");
+      const snapshot = { ...variables };
+      for (const [rail, floating] of [
+        [false, false],
+        [true, false],
+        [false, true],
+      ] as const) {
+        expectVisibleSelection(
+          androidWorkspaceNavigationColors({
+            colors: variables,
+            phoneBackdropColor: null,
+            rail,
+            floating,
+          }),
+        );
       }
-    },
-  );
+      expect(variables).toEqual(snapshot);
+    }
+  });
 
   it.each(["#6750a4", "#9c4146"])(
     "keeps Material You selection visible for system seed %s",
@@ -97,12 +99,17 @@ describe("Android workspace navigation colors", () => {
           appearance,
           getMobileThemeRuntimeVariables("material-you", appearance, "android"),
         );
-        for (const rail of [false, true]) {
+        for (const [rail, floating] of [
+          [false, false],
+          [true, false],
+          [false, true],
+        ] as const) {
           expectVisibleSelection(
             androidWorkspaceNavigationColors({
               colors: variables,
               phoneBackdropColor: null,
               rail,
+              floating,
             }),
           );
         }

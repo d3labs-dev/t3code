@@ -44,7 +44,6 @@ export const apkUpdatesEnabled = config !== null;
 let state: ApkUpdateState = { status: "idle" };
 const listeners = new Set<() => void>();
 let promptedVersionCode: number | undefined;
-let automaticChecksStarted = false;
 
 function setState(next: ApkUpdateState): void {
   state = next;
@@ -78,15 +77,14 @@ function isBusy(current: ApkUpdateState): boolean {
  * Checks at launch and after the app returns from a long backgrounding, with
  * the same cadence as the over-the-air check.
  */
-export function startApkUpdateChecks(): void {
-  if (!config || automaticChecksStarted) return;
-  automaticChecksStarted = true;
+export function installApkUpdateChecks(): () => void {
+  if (!config) return () => undefined;
   // Nothing installs at launch, so any APK left here is from a finished or abandoned update.
   if (downloadDirectory.exists) downloadDirectory.delete();
   void checkForApkUpdate("automatic");
 
   let backgroundedAtMs: number | null = null;
-  AppState.addEventListener("change", (appState) => {
+  const subscription = AppState.addEventListener("change", (appState) => {
     if (appState === "background") {
       backgroundedAtMs = Date.now();
       return;
@@ -96,6 +94,7 @@ export function startApkUpdateChecks(): void {
     backgroundedAtMs = null;
     if (shouldCheck) void checkForApkUpdate("automatic");
   });
+  return () => subscription.remove();
 }
 
 /** Automatic checks prompt once per release and fail quietly; manual ones report failures. */
