@@ -7,7 +7,7 @@ import { Alert, Linking, View } from "react-native";
 
 import type { SymbolView } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
-import { SettingsActionRow } from "../settings/components/SettingsActionRow";
+import { ListActionRow as SettingsActionRow } from "../../components/ui/ListActionRow";
 import { SettingsRow } from "../settings/components/SettingsRow";
 import { usePhoneFolderRead } from "./phoneBackground";
 import {
