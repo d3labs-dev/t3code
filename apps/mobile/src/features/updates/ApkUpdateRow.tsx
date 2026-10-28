@@ -1,4 +1,4 @@
-import { SettingsActionRow } from "../settings/components/SettingsActionRow";
+import { ListActionRow as SettingsActionRow } from "../../components/ui/ListActionRow";
 import {
   type ApkUpdateState,
   checkForApkUpdate,
