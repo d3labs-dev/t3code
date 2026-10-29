@@ -296,24 +296,13 @@ html[data-theme-id]:not([data-theme-id=""]) {
   backdrop-filter: none;
 }
 
-/* 450 sits between regular and medium: the system fonts are variable, and a
-   font without that weight rounds to 400. Dark mode also replaces the reply's
-   80% foreground with an opaque one pulled toward white. Unlayered so it beats
-   ChatMarkdown's text color utility. */
+/* Replies draw at 90% foreground; this gives them the full color your own
+   messages use. Unlayered so it beats ChatMarkdown's text color utility. */
 [data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-reply-text-emphasis])
   [data-assistant-reply]
   [data-assistant-citation-source]
   .chat-markdown {
-  font-weight: 450;
-
-  @variant dark {
-    color: color-mix(in srgb, var(--foreground) 75%, var(--color-white));
-  }
-
-  & pre,
-  & code {
-    font-weight: normal;
-  }
+  color: var(--contrast-message-foreground);
 }
 
 [data-chat-background-pane]:has(> [data-chat-backdrop="source"])

@@ -41,7 +41,6 @@ import {
 } from "../panelAnimations";
 import { BackgroundThreadAnnouncer } from "./BackgroundThreadAnnouncer";
 import ThreadSidebar from "./Sidebar";
-import { UsageSidebarPanel } from "./usage/UsageSidebarPanel";
 import { useSidebarPanelStore } from "./sidebar/sidebarPanelStore";
 
 // The studio pulls in the filter controls and image store; it stays out of the
@@ -424,8 +423,8 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const pathname = useLocation({ select: (location) => location.pathname });
   const panelAnimationsSuppressed = usePanelNavigationSuppression(pathname);
   const routePanelAnimationsActive = panelAnimationsActive && !panelAnimationsSuppressed;
-  // Usage and the background studio are sidebar modes, not routes, so they
-  // take over whichever sidebar the current route would otherwise show.
+  // The background studio is a sidebar mode, not a route, so it takes over
+  // whichever sidebar the current route would otherwise show.
   const sidebarPanel = useSidebarPanelStore((store) => store.panel);
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
@@ -487,13 +486,9 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           {sidebarPanel !== null ? (
             <>
               <SidebarChromeHeader isElectron={isElectron} />
-              {sidebarPanel === "usage" ? (
-                <UsageSidebarPanel />
-              ) : (
-                <Suspense fallback={null}>
-                  <BackgroundStudioSidebar />
-                </Suspense>
-              )}
+              <Suspense fallback={null}>
+                <BackgroundStudioSidebar />
+              </Suspense>
             </>
           ) : (
             <ThreadSidebar routeReveal={sidebarRouteReveal} />

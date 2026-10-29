@@ -993,21 +993,27 @@ export function BackgroundStudioPanel() {
           Theme from image colors
           <Switch
             checked={dynamicTheme}
-            onCheckedChange={(checked) => updateClientSettings({ customBackgroundDynamicTheme: checked })}
+            onCheckedChange={(checked) =>
+              updateClientSettings({ customBackgroundDynamicTheme: checked })
+            }
           />
         </label>
         <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           Bubbles behind agent replies
           <Switch
             checked={agentBubbles}
-            onCheckedChange={(checked) => updateClientSettings({ customBackgroundAgentBubbles: checked })}
+            onCheckedChange={(checked) =>
+              updateClientSettings({ customBackgroundAgentBubbles: checked })
+            }
           />
         </label>
         <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           Bubbles behind your messages
           <Switch
             checked={userBubbles}
-            onCheckedChange={(checked) => updateClientSettings({ customBackgroundUserBubbles: checked })}
+            onCheckedChange={(checked) =>
+              updateClientSettings({ customBackgroundUserBubbles: checked })
+            }
           />
         </label>
         {agentBubbles || userBubbles ? (
@@ -1019,7 +1025,9 @@ export function BackgroundStudioPanel() {
               step={1}
               value={bubbleOpacity}
               format={(value) => `${value}%`}
-              onChange={(value) => updateClientSettings({ customBackgroundAgentBubbleOpacity: value })}
+              onChange={(value) =>
+                updateClientSettings({ customBackgroundAgentBubbleOpacity: value })
+              }
             />
             <RangeControl
               label="Bubble blur"
@@ -1037,12 +1045,14 @@ export function BackgroundStudioPanel() {
               step={1}
               value={bubblePadding}
               format={(value) => `${value}px`}
-              onChange={(value) => updateClientSettings({ customBackgroundAgentBubblePadding: value })}
+              onChange={(value) =>
+                updateClientSettings({ customBackgroundAgentBubblePadding: value })
+              }
             />
           </>
         ) : null}
         <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          Bolder, brighter reply text
+          Brighter reply text
           <Switch
             checked={replyTextEmphasis}
             onCheckedChange={(checked) =>

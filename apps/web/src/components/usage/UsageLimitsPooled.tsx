@@ -101,12 +101,7 @@ function AccountAvatar({
   return account.email ? <AccountChip email={account.email} /> : null;
 }
 
-/**
- * Who an account is, without printing the email: the instance name when there
- * is one, else a two-letter chip. The address itself is revealed on demand in
- * the segment's popover.
- */
-export function AccountName({
+function AccountName({
   account,
   className,
 }: {

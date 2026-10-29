@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 /** A panel that replaces the sidebar's normal contents while it is open. */
-export type SidebarPanel = "usage" | "background";
+export type SidebarPanel = "background";
 
 type SidebarPanelStore = {
   panel: SidebarPanel | null;

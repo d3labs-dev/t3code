@@ -166,7 +166,6 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const sidebarPanel = useSidebarPanelStore((store) => store.panel);
-  const openSidebarPanel = useSidebarPanelStore((store) => store.openSidebarPanel);
   const closeSidebarPanel = useSidebarPanelStore((store) => store.closeSidebarPanel);
   const pullRequestsSupported = usePullRequestsSupported();
   const closeMobileSidebar = () => {
@@ -186,10 +185,11 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     void navigate({ to: "/settings" });
   };
 
-  // Usage takes over the sidebar rather than the main pane, so the thread
-  // stays put and the mobile sheet stays open on the panel it just opened.
   const handleUsageClick = () => {
-    openSidebarPanel("usage");
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void navigate({ to: "/usage" });
   };
 
   const handleBackClick = () => {

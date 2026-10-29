@@ -1,4 +1,4 @@
-import type { ServerProvider, UsageProviderKind } from "@t3tools/contracts";
+import type { UsageProviderKind } from "@t3tools/contracts";
 
 import { ProviderDriverKind } from "@t3tools/contracts";
 
@@ -62,18 +62,4 @@ export function providersWithUsage(
       .map((entry) => entry.provider),
   );
   return PROVIDER_ORDER.filter((provider) => active.has(provider));
-}
-
-/**
- * The usage-contract provider a driver's spend is recorded under, or undefined
- * for drivers the contract does not price.
- */
-export function usageKindForDriver(
-  driver: ServerProvider["driver"],
-): UsageProviderKind | undefined {
-  if (driver === "codex") return "codex";
-  if (driver === "claudeAgent") return "claude";
-  if (driver === "grok") return "grok";
-  if (driver === "antigravity") return "antigravity";
-  return undefined;
 }

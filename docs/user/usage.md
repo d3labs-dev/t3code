@@ -1,18 +1,10 @@
 # Usage and limits
 
-Open the full **Usage** page from the sidebar usage panel or the command palette, or press
-`mod+u` on web and desktop when the terminal is not focused. Customize `usage.open` in
+Open **Usage** from the sidebar or the command palette, or press `mod+u` on web and
+desktop when the terminal is not focused. Customize `usage.open` in
 **Settings → Keybindings**.
 
 On mobile, choose **Usage** in the workspace navigation.
-
-## Check usage at a glance
-
-The chart button at the bottom of the sidebar opens a usage panel in its place, so your
-thread stays where it is. Each provider gets its remaining quota per window, when the next
-one resets, and what it has cost today, yesterday, and over the last 30 days. **Back**
-returns to your threads, and the chart button in the panel opens the full page described
-below.
 
 ## Understand your usage
 
@@ -115,9 +107,9 @@ and a partly spent session may only regain its unused portion when the week rese
 stale reset times have no refill estimate; refresh Limits for a new reading. Claude's
 model-specific weekly allowances keep their reported values.
 
-Limits update in the background every five minutes while T3 is open; opening Limits or the usage
-sidebar shows the latest reading without checking again. If a window looks stale, refresh Limits
-to re-check every provider and hub now; the next background check then waits another five minutes.
+Limits update in the background every five minutes while T3 is open; opening Limits shows the
+latest reading without checking again. If a window looks stale, refresh Limits to re-check every
+provider and hub now; the next background check then waits another five minutes.
 
 Pick `/usage-limits` from the composer's command menu, or send it as a message, to check the
 current model's limits without leaving the conversation. The result opens above the composer and

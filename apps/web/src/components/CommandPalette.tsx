@@ -241,7 +241,6 @@ import type { ChatComposerHandle } from "./chat/ChatComposer";
 import { buildSidebarProjectPickerEntries } from "../sidebarProjectGrouping";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { readPullRequestListPreferences } from "~/components/pullRequest/pullRequestListPreferences";
-import { useSidebarPanelStore } from "~/components/sidebar/sidebarPanelStore";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import { threadRecentUse } from "@t3tools/shared/paletteSearch";
 
@@ -1523,8 +1522,6 @@ function OpenCommandPaletteDialog(props: {
     icon: <ChartNoAxesColumnIcon className={ITEM_ICON_CLASS} />,
     shortcutCommand: "usage.open",
     run: async () => {
-      // The full page and the sidebar panel are the same numbers twice over.
-      useSidebarPanelStore.getState().closeSidebarPanel();
       await navigate({ to: "/usage" });
     },
   });
