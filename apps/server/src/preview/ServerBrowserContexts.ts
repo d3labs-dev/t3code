@@ -19,6 +19,13 @@ interface Options {
   readonly platform: NodeJS.Platform;
   /** The shared headless browser's executable, installing it on first use. */
   readonly executable: () => Promise<string>;
+  /**
+   * A path that starts `executable`, such as one that moves Chrome out of the server's cgroup.
+   * Released after the whole launch call, since Playwright retries the same path after a glibc race.
+   */
+  readonly launcher?: (
+    executable: string,
+  ) => Promise<{ readonly path: string; readonly release: () => Promise<void> } | undefined>;
   readonly diagnose?: (executable: string, cause: unknown) => Promise<unknown>;
   readonly env?: NodeJS.ProcessEnv;
   readonly onContextClose?: (context: BrowserContext) => void;
@@ -95,10 +102,9 @@ export class ServerBrowserContexts {
   }
 
   private async launchOptions() {
-    const executablePath = await this.options.executable();
+    const executable = await this.options.executable();
     const env = this.options.env ?? process.env;
     const options = {
-      executablePath,
       env,
       // People drive these tabs, so they must not announce automation (navigator.webdriver).
       args: ["--force-device-scale-factor=2", "--disable-blink-features=AutomationControlled"],
@@ -107,14 +113,18 @@ export class ServerBrowserContexts {
       // Only an explicit operator opt-out disables sandboxing. Launch errors never do.
       chromiumSandbox: !sandboxDisabled(env),
     };
-    return { ...options, args: [...(await this.renderingArgs(options)), ...options.args] };
+    return {
+      executable,
+      ...options,
+      args: [...(await this.renderingArgs(executable, options)), ...options.args],
+    };
   }
 
   /** Decided once per server: the GPU when it composites, otherwise software compositing. */
-  private renderingArgs(options: LaunchOptions & { readonly executablePath: string }) {
+  private renderingArgs(executable: string, options: LaunchOptions) {
     if (this.options.platform !== "linux") return Promise.resolve(SOFTWARE_RENDERING);
     if (!this.rendering) {
-      const probing = this.probeGpu(options);
+      const probing = this.probeGpu(executable, options);
       this.rendering = probing;
       void probing.catch(() => {
         if (this.rendering === probing) this.rendering = undefined;
@@ -123,10 +133,12 @@ export class ServerBrowserContexts {
     return this.rendering;
   }
 
-  private async probeGpu(options: LaunchOptions & { readonly executablePath: string }) {
+  private async probeGpu(executable: string, options: LaunchOptions) {
     const { chromium } = loadPlaywright();
     const launchOptions = { ...options, args: [...GPU_RENDERING, ...(options.args ?? [])] };
-    const browser = await this.launch(options, () => chromium.launch(launchOptions));
+    const browser = await this.launch(executable, (executablePath) =>
+      chromium.launch({ ...launchOptions, executablePath }),
+    );
     try {
       const cdp = await browser.newBrowserCDPSession();
       const { gpu } = await cdp.send("SystemInfo.getInfo");
@@ -138,19 +150,26 @@ export class ServerBrowserContexts {
     }
   }
 
-  private async launch<A>(options: { readonly executablePath: string }, start: () => Promise<A>) {
+  private async launch<A>(executable: string, start: (executablePath: string) => Promise<A>) {
+    let release: (() => Promise<void>) | undefined;
     try {
-      return await start();
+      const launcher = await this.options.launcher?.(executable);
+      release = launcher?.release;
+      return await start(launcher?.path ?? executable);
     } catch (cause) {
-      throw (await this.options.diagnose?.(options.executablePath, cause)) ?? cause;
+      throw (await this.options.diagnose?.(executable, cause)) ?? cause;
+    } finally {
+      await release?.().catch(constVoid);
     }
   }
 
   private sharedBrowser() {
     if (!this.browser) {
-      const launched = this.launchOptions().then(async (options) => {
+      const launched = this.launchOptions().then(async ({ executable, ...options }) => {
         const { chromium } = loadPlaywright();
-        const browser = await this.launch(options, () => chromium.launch(options));
+        const browser = await this.launch(executable, (executablePath) =>
+          chromium.launch({ ...options, executablePath }),
+        );
         browser.on("disconnected", () => {
           if (this.browser === launched) this.browser = undefined;
         });
@@ -198,11 +217,15 @@ export class ServerBrowserContexts {
       return browser.newContext(contextOptions);
     }
     const directory = this.profileDirectory(profileId);
-    const options = await this.launchOptions();
-    const { chromium } = loadPlaywright();
     await NodeFSP.mkdir(directory, { recursive: true });
-    return this.launch(options, () =>
-      chromium.launchPersistentContext(directory, { ...options, ...contextOptions }),
+    const { executable, ...options } = await this.launchOptions();
+    const { chromium } = loadPlaywright();
+    return this.launch(executable, (executablePath) =>
+      chromium.launchPersistentContext(directory, {
+        ...options,
+        ...contextOptions,
+        executablePath,
+      }),
     );
   }
 
