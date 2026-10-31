@@ -2,7 +2,6 @@ import {
   AntigravitySettings,
   ClaudeSettings,
   CodexSettings,
-  DictationSettings,
   EasDeviceHostConfig,
   type ServerSettings,
   SimlockDeviceHostConfig,
@@ -35,7 +34,6 @@ const providerSecretFields = new Map([
   ),
 ]);
 const usageLimitSecretFields = secretSettingsFields(UsageLimitSourceConfig);
-const dictationSecretFields = secretSettingsFields(DictationSettings);
 const easDeviceHostSecretFields = secretSettingsFields(EasDeviceHostConfig);
 const simlockDeviceHostSecretFields = secretSettingsFields(SimlockDeviceHostConfig);
 const encode = (value: string) => Buffer.from(value, "utf8").toString("base64url");
@@ -152,13 +150,6 @@ export function mapSettingsSecrets(
     ]),
   ) as ServerSettings["usageLimitSources"];
 
-  // The dictation key keeps the store entry it had before secrets were schema-declared.
-  const dictation = mapFields(
-    settings.dictation,
-    dictationSecretFields,
-    () => "dictation-api-key",
-  ) as ServerSettings["dictation"];
-
   const easDeviceHosts = settings.easDeviceHosts.map(
     (host) =>
       mapFields(
@@ -187,7 +178,6 @@ export function mapSettingsSecrets(
     providerInstances,
     sourceControlHosts,
     usageLimitSources,
-    dictation,
     easDeviceHosts,
     simlockDeviceHosts,
   };

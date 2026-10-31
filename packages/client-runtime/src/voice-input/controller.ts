@@ -54,8 +54,6 @@ export type VoiceInputControllerDependencies = {
     text: string,
     selection: { readonly start: number; readonly end: number },
   ) => void;
-  /** Receives each transcript after it lands in the draft. */
-  readonly onTranscriptInserted?: (transcript: string) => void;
   readonly onStateChange: (state: VoiceInputState) => void;
 };
 
@@ -176,9 +174,6 @@ function transcriptionErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message === "voice-operation-busy") {
     return "Voice transcription is still finishing. Try again shortly.";
   }
-  if (errorCode(error) === "rejected" && error instanceof Error) {
-    return error.message;
-  }
   return "Could not transcribe this recording.";
 }
 
@@ -265,7 +260,7 @@ export class VoiceInputController {
       if (!this.isCurrent(operationToken)) return;
       await this.dependencies.recorder.prepareToRecordAsync();
       if (!this.isCurrent(operationToken)) return;
-      this.recordingUri = this.readRecorderUri();
+      this.recordingUri = this.dependencies.recorder.uri;
       this.rememberRecordingUri(this.recordingUri);
 
       const capturedDraft = this.dependencies.readDraft();
@@ -290,9 +285,8 @@ export class VoiceInputController {
     }
   }
 
-  /** Resolves true once the transcript lands in the draft. */
-  stop(): Promise<boolean> {
-    if (this.state.phase !== "recording") return Promise.resolve(false);
+  stop(): Promise<void> {
+    if (this.state.phase !== "recording") return Promise.resolve();
     return this.finishRecording(false, null);
   }
 
@@ -336,7 +330,7 @@ export class VoiceInputController {
     return this.interruptRecording();
   }
 
-  handleRecorderStatus(status: VoiceRecorderStatus): Promise<boolean | void> | void {
+  handleRecorderStatus(status: VoiceRecorderStatus): Promise<void> | void {
     if (this.state.phase !== "recording") return;
     if (status.hasError) {
       return this.interruptRecording(
@@ -357,8 +351,11 @@ export class VoiceInputController {
     this.cancel();
   }
 
-  dispose(): Promise<void> | void {
-    if (this.state.phase === "recording") return this.discardRecording(null);
+  dispose(): void {
+    if (this.state.phase === "recording") {
+      this.discardRecording(null);
+      return;
+    }
     if (this.state.phase === "preparing" || this.state.phase === "transcribing") {
       this.invalidateOperation();
       this.setState(IDLE_STATE);
@@ -368,8 +365,8 @@ export class VoiceInputController {
   private async finishRecording(
     alreadyStopped: boolean,
     completedUri: string | null,
-  ): Promise<boolean> {
-    if (this.finishing || this.state.phase !== "recording") return false;
+  ): Promise<void> {
+    if (this.finishing || this.state.phase !== "recording") return;
     this.finishing = true;
     const operationToken = this.operationToken;
     this.setState({ phase: "transcribing", error: null, errorAction: null });
@@ -377,9 +374,9 @@ export class VoiceInputController {
     try {
       if (!alreadyStopped) await this.dependencies.recorder.stop();
       await this.releaseAudioSession();
-      this.recordingUri = completedUri ?? this.readRecorderUri() ?? this.recordingUri;
+      this.recordingUri = completedUri ?? this.dependencies.recorder.uri ?? this.recordingUri;
       this.rememberRecordingUri(this.recordingUri);
-      if (!this.isCurrent(operationToken)) return false;
+      if (!this.isCurrent(operationToken)) return;
       if (
         !this.recordingUri ||
         !this.transcription ||
@@ -387,7 +384,7 @@ export class VoiceInputController {
         !this.capturedDraft
       ) {
         this.setError("Could not finish voice recording.", "retry");
-        return false;
+        return;
       }
 
       const recordingUri = this.recordingUri;
@@ -403,9 +400,9 @@ export class VoiceInputController {
         if (this.isCurrent(operationToken)) {
           this.setError(transcriptionErrorMessage(error), "retry");
         }
-        return false;
+        return;
       }
-      if (!this.isCurrent(operationToken)) return false;
+      if (!this.isCurrent(operationToken)) return;
 
       const result = resolveTranscriptCommit(
         capturedDraft,
@@ -418,22 +415,19 @@ export class VoiceInputController {
           "The draft changed while voice input was running. The transcript was not added.",
           "retry",
         );
-        return false;
+        return;
       }
       if (result.kind === "empty") {
         this.setError("No speech was detected.", "retry");
-        return false;
+        return;
       }
 
       this.dependencies.commitDraft(result.text, result.selection);
-      this.dependencies.onTranscriptInserted?.(transcript.trim());
       this.setState(IDLE_STATE);
-      return true;
     } catch {
       if (this.isCurrent(operationToken)) {
         this.setError("Could not finish voice recording.", "retry");
       }
-      return false;
     } finally {
       this.finishing = false;
       await this.releaseResources();
@@ -450,7 +444,6 @@ export class VoiceInputController {
     try {
       await this.dependencies.recorder.stop();
     } catch {
-      // A recorder released with its owner has already stopped natively.
     } finally {
       await this.releaseResources();
     }
@@ -458,7 +451,9 @@ export class VoiceInputController {
 
   private async releaseResources(): Promise<void> {
     this.rememberRecordingUri(this.recordingUri);
-    this.rememberRecordingUri(this.readRecorderUri());
+    try {
+      this.rememberRecordingUri(this.dependencies.recorder.uri);
+    } catch {}
     this.recordingUri = null;
     for (const uri of this.ownedRecordingUris) {
       try {
@@ -476,15 +471,6 @@ export class VoiceInputController {
 
   private rememberRecordingUri(uri: string | null): void {
     if (uri) this.ownedRecordingUris.add(uri);
-  }
-
-  /** Native recorders throw once their owner released them, e.g. on screen unmount. */
-  private readRecorderUri(): string | null {
-    try {
-      return this.dependencies.recorder.uri;
-    } catch {
-      return null;
-    }
   }
 
   private async releaseAudioSession(): Promise<void> {

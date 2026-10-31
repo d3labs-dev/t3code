@@ -174,51 +174,27 @@ Stashes containing uploaded files must be restored in their original environment
 Those files are retained for 24 hours. After an upload expires, restore the prompt
 and use **Attach again** or remove the missing file before sending.
 
-## Voice input
+## Voice input on iPhone
 
-Dictate into the composer instead of typing. T3 Code removes filler words like
-"um", applies corrections you make while speaking, and spells your vocabulary the
-way you wrote it. The text lands in your draft for you to review before sending.
+On supported iPhones with iOS 26 or later, use the composer's microphone to record,
+then confirm to transcribe. Text is inserted where your selection was when
+recording started, ready for you to review and edit before sending.
 
-To set it up for web, desktop, and Android, open **Settings → General → Voice
-input** and paste a Groq API key (free at [console.groq.com/keys](https://console.groq.com/keys)).
-Add names and terms you use under **Vocabulary**, one per line. Voice input also
-learns on its own: when you fix a misheard word in dictated text before sending
-("tan stack" → "TanStack"), it remembers the spelling and lists it under **Learned
-words**, where you can remove it for good. While you dictate into a thread, it also
-reads that thread's recent messages to spell the files and code names in it. All of
-this is stored on the environment, so every device connected to it benefits.
+The first use may download Apple's speech model and needs a network connection.
+Later transcription works offline for that language. Recordings can be up to five
+minutes long. Canceling, leaving the screen, or an audio interruption discards the
+recording and preserves your existing draft. While recording, the screen stays
+awake; it can sleep normally once recording stops.
 
-- **Desktop and web:** hold `Option+Space` (`Ctrl+Shift+Space` on Windows and Linux)
-  while you speak and release to insert, or click the microphone. Double-tap the
-  shortcut to keep recording hands-free, then press it again to finish. `Esc`
-  discards the recording.
-- **Mac:** you can also hold `fn` (🌐) the same way. So macOS doesn't react to the
-  same key, click **Free up fn key** next to the API key. It sets **Press 🌐 key
-  to** to **Do Nothing** and moves Apple Dictation off the fn key; you can change
-  both back in **System Settings → Keyboard**.
-- **Android:** tap the microphone to record, then the check mark to insert.
-- **iPhone:** on iOS 26 or later, transcription runs on the device. The first use
-  may download Apple's speech model and needs a network connection; later
-  transcription works offline for that language. Other iPhones use the
-  environment like Android.
-
-On iPhone, voice input records from the first connected microphone in **Settings → Microphone**.
+Voice input records from the first connected microphone in **Settings → Microphone**.
 The list mixes kinds (built-in, other wired, other Bluetooth, CarPlay) with wired and
 Bluetooth devices you have dictated with, listed by name. Drag to rank them together:
 for example, put **Other Bluetooth** above your AirPods so a new headset is preferred
 while the AirPods microphone stays low. By default, CarPlay comes after the built-in
 microphone. Swipe a device left to forget it.
 
-Recordings can be up to five minutes long. Canceling, leaving the screen, or an
-audio interruption discards the recording and preserves your existing draft.
-
-With environment transcription, the recording and the code and file names from the
-thread's last few messages go to your environment and then to Groq for transcription
-and cleanup. Groq doesn't retain it by default
-([data policy](https://console.groq.com/docs/your-data)). T3 Code deletes the
-temporary audio after transcription or cancellation; only the message text is
-sent when you submit.
+Transcription runs on your device. T3 Code deletes the temporary audio after
+transcription or cancellation; only the message text is sent when you submit.
 
 ## Queued messages
 

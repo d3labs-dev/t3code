@@ -36,7 +36,6 @@ import {
   LINUX_BROWSER_SECRET_EXTRA_RESOURCES,
   LINUX_FILE_EXCLUSIONS,
   MAC_FILE_EXCLUSIONS,
-  MAC_FN_KEY_EXTRA_RESOURCES,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
   UnsupportedDesktopBuildArchitectureError,
@@ -587,7 +586,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     for (const resource of [
       ...WSL_RUNTIME_EXTRA_RESOURCES,
       ...LINUX_BROWSER_SECRET_EXTRA_RESOURCES,
-      ...MAC_FN_KEY_EXTRA_RESOURCES,
     ]) {
       assert.include(
         DESKTOP_FILE_EXCLUSIONS,
@@ -607,10 +605,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "!apps/desktop/resources/browser-secret/**/*",
       "!apps/desktop/prod-resources/browser-secret",
       "!apps/desktop/prod-resources/browser-secret/**/*",
-      "!apps/desktop/resources/fn-key",
-      "!apps/desktop/resources/fn-key/**/*",
-      "!apps/desktop/prod-resources/fn-key",
-      "!apps/desktop/prod-resources/fn-key/**/*",
       "!apps/desktop/prod-resources/windows-server",
       "!apps/desktop/prod-resources/windows-server/**/*",
       "!apps/desktop/prod-resources/wsl-runtime.tar.gz",
@@ -677,10 +671,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual(win.asarUnpack, [WINDOWS_NATIVE_ASAR_UNPACK_GLOB]);
       assert.deepStrictEqual(winWithoutWslRuntime.asar, win.asar);
       assert.deepStrictEqual(winWithoutWslRuntime.asarUnpack, win.asarUnpack);
-      assert.deepStrictEqual(mac.extraResources, [
-        ...DESKTOP_EXTRA_RESOURCES,
-        { from: "apps/desktop/prod-resources/fn-key", to: "fn-key" },
-      ]);
+      assert.deepStrictEqual(mac.extraResources, DESKTOP_EXTRA_RESOURCES);
       assert.deepStrictEqual(linux.extraResources, [
         ...DESKTOP_EXTRA_RESOURCES,
         ...LINUX_CAPTURE_EXTRA_RESOURCES,

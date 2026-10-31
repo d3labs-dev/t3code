@@ -51,7 +51,6 @@ export const EVENT_CODE_SHORTCUT_KEYS: Readonly<Record<string, string>> = {
   Quote: "'",
   Semicolon: ";",
   Slash: "/",
-  Space: " ",
 };
 
 export const US_SHIFTED_TO_UNSHIFTED_KEYS: ReadonlyMap<string, string> = new Map([
@@ -181,10 +180,6 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+alt+shift+t", command: "themeEditor.toggle" },
   { key: "mod+alt+shift+b", command: "backgroundEditor.toggle" },
   { key: "mod+s", command: "composer.stash", when: "!terminalFocus" },
-  // Windows and Linux desktops open the window menu on Alt+Space, and launchers such as
-  // PowerToys Run claim it globally.
-  { key: "alt+space", command: "composer.dictate", when: "isMac && !terminalFocus" },
-  { key: "ctrl+shift+space", command: "composer.dictate", when: "!isMac && !terminalFocus" },
   { key: "mod+shift+enter", command: "thread.steerQueuedMessage", when: "!terminalFocus" },
   { key: "alt+arrowup", command: "thread.editQueuedMessage", when: "composerFocus" },
   { key: "mod+enter", command: "composer.sendAlternate", when: "composerFocus && turnRunning" },

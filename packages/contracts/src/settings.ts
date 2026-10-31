@@ -941,25 +941,6 @@ export const UsageLimitSourceConfig = Schema.Struct({
 });
 export type UsageLimitSourceConfig = typeof UsageLimitSourceConfig.Type;
 
-/**
- * Composer voice input transcribed and cleaned up on this environment. The
- * API key is redacted before reaching a client, like usage-limit hub keys.
- * `vocabulary` holds one term per line.
- */
-export const DictationSettings = Schema.Struct({
-  apiKey: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("")), secretSetting),
-  vocabulary: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  /** Spellings learned from the user's fixes to dictated text. */
-  learnedVocabulary: Schema.Array(TrimmedNonEmptyString).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  /** Learned words the user removed; never learned again. */
-  forgottenVocabulary: Schema.Array(TrimmedNonEmptyString).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-});
-export type DictationSettings = typeof DictationSettings.Type;
-
 export const SecretProviderKind = SecretProviderSlug.pipe(Schema.brand("SecretProviderKind"));
 export type SecretProviderKind = typeof SecretProviderKind.Type;
 
@@ -1455,11 +1436,7 @@ export const ServerSettings = Schema.Struct({
   usagePriceOverrides: Schema.Record(TrimmedNonEmptyString, UsageModelPriceOverride).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
-  dictation: DictationSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-  /**
-   * Exact model ID to the model its usage counts as, such as a preview slug to
-   * its released name. The mapped model is priced and reported as its target.
-   */
+
   usageModelAliases: Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1776,15 +1753,7 @@ export const ServerSettingsPatch = Schema.Struct({
   usagePriceOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, Schema.NullOr(UsageModelPriceOverride)),
   ),
-  dictation: Schema.optionalKey(
-    Schema.Struct({
-      apiKey: Schema.optionalKey(TrimmedString),
-      vocabulary: Schema.optionalKey(TrimmedString),
-      learnedVocabulary: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
-      forgottenVocabulary: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
-    }),
-  ),
-  /** Each entry replaces one model's mapping; `null` removes it. */
+
   usageModelAliases: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, Schema.NullOr(TrimmedNonEmptyString)),
   ),

@@ -34,8 +34,6 @@ const RPC_AGGREGATES = {
   [WS_METHODS.serverProbe]: "server",
   [WS_METHODS.serverPushRegisterDevice]: "server",
   [WS_METHODS.serverPushUnregisterDevice]: "server",
-  [WS_METHODS.voiceCreateTranscriptionUrl]: "workspace",
-  [WS_METHODS.voiceLearnCorrections]: "workspace",
   [WS_METHODS.serverGetConfig]: "server",
   [WS_METHODS.serverGetNpmRelease]: "server",
   [WS_METHODS.serverRefreshProviders]: "server",

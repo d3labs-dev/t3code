@@ -1036,9 +1036,6 @@ export const DesktopPreviewRecordingSaveInputSchema = Schema.Struct({
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
-export type DesktopDictationKeyState = "down" | "up" | "cancel";
-export type DesktopFnKeySetup = "ready" | "needs-setup";
-
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;
@@ -1137,18 +1134,6 @@ export interface DesktopBridge {
   onMenuAction: (listener: (action: string) => void) => () => void;
   onSnapShotEvent: (listener: (event: DesktopSnapShotEvent) => void) => () => void;
   onQuitShortcut: (listener: (event: QuitShortcutHintEvent) => void) => () => void;
-  /**
-   * Starts or stops watching the fn/Globe key while a T3 Code window is
-   * focused (macOS only). While enabled, bare fn presses are consumed so macOS
-   * does not also run its Globe key action. Absent where the key can't be read.
-   */
-  setDictationKeyEnabled?: (enabled: boolean) => void;
-  /** fn/Globe presses while enabled; `cancel` means fn was used as a modifier for another key. */
-  onDictationKey?: (listener: (state: DesktopDictationKeyState) => void) => () => void;
-  /** Whether macOS leaves the fn/🌐 key free for voice input (macOS only). */
-  readFnKeySetup?: () => Promise<DesktopFnKeySetup>;
-  /** Sets "Press 🌐 key to" to Do Nothing and moves Apple Dictation off the fn key. */
-  applyFnKeySetup?: () => Promise<DesktopFnKeySetup>;
   getWindowFullscreenState: () => boolean;
   onWindowFullscreenStateChange: (listener: (fullscreen: boolean) => void) => () => void;
   getWindowZoomFactor: () => number;

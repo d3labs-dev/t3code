@@ -262,8 +262,6 @@ The C toolchain, pkg-config, and libsecret headers are also needed for Linux des
 ### macOS DMG prerequisites
 
 Install the Xcode Command Line Tools with `xcode-select --install` and install Rust.
-The Command Line Tools are also needed for macOS desktop development, which builds the fn key
-helper for voice input.
 For a cross-architecture or universal build, add the requested Rust targets:
 
 ```sh

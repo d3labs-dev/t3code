@@ -56,30 +56,6 @@ if (clientPlatform === "darwin") {
   window.addEventListener("resize", syncWindowControlInset);
 }
 
-const dictationKeyBridge: Pick<
-  DesktopBridge,
-  "setDictationKeyEnabled" | "onDictationKey" | "readFnKeySetup" | "applyFnKeySetup"
-> =
-  clientPlatform === "darwin"
-    ? {
-        readFnKeySetup: () => ipcRenderer.invoke(IpcChannels.READ_FN_KEY_SETUP_CHANNEL, undefined),
-        applyFnKeySetup: () =>
-          ipcRenderer.invoke(IpcChannels.APPLY_FN_KEY_SETUP_CHANNEL, undefined),
-        setDictationKeyEnabled: (enabled) => {
-          void ipcRenderer.invoke(IpcChannels.SET_DICTATION_KEY_ENABLED_CHANNEL, enabled);
-        },
-        onDictationKey: (listener) => {
-          const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
-            if (state === "down" || state === "up" || state === "cancel") listener(state);
-          };
-          ipcRenderer.on(IpcChannels.DICTATION_KEY_CHANNEL, wrappedListener);
-          return () => {
-            ipcRenderer.removeListener(IpcChannels.DICTATION_KEY_CHANNEL, wrappedListener);
-          };
-        },
-      }
-    : {};
-
 function unwrapEnsureSshEnvironmentResult(result: unknown) {
   if (
     typeof result === "object" &&
@@ -282,7 +258,6 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.removeListener(IpcChannels.QUIT_SHORTCUT_CHANNEL, wrappedListener);
     };
   },
-  ...dictationKeyBridge,
   getWindowFullscreenState: () =>
     ipcRenderer.sendSync(IpcChannels.GET_WINDOW_FULLSCREEN_STATE_CHANNEL) === true,
   getWindowZoomFactor: () => webFrame.getZoomFactor(),

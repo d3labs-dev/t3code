@@ -64,8 +64,6 @@ import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts"
 import * as SourceControlSignIn from "./sourceControl/SourceControlSignIn.ts";
 import { BUILT_IN_SOURCE_CONTROL_DRIVER_LIST } from "./sourceControl/sourceControlDefinitions.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
-import * as VoiceTranscription from "./voice/VoiceTranscription.ts";
-import * as RecentThreadMessages from "./voice/RecentThreadMessages.ts";
 import * as SecretResolver from "./secrets/SecretResolver.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
 import * as ProjectSettingsOverrideSweep from "./provider/ProjectSettingsOverrideSweep.ts";
@@ -339,12 +337,6 @@ const layerHttpServer = Layer.unwrap(
 const layerPlatformServices = DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer));
 
 const layerPersistence = Layer.empty.pipe(Layer.provideMerge(SqlitePersistence.layerConfig));
-
-const layerVoiceTranscription = VoiceTranscription.layer.pipe(
-  Layer.provide(RecentThreadMessages.layer),
-  Layer.provide(layerServerSettings),
-  Layer.provide(layerPersistence),
-);
 
 const layerVcsDriverRegistry = VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer));
 
@@ -710,7 +702,6 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
   Layer.provideMerge(layerUsage),
   Layer.provideMerge(layerBackground),
   Layer.provideMerge(layerResourceDiagnostics),
-  Layer.provideMerge(layerVoiceTranscription),
   Layer.provideMerge(TraceDiagnostics.layer),
   Layer.provideMerge(TriageService.layer.pipe(Layer.provide(GitVcsDriver.layer))),
   Layer.provideMerge(AnalyticsService.layer),
@@ -745,7 +736,6 @@ const layerMakeRoutes = Layer.mergeAll(
     ServerHttp.layerOtlpTracesProxyRoute,
     ServerHttp.layerAssetRoute,
     ServerHttp.layerAttachmentUploadRoute,
-    ServerHttp.voiceTranscriptionRouteLayer,
     GuestHttp.layer,
     DeviceHubProxy.layer,
     ServerBrowserStream.routeLayer,

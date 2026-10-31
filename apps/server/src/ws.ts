@@ -260,7 +260,6 @@ import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
 import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
-import * as VoiceRpc from "./voice/VoiceRpc.ts";
 import { isNetworkPath } from "@t3tools/shared/path";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { isTelemetryIdHash } from "@t3tools/shared/telemetryId";
@@ -1870,7 +1869,6 @@ export const layerWsRpc = (
 
       const handlers = ServerWsRpcGroup.of({
         ...(yield* ServerPush.makeRpcHandlers),
-        ...(yield* VoiceRpc.makeRpcHandlers),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,

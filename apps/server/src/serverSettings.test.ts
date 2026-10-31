@@ -610,42 +610,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     ).pipe(Effect.provide(layerServerSettings())),
   );
 
-  it.effect("keeps the dictation API key in the secret store and out of client settings", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const serverConfig = yield* ServerConfig.ServerConfig;
-        const fileSystem = yield* FileSystem.FileSystem;
-        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
-        const secretStore = yield* ServerSecretStore.ServerSecretStore;
-
-        yield* serverSettings.updateSettings({
-          dictation: { apiKey: "gsk_secret", vocabulary: "T3 Code" },
-        });
-        assert.notInclude(
-          yield* fileSystem.readFileString(serverConfig.settingsPath),
-          "gsk_secret",
-        );
-        const settings = yield* serverSettings.getSettings;
-        assert.deepStrictEqual(settings.dictation, {
-          apiKey: "gsk_secret",
-          vocabulary: "T3 Code",
-          learnedVocabulary: [],
-          forgottenVocabulary: [],
-        });
-        const redacted = ServerSettingsModule.redactServerSettingsForClient(settings);
-        assert.notEqual(redacted.dictation.apiKey, "gsk_secret");
-        assert.isAbove(redacted.dictation.apiKey.length, 0);
-
-        yield* serverSettings.updateSettings({ dictation: { vocabulary: "T3 Code\nEffect" } });
-        assert.equal((yield* serverSettings.getSettings).dictation.apiKey, "gsk_secret");
-
-        yield* serverSettings.updateSettings({ dictation: { apiKey: "" } });
-        assert.equal((yield* serverSettings.getSettings).dictation.apiKey, "");
-        assert.isTrue(Option.isNone(yield* secretStore.get("dictation-api-key")));
-      }),
-    ).pipe(Effect.provide(layerServerSettingsWithSecrets())),
-  );
-
   it.effect("preserves model when switching providers via textGenerationModelSelection", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;

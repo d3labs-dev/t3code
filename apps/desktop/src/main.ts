@@ -53,8 +53,6 @@ import * as DesktopShutdown from "./app/DesktopShutdown.ts";
 import * as DesktopObservability from "./app/DesktopObservability.ts";
 import * as DesktopServerExposure from "./backend/DesktopServerExposure.ts";
 import * as DesktopClientSettings from "./settings/DesktopClientSettings.ts";
-import * as DesktopDictationKey from "./dictation/DesktopDictationKey.ts";
-import * as MacFnKeySetup from "./dictation/MacFnKeySetup.ts";
 import * as DesktopSavedEnvironments from "./settings/DesktopSavedEnvironments.ts";
 import * as DesktopSnapShot from "./snapShot/DesktopSnapShot.ts";
 import * as DesktopAppSettings from "./settings/DesktopAppSettings.ts";
@@ -150,8 +148,6 @@ const layerDesktopFoundation = Layer.mergeAll(
   DesktopClientSettings.layer,
   DesktopConnectionCatalogStore.layer.pipe(Layer.provideMerge(DesktopSavedEnvironments.layer)),
   DesktopAssets.layer,
-  DesktopDictationKey.layer,
-  MacFnKeySetup.layer,
   DesktopObservability.layer,
   DesktopRendererHistory.layer,
 ).pipe(Layer.provideMerge(layerDesktopEnvironment));
