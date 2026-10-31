@@ -13,15 +13,8 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Queue from "effect/Queue";
-import * as Stream from "effect/Stream";
 import * as Tracer from "effect/Tracer";
-import {
-  HttpBody,
-  HttpClient,
-  HttpClientRequest,
-  HttpRouter,
-  HttpServerResponse,
-} from "effect/http";
+import { HttpClient, HttpClientRequest, HttpRouter, HttpServerResponse } from "effect/http";
 import { ASSET_ROUTE_PREFIX } from "./assets/AssetAccess.ts";
 import { ATTACHMENT_UPLOAD_ROUTE_PREFIX } from "./assets/AttachmentUpload.ts";
 import { openMediaFile } from "./assets/MediaFile.ts";
@@ -32,12 +25,9 @@ import {
   injectMcpAppThemeBootstrap,
   MCP_APP_MAX_HTML_BYTES,
 } from "@t3tools/shared/mcpApp";
-import { ORCHESTRATION_PROTOCOL_HEADER, ThreadId } from "@t3tools/contracts";
+import { ORCHESTRATION_PROTOCOL_HEADER } from "@t3tools/contracts";
 
-import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ServerConfig from "./config.ts";
-import * as VoiceTranscription from "./voice/VoiceTranscription.ts";
-import { issueVoiceTranscriptionUrl } from "./voice/VoiceTranscriptionUrl.ts";
 
 import { assetResponseHeaders, assetFileResponse, downloadContentDisposition } from "./http.ts";
 import * as ServerHttp from "./http.ts";
@@ -863,63 +853,4 @@ describe("downloadContentDisposition", () => {
       `attachment; filename="bad_name.pdf"; filename*=UTF-8''bad%EF%BF%BDname.pdf`,
     );
   });
-});
-
-const voiceRouteTestLayer = HttpRouter.serve(
-  Layer.merge(ServerHttp.voiceTranscriptionRouteLayer, ServerHttp.layerBrowserApiCors),
-  { disableListenLog: true, disableLogger: true },
-).pipe(
-  Layer.provideMerge(NodeHttpServer.layerTest),
-  Layer.provideMerge(
-    Layer.mock(VoiceTranscription.VoiceTranscription)({
-      transcribe: ({ audio, threadId }) =>
-        audio[0] === 0
-          ? Effect.fail(
-              new VoiceTranscription.VoiceTranscriptionFailure({ reason: "rate-limited" }),
-            )
-          : Effect.succeed(`heard ${audio.byteLength} bytes in ${threadId ?? "a draft"}`),
-    }),
-  ),
-  Layer.provideMerge(ServerSecretStore.layer),
-  Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-voice-http-test-" })),
-  Layer.provideMerge(NodeServices.layer),
-);
-
-it.layer(voiceRouteTestLayer)("voice transcription route", (it) => {
-  it.effect("transcribes a recording uploaded through a signed voice URL", () =>
-    Effect.gen(function* () {
-      const issued = yield* issueVoiceTranscriptionUrl({
-        mimeType: "audio/webm",
-        sizeBytes: 4,
-        threadId: ThreadId.make("thread-voice"),
-      });
-
-      const short = yield* HttpClient.post(issued.relativeUrl, {
-        body: HttpBody.uint8Array(new Uint8Array([1, 2, 3]), "audio/webm"),
-      });
-      expect(short.status).toBe(400);
-
-      const response = yield* HttpClient.post(issued.relativeUrl, {
-        headers: { origin: "http://remote-client.test:3773" },
-        body: HttpBody.stream(
-          Stream.make(new Uint8Array([1, 2]), new Uint8Array([3, 4])),
-          "audio/webm",
-        ),
-      });
-      expect(response.status).toBe(200);
-      expect(response.headers["access-control-allow-origin"]).toBe("*");
-      expect(yield* response.json).toEqual({ text: "heard 4 bytes in thread-voice" });
-
-      const limited = yield* HttpClient.post(issued.relativeUrl, {
-        body: HttpBody.uint8Array(new Uint8Array([0, 0, 0, 0]), "audio/webm"),
-      });
-      expect(limited.status).toBe(429);
-      expect(yield* limited.text).toContain("rate limiting");
-
-      const forged = yield* HttpClient.post(`${issued.relativeUrl}x`, {
-        body: HttpBody.uint8Array(new Uint8Array([1, 2, 3, 4]), "audio/webm"),
-      });
-      expect(forged.status).toBe(404);
-    }),
-  );
 });

@@ -17,8 +17,6 @@ export type VoiceTranscriptionErrorCode =
   | "unsupported-locale"
   | "preparation-failed"
   | "transcription-failed"
-  /** A transcription service refused the recording; the message is written for the user. */
-  | "rejected"
   | "cancelled";
 
 export class VoiceTranscriptionError extends Error {

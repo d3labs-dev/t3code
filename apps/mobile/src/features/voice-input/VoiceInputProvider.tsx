@@ -62,7 +62,6 @@ const voiceInputAtom = Atom.make((get) => {
     Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0),
   );
   let keepAwakeSequence = 0;
-  let permissionRequestPending = false;
   let audioToken: ReturnType<typeof acquireAudioSession> | null = null;
   const recorder = createLazyVoiceRecorder({
     create: () => new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
@@ -94,13 +93,8 @@ const voiceInputAtom = Atom.make((get) => {
     recorder,
     getTranscriber: getLocalVoiceTranscriber,
     requestPermission: async () => {
-      permissionRequestPending = true;
-      try {
-        const permission = await requestRecordingPermissionsAsync();
-        return { granted: permission.granted, canAskAgain: permission.canAskAgain };
-      } finally {
-        permissionRequestPending = false;
-      }
+      const permission = await requestRecordingPermissionsAsync();
+      return { granted: permission.granted, canAskAgain: permission.canAskAgain };
     },
     configureRecording: async () => {
       const token = acquireAudioSession("recording");
@@ -126,13 +120,11 @@ const voiceInputAtom = Atom.make((get) => {
     publishAudioLevels: (levels) => audioLevels.set(levels),
     keepAwake: () => keepScreenAwake(`voice-input:${++keepAwakeSequence}`),
   });
-  // iOS reports `inactive` while its permission dialog is open, but Android pauses the
-  // activity (`background`), so skip it while our own permission request is pending.
-  // Recorder status handles calls and route interruptions during capture.
+  // iOS reports `inactive` while its permission dialog is open. Only the real
+  // background state cancels preparation; recorder status handles calls and
+  // route interruptions during capture.
   const appStateSubscription = AppState.addEventListener("change", (nextState) => {
-    if (nextState === "background" && !permissionRequestPending) {
-      void session.controller.appMovedToBackground();
-    }
+    if (nextState === "background") void session.controller.appMovedToBackground();
   });
   get.addFinalizer(() => {
     appStateSubscription.remove();

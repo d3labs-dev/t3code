@@ -107,7 +107,6 @@ import {
 } from "../../composerDraftStore";
 import { ComposerStashBadge } from "./ComposerStashBadge";
 import { ComposerStashMenu } from "./ComposerStashMenu";
-import { ComposerVoiceControl } from "./ComposerVoiceControl";
 import { useComposerTriggerState } from "./useComposerTriggerState";
 import { useComposerMenuItems } from "./useComposerMenuItems";
 import { useComposerMultilinePrompt } from "./useComposerMultilinePrompt";
@@ -134,8 +133,6 @@ import {
   useAttachmentUploadStore,
 } from "../../lib/attachmentUploadQueue";
 import { attachmentUploadBlockReason } from "../../lib/attachmentUploadState";
-import { getTerminalFocusOwner } from "../../lib/terminalFocus";
-import { useComposerVoiceInput } from "../../voice/useComposerVoiceInput";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { shortcutLabelForCommand } from "../../keybindings";
 import {
@@ -313,8 +310,6 @@ export interface ChatComposerHandle {
   isModelPickerOpen: () => boolean;
   isCaretAtStart: () => boolean;
   compactContext: () => void;
-  /** Starts or finishes hands-free voice input; false when voice input is unavailable. */
-  toggleVoiceInput: () => boolean;
   readSnapshot: () => {
     value: string;
     cursor: number;
@@ -1016,21 +1011,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [isComposerPrimaryActionsCompact, setIsComposerPrimaryActionsCompact] = useState(false);
   const [isComposerModelPickerOpen, setIsComposerModelPickerOpen] = useState(false);
-  const insertVoiceTranscriptRef = useRef<(text: string) => boolean>(() => false);
-  const voice = useComposerVoiceInput({
-    environmentId,
-    ownerKey: composerTargetKey(composerDraftTarget),
-    threadId: activeThreadId,
-    insertTranscript: (text) => insertVoiceTranscriptRef.current(text),
-    keybindings,
-    shortcutContext: () => ({
-      context: {
-        terminalFocus: getTerminalFocusOwner() !== null,
-        terminalOpen,
-        modelPickerOpen: isComposerModelPickerOpen,
-      },
-    }),
-  });
   const isMobileViewport = useMediaQuery("max-sm");
   const isSoftwareKeyboardOpen = useSoftwareKeyboardOpen();
   const [isComposerFocused, setIsComposerFocused] = useState(false);
@@ -2099,9 +2079,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       });
       return;
     }
-    const sentPrompt = promptRef.current;
     const submission = submitComposerDraft({
-      prompt: sentPrompt,
+      prompt: promptRef.current,
       submissionTarget: activePendingProgress ? "pending-user-input" : "provider-turn",
       event,
       onSend: (sendEvent) => {
@@ -2122,7 +2101,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     });
     setComposerSubmissionError(submission.validationMessage);
     if (!submission.didDispatch) return;
-    voice.messageSent(sentPrompt);
     onTypingGuardSend();
     if (shouldBlurMobileComposerOnSubmit()) {
       blurMobileComposerAfterSend();
@@ -2421,11 +2399,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     );
   };
   const insertComposerTextStable = useStableCallback(insertComposerText);
-
-  useLayoutEffect(() => {
-    insertVoiceTranscriptRef.current = (text) =>
-      insertComposerTextStable(text, "cursor", { ensureLeadingBoundary: true });
-  }, [insertComposerTextStable]);
 
   const insertAttachmentReferences = (
     references: ReadonlyArray<ComposerContextReference>,
@@ -2904,11 +2877,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         trigger.click();
       },
       compactContext: compactThreadContextStable,
-      toggleVoiceInput: () => {
-        if (!voice.isAvailable) return false;
-        voice.toggle();
-        return true;
-      },
       isModelPickerOpen: () => isComposerModelPickerOpen,
       isCaretAtStart: () => {
         const range = composerEditorRef.current?.readSelectionRange();
@@ -3019,7 +2987,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [
       activeThread,
       addComposerAttachments,
-      voice,
       addComposerFoldersStable,
       foldPastedText,
       composerDraftTarget,
@@ -3483,12 +3450,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   >
                     {composerControls}
                   </div>
-                  {voice.isAvailable ? (
-                    <ComposerVoiceControl
-                      voice={voice}
-                      shortcutLabel={shortcutLabelForCommand(keybindings, "composer.dictate")}
-                    />
-                  ) : null}
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}

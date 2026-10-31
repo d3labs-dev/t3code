@@ -38,11 +38,6 @@ import {
   storeAttachmentUpload,
   validateAttachmentUploadToken,
 } from "./assets/AttachmentUpload.ts";
-import {
-  VOICE_TRANSCRIPTION_ROUTE_PREFIX,
-  validateVoiceTranscriptionToken,
-} from "./voice/VoiceTranscriptionUrl.ts";
-import * as VoiceTranscription from "./voice/VoiceTranscription.ts";
 import * as BrowserTraceCollector from "./observability/BrowserTraceCollector.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { traceRelayRequest } from "./cloud/traceRelayRequest.ts";
@@ -501,74 +496,6 @@ export const layerAttachmentUploadRoute = HttpRouter.add(
     return stored.ok
       ? HttpServerResponse.empty({ status: 204 })
       : HttpServerResponse.text(stored.detail, { status: stored.status });
-  }),
-);
-
-const VOICE_TRANSCRIPTION_FAILURE_STATUS = {
-  "not-configured": 409,
-  unauthorized: 502,
-  "rate-limited": 429,
-  provider: 502,
-} satisfies Record<VoiceTranscription.VoiceTranscriptionFailureReason, number>;
-
-const readBoundedRequestBody = Effect.fn("readBoundedRequestBody")(function* (
-  stream: HttpServerRequest.HttpServerRequest["stream"],
-  expectedBytes: number,
-) {
-  const body = new Uint8Array(expectedBytes);
-  let receivedBytes = 0;
-  yield* Stream.runForEach(
-    stream.pipe(Stream.takeWhile((chunk) => receivedBytes + chunk.byteLength <= expectedBytes)),
-    (chunk) =>
-      Effect.sync(() => {
-        body.set(chunk, receivedBytes);
-        receivedBytes += chunk.byteLength;
-      }),
-  );
-  return receivedBytes === expectedBytes ? body : null;
-});
-
-export const voiceTranscriptionRouteLayer = HttpRouter.add(
-  "POST",
-  `${VOICE_TRANSCRIPTION_ROUTE_PREFIX}/*`,
-  Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    const url = HttpServerRequest.toURL(request);
-    if (Option.isNone(url)) {
-      return HttpServerResponse.text("Bad Request", { status: 400 });
-    }
-
-    const token = url.value.pathname.slice(`${VOICE_TRANSCRIPTION_ROUTE_PREFIX}/`.length);
-    const claims = token ? yield* validateVoiceTranscriptionToken(token) : null;
-    if (!claims) {
-      return HttpServerResponse.text("Not Found", { status: 404 });
-    }
-
-    const contentLengthHeader = request.headers["content-length"];
-    if (contentLengthHeader !== undefined && Number(contentLengthHeader) !== claims.sizeBytes) {
-      return HttpServerResponse.text("Content-Length must match the recording size.", {
-        status: 400,
-      });
-    }
-    const audio = yield* readBoundedRequestBody(request.stream, claims.sizeBytes).pipe(
-      Effect.orElseSucceed(() => null),
-    );
-    if (!audio) {
-      return HttpServerResponse.text("The recording upload was incomplete.", { status: 400 });
-    }
-
-    const voiceTranscription = yield* VoiceTranscription.VoiceTranscription;
-    return yield* voiceTranscription.transcribe({ audio, threadId: claims.threadId }).pipe(
-      Effect.map((text) => HttpServerResponse.jsonUnsafe({ text })),
-      Effect.catchTags({
-        VoiceTranscriptionFailure: (failure) =>
-          Effect.succeed(
-            HttpServerResponse.text(failure.message, {
-              status: VOICE_TRANSCRIPTION_FAILURE_STATUS[failure.reason],
-            }),
-          ),
-      }),
-    );
   }),
 );
 

@@ -838,9 +838,6 @@ importers:
 
   apps/server:
     dependencies:
-      '@ai-sdk/groq':
-        specifier: 4.0.46
-        version: 4.0.46(zod@4.6.5)
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.276
         version: 0.3.276(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.29.0(supports-color@8.1.1)(zod@4.6.5))(zod@4.6.5)
@@ -913,9 +910,6 @@ importers:
       '@t3tools/source-control-gitlab':
         specifier: workspace:*
         version: link:../../packages/source-control-gitlab
-      ai:
-        specifier: 7.0.111
-        version: 7.0.111(zod@4.6.5)
       character-entities:
         specifier: 2.0.2
         version: 2.0.2
@@ -2485,12 +2479,6 @@ packages:
 
   '@ai-sdk/gateway@4.0.89':
     resolution: {integrity: sha512-n0Q88UUASYQBGK3Ogs9pCe8h3ZXeTHFSuGOLBJAyH73MVGNKUv9w8EJX2f340WUF3eDWWOV305gO7YBpSCPblA==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
-  '@ai-sdk/groq@4.0.46':
-    resolution: {integrity: sha512-xvR0KORuhb5x2Q4TcTc/kD+HSG0iWy9kMO1tvEdo87OMAAOO1YmZw4F28uq5IhYO9xcbas7KQMP5deUlG64dDA==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -12535,12 +12523,7 @@ snapshots:
       '@ai-sdk/provider-utils': 5.0.45(zod@4.6.5)
       '@vercel/oidc': 3.2.0
       zod: 4.6.5
-
-  '@ai-sdk/groq@4.0.46(zod@4.6.5)':
-    dependencies:
-      '@ai-sdk/provider': 4.0.17
-      '@ai-sdk/provider-utils': 5.0.45(zod@4.6.5)
-      zod: 4.6.5
+    optional: true
 
   '@ai-sdk/provider-utils@4.0.57(zod@4.6.5)':
     dependencies:
@@ -12558,6 +12541,7 @@ snapshots:
       eventsource-parser: 3.1.0
       undici: 7.29.1
       zod: 4.6.5
+    optional: true
 
   '@ai-sdk/provider@3.0.18':
     dependencies:
@@ -12566,6 +12550,7 @@ snapshots:
   '@ai-sdk/provider@4.0.17':
     dependencies:
       json-schema: 0.4.0
+    optional: true
 
   '@alchemy.run/acme@2.0.0-beta.84(74118100341fd69edb1510aa7b7f1bd2)':
     dependencies:
@@ -16778,7 +16763,8 @@ snapshots:
       pretty-cache-header: 1.0.0
       zod: 3.25.76
 
-  '@vercel/oidc@3.2.0': {}
+  '@vercel/oidc@3.2.0':
+    optional: true
 
   '@vercel/routing-utils@6.2.0':
     dependencies:
@@ -17100,7 +17086,8 @@ snapshots:
 
   '@webgpu/types@0.1.74': {}
 
-  '@workflow/serde@4.1.0': {}
+  '@workflow/serde@4.1.0':
+    optional: true
 
   '@xmldom/xmldom@0.8.15': {}
 
@@ -17224,6 +17211,7 @@ snapshots:
       '@ai-sdk/provider': 4.0.17
       '@ai-sdk/provider-utils': 5.0.45(zod@4.6.5)
       zod: 4.6.5
+    optional: true
 
   ajv-draft-04@1.0.0(ajv@8.20.0):
     optionalDependencies:
@@ -22415,7 +22403,8 @@ snapshots:
 
   undici@6.29.0: {}
 
-  undici@7.29.1: {}
+  undici@7.29.1:
+    optional: true
 
   undici@8.11.2: {}
 

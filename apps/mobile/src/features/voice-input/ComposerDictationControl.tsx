@@ -255,7 +255,6 @@ function VoiceActionButton(props: {
   readonly accessibilityLabel: string;
   readonly disabled?: boolean;
   readonly icon: AppSymbolName;
-  readonly iconSize?: number;
   readonly loading?: boolean;
   readonly onPress: () => void;
   readonly variant?: "plain" | "primary";
@@ -306,7 +305,7 @@ function VoiceActionButton(props: {
           ) : (
             <SymbolView
               name={props.icon}
-              size={props.iconSize ?? iconSize}
+              size={iconSize}
               weight={variant === "primary" ? "semibold" : "regular"}
               tintColorClassName={
                 variant === "primary" ? "accent-primary-foreground" : "accent-icon"
@@ -411,45 +410,23 @@ export function ComposerDictationPrimaryAction(props: {
   readonly disabled?: boolean;
   readonly onStart: () => void;
   readonly onConfirm: () => void;
-  readonly onConfirmAndSend?: () => void;
   readonly onCancel: () => void;
 }) {
   if (props.presentation.trailingAction === "confirm") {
-    const confirmationEnabled = props.presentation.confirmationEnabled;
-    const pendingLabel = props.presentation.statusLabel ?? "Preparing voice input";
-    if (!props.onConfirmAndSend) {
-      return (
-        <VoiceActionButton
-          size={props.size}
-          accessibilityLabel={confirmationEnabled ? "Finish dictation" : pendingLabel}
-          disabled={!confirmationEnabled}
-          icon="checkmark"
-          loading={!confirmationEnabled}
-          onPress={props.onConfirm}
-          variant="primary"
-        />
-      );
-    }
     return (
-      <>
-        <VoiceActionButton
-          size={props.size}
-          accessibilityLabel="Stop dictation and insert text"
-          disabled={!confirmationEnabled}
-          icon="stop.fill"
-          iconSize={14}
-          onPress={props.onConfirm}
-        />
-        <VoiceActionButton
-          size={props.size}
-          accessibilityLabel={confirmationEnabled ? "Finish dictation and send" : pendingLabel}
-          disabled={!confirmationEnabled}
-          icon="arrow.up"
-          loading={!confirmationEnabled}
-          onPress={props.onConfirmAndSend}
-          variant="primary"
-        />
-      </>
+      <VoiceActionButton
+        size={props.size}
+        accessibilityLabel={
+          props.presentation.confirmationEnabled
+            ? "Finish dictation"
+            : (props.presentation.statusLabel ?? "Preparing voice input")
+        }
+        disabled={!props.presentation.confirmationEnabled}
+        icon="checkmark"
+        loading={!props.presentation.confirmationEnabled}
+        onPress={props.onConfirm}
+        variant="primary"
+      />
     );
   }
 

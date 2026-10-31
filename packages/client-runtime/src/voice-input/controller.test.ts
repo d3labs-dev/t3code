@@ -232,7 +232,7 @@ describe("VoiceInputController", () => {
       error: null,
       url: "file:///voice.m4a",
     });
-    await expect(stopping).resolves.toBe(true);
+    await stopping;
 
     expect(harness.commits).toEqual([
       { text: "hello new text", selection: { start: 14, end: 14 } },
@@ -290,7 +290,7 @@ describe("VoiceInputController", () => {
       expect(prepare).not.toHaveBeenCalled();
       expect(next.recorder.prepareToRecordAsync).not.toHaveBeenCalled();
       audioRelease.resolve(undefined);
-      await expect(stopping).resolves.toBe(false);
+      await stopping;
       await nextStart;
 
       expect(harness.commits).toEqual([]);
@@ -321,28 +321,6 @@ describe("VoiceInputController", () => {
     await harness.controller.stop();
 
     expect(events).toEqual(["released", "transcribed"]);
-  });
-
-  it("frees the session when disposed after its owner released the recorder", async () => {
-    const releaseRecording = vi.fn(async () => undefined);
-    const harness = createHarness({ releaseRecording });
-    await harness.controller.start();
-    Object.defineProperty(harness.recorder, "uri", {
-      get: () => {
-        throw new Error("native shared object released");
-      },
-    });
-    harness.recorder.stop.mockRejectedValueOnce(new Error("native shared object released"));
-
-    await harness.controller.dispose();
-
-    expect(harness.controller.currentState.phase).toBe("idle");
-    expect(harness.deleted).toEqual(["file:///voice.m4a"]);
-    expect(releaseRecording).toHaveBeenCalledOnce();
-    const next = createHarness();
-    await next.controller.start();
-    expect(next.controller.currentState.phase).toBe("recording");
-    await next.controller.interruptRecording();
   });
 
   it("ignores a late transcript after the draft owner changes", async () => {

@@ -563,17 +563,12 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   });
   const voiceInput = useVoiceInputController({
     ownerKey: composerDraftKey,
-    environmentId: props.environmentId,
-    threadId: props.selectedThread.id,
     label: props.selectedThread.title || "Untitled thread",
     readDraftMessage: () => getComposerDraftSnapshot(composerDraftKey).text,
     subscribeToDraftChanges: (onChange) => appAtomRegistry.subscribe(composerDraftsAtom, onChange),
     selection: composerMenu.selection,
     onChangeDraftMessage: (text) => setComposerDraftText(composerDraftKey, text),
     onChangeSelection: composerMenu.onSelectionChange,
-    onSend: () => {
-      if (canSend) void handleSend();
-    },
   });
   const isSubmissionLocked =
     props.interactionLocked === true || queuedEdit?.saving === true || voiceInput.blocksSubmission;
@@ -680,7 +675,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     const threadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
     if (inFlightThreadIdsRef.current.has(threadKey)) return;
     inFlightThreadIdsRef.current.add(threadKey);
-    const sentMessage = draftMessage;
     const draftAtSend = getComposerDraftSnapshot(composerDraftKey);
     const stillSendable = () => {
       const draft = getComposerDraftSnapshot(composerDraftKey);
@@ -701,7 +695,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       return;
     }
     if (sent.value === null) return;
-    voiceInput.messageSent(sentMessage);
     // Arm after send so preference reads and native Activity startup do not delay tap-frame feedback.
     armAgentAwarenessLiveActivityForLocalWork({
       environmentId: props.environmentId,
@@ -1162,7 +1155,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                     disabled={isSubmissionLocked}
                     onStart={voiceInput.start}
                     onConfirm={voiceInput.stop}
-                    onConfirmAndSend={voiceInput.stopAndSend}
                     onCancel={voiceInput.cancel}
                   />
                   {showStopAction ? (

@@ -1,4 +1,3 @@
-import { VoiceInputSettingsSection } from "./VoiceInputSettings";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
@@ -1049,7 +1048,6 @@ export function GeneralSettingsPanel() {
           }
         />
       </SettingsSection>
-      <VoiceInputSettingsSection />
     </SettingsPageContainer>
   );
 }

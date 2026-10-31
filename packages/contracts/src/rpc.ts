@@ -108,14 +108,6 @@ import {
   AttachmentUploadSigningKeyError,
 } from "./assets.ts";
 import {
-  VoiceLearnCorrectionsInput,
-  VoiceLearnCorrectionsResult,
-  VoiceTranscriptionCreateUrlInput,
-  VoiceTranscriptionCreateUrlResult,
-  VoiceTranscriptionNotConfiguredError,
-  VoiceTranscriptionSigningKeyError,
-} from "./voiceTranscription.ts";
-import {
   PersistChatAttachmentsError,
   PersistChatAttachmentsInput,
   PersistChatAttachmentsResult,
@@ -439,8 +431,6 @@ export const WS_METHODS = {
   assetsPersistChatAttachments: "assets.persistChatAttachments",
   attachmentsCreateUploadUrl: "attachments.createUploadUrl",
   attachmentsDelete: "attachments.delete",
-  voiceCreateTranscriptionUrl: "voice.createTranscriptionUrl",
-  voiceLearnCorrections: "voice.learnCorrections",
 
   mcpAppsCallTool: "mcpApps.callTool",
   mcpAppsToolInfo: "mcpApps.toolInfo",
@@ -1420,22 +1410,6 @@ const WsAttachmentsDeleteRpc = Rpc.make(WS_METHODS.attachmentsDelete, {
   error: EnvironmentAuthorizationError,
 });
 
-const WsVoiceLearnCorrectionsRpc = Rpc.make(WS_METHODS.voiceLearnCorrections, {
-  payload: VoiceLearnCorrectionsInput,
-  success: VoiceLearnCorrectionsResult,
-  error: Schema.Union([VoiceTranscriptionNotConfiguredError, EnvironmentAuthorizationError]),
-});
-
-const WsVoiceCreateTranscriptionUrlRpc = Rpc.make(WS_METHODS.voiceCreateTranscriptionUrl, {
-  payload: VoiceTranscriptionCreateUrlInput,
-  success: VoiceTranscriptionCreateUrlResult,
-  error: Schema.Union([
-    VoiceTranscriptionNotConfiguredError,
-    VoiceTranscriptionSigningKeyError,
-    EnvironmentAuthorizationError,
-  ]),
-});
-
 const WsMcpAppsCallToolRpc = Rpc.make(WS_METHODS.mcpAppsCallTool, {
   payload: McpAppCallToolInput,
   success: McpAppCallToolResult,
@@ -2135,8 +2109,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsAssetsPersistChatAttachmentsRpc,
   WsAttachmentsCreateUploadUrlRpc,
   WsAttachmentsDeleteRpc,
-  WsVoiceCreateTranscriptionUrlRpc,
-  WsVoiceLearnCorrectionsRpc,
   WsMcpAppsCallToolRpc,
   WsMcpAppsToolInfoRpc,
   WsMcpAppsReadResourceRpc,

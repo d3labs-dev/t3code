@@ -20,9 +20,6 @@ export type VoiceInputTarget = {
   readonly readDraft: () => VoiceDraftSnapshot | null;
   readonly commitDraft: VoiceInputControllerDependencies["commitDraft"];
   readonly subscribe: () => () => void;
-  /** Consulted when the app has no on-device transcriber, e.g. to use the environment. */
-  readonly getTranscriber?: VoiceInputControllerDependencies["getTranscriber"];
-  readonly onTranscriptInserted?: (transcript: string) => void;
 };
 
 export type VoiceInputSnapshot = {
@@ -104,9 +101,6 @@ export class VoiceInputSession {
     this.dependencies = dependencies;
     this.controller = new VoiceInputController({
       ...dependencies,
-      getTranscriber: () =>
-        dependencies.getTranscriber() ?? this.target?.getTranscriber?.() ?? null,
-      onTranscriptInserted: (transcript) => this.target?.onTranscriptInserted?.(transcript),
       onStateChange: (state) => this.handleStateChange(state),
       readDraft: () => this.target?.readDraft() ?? null,
       commitDraft: (text, selection) => this.target?.commitDraft(text, selection),

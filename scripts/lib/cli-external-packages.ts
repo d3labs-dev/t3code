@@ -37,21 +37,9 @@ export function isRuntimeExternalCliDependency(id: string): boolean {
   );
 }
 
-/**
- * This has to be wired to the bundler's `neverBundle`, not just to
- * `alwaysBundle`. `alwaysBundle` only forces packages IN — returning false from
- * it means "no opinion", and the default then applies: a declared dependency
- * stays external, but a transitive one gets bundled. That is how a native
- * loader such as node-gyp-build ended up inlined while node-pty (a declared
- * dependency) stayed external.
- *
- * Cursor's pure-JS closure only has to exist on disk beside the external SDK,
- * which the bundler never walks into. Bundled code that imports one of those
- * packages (the AI SDK imports `zod/v4`) inlines its own copy, because a
- * single-executable cannot `import` a file-backed package.
- */
+/** Use neverBundle: false from alwaysBundle means no opinion and leaves transitive packages bundled. */
 export function isExternalCliDependency(id: string): boolean {
-  return CLI_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => id.startsWith(prefix));
+  return isRuntimeExternalCliDependency(id);
 }
 
 export function shouldBundleCliDependency(id: string): boolean {
