@@ -2,9 +2,11 @@ import { useEffect, useLayoutEffect, useState } from "react";
 
 import { useSidebar } from "../ui/sidebar";
 
-const HIDE_DELAY_MS = 200;
 // Matches the slide transition on [data-app-sidebar][data-peek] in custom.css.
 const SLIDE_MS = 200;
+// The card closes once the pointer is this far past its edge, the same
+// distance from the window edge that opens it.
+const PEEK_EDGE_PX = 8;
 
 type Peek = "hidden" | "shown" | "leaving";
 
@@ -23,6 +25,7 @@ export function SidebarPeek() {
   const [peek, setPeek] = useState<Peek>("hidden");
   if (peek !== "hidden" && !canPeek) setPeek("hidden");
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- data-peek and inert on the sidebar DOM node, which ui/sidebar owns
   useLayoutEffect(() => {
     const sidebar = findAppSidebar();
     if (!sidebar) return;
@@ -37,37 +40,30 @@ export function SidebarPeek() {
     else if (peek === "leaving") root.inert = true;
   }, [peek]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- timer that drops data-peek once the slide-out transition has run
   useEffect(() => {
     if (peek !== "leaving") return;
     const timer = window.setTimeout(() => setPeek("hidden"), SLIDE_MS);
     return () => window.clearTimeout(timer);
   }, [peek]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- document pointermove listener that hides the card once the pointer leaves it
   useEffect(() => {
     if (peek !== "shown") return;
     const sidebar = findAppSidebar();
     if (!sidebar) return;
-    let hideTimer: number | undefined;
     // The offset box ignores the slide transform, so the card counts from its
     // first frame. Menus opened from the sidebar render in portals outside
     // it, so an open menu or a hovered popup also holds it.
     const holdsPeekOpen = (event: PointerEvent) =>
-      event.clientX < sidebar.offsetLeft + sidebar.offsetWidth ||
+      event.clientX < sidebar.offsetLeft + sidebar.offsetWidth + PEEK_EDGE_PX ||
       sidebar.querySelector("[data-popup-open]") !== null ||
       (event.target instanceof Element && event.target.closest('[data-slot$="popup"]') !== null);
     const onPointerMove = (event: PointerEvent) => {
-      if (holdsPeekOpen(event)) {
-        window.clearTimeout(hideTimer);
-        hideTimer = undefined;
-        return;
-      }
-      hideTimer ??= window.setTimeout(() => setPeek("leaving"), HIDE_DELAY_MS);
+      if (!holdsPeekOpen(event)) setPeek("leaving");
     };
     document.addEventListener("pointermove", onPointerMove, { passive: true });
-    return () => {
-      window.clearTimeout(hideTimer);
-      document.removeEventListener("pointermove", onPointerMove);
-    };
+    return () => document.removeEventListener("pointermove", onPointerMove);
   }, [peek]);
 
   if (!canPeek || peek === "shown") return null;
@@ -75,7 +71,8 @@ export function SidebarPeek() {
   return (
     <div
       aria-hidden
-      className="fixed inset-y-0 left-0 z-10 w-2"
+      className="fixed inset-y-0 left-0 z-10"
+      style={{ width: PEEK_EDGE_PX }}
       onPointerEnter={(event) => {
         if (event.pointerType !== "mouse") return;
         const sidebar = findAppSidebar();
