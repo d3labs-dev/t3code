@@ -51,8 +51,6 @@ Remove the hourly job without deleting the application, data, or signing identit
 ./scripts/custom-nightly-macos.sh uninstall
 ```
 
-While D3 Code runs, its Dock icon shows the cat in a mood that follows your threads: questions waiting on you or an unseen failure, agents at work (sweating when two or more run at once), finished work you have not opened, a big day, nothing new for half an hour or more, or everything settled. The pictures live in `apps/desktop/resources/mascot/`, and `packages/client-runtime/src/state/mascotMood.ts` picks one.
-
 ## Windows app
 
 Install the `-x64.exe` from a release and accept the SmartScreen prompt; the installer is unsigned. Like the Mac app, it downloads later releases from the fork in the background and installs them on restart.
@@ -60,8 +58,6 @@ Install the `-x64.exe` from a release and accept the SmartScreen prompt; the ins
 ## Android app
 
 Install the `-android-arm64.apk` from a release. It installs as `com.t3tools.t3code.preview` under the name D3 Code, next to the Play Store app and local development builds. Its Clerk sign-in callback is already allowlisted, so T3 Connect works. It never takes upstream's over-the-air updates.
-
-Its launcher icon shows the same cat mood as the Mac Dock, counting a thread as seen once you open it on the phone. The icon changes only when you leave the app, and the launcher can take several seconds to redraw it.
 
 The app checks the fork's releases at launch and after 15 minutes in the background, and offers newer APKs. **Settings > About > Check for updates** checks on demand. Android asks to confirm every install; the first update also asks to allow D3 Code to install unknown apps.
 
