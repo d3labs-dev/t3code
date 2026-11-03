@@ -102,22 +102,6 @@ export interface DesktopAppBranding {
   displayName: string;
 }
 
-/** Which mascot the macOS Dock shows, from the state of every thread. */
-export const DesktopMascotMoodSchema = Schema.Literals([
-  "default",
-  "waiting",
-  "urgent",
-  "thinking",
-  "confused",
-  "juggling",
-  "excited",
-  "celebrating",
-  "bored",
-  "grumpy",
-  "sleeping",
-]);
-export type DesktopMascotMood = typeof DesktopMascotMoodSchema.Type;
-
 export const DesktopAppBrandingSchema = Schema.Struct({
   baseName: Schema.String,
   stageLabel: DesktopAppStageLabelSchema,
@@ -1054,7 +1038,6 @@ export interface DesktopBridge {
   getClientPlatform: () => string;
   setNotificationBadge: (badge: { count: number; image: string | null }) => Promise<void>;
   onNotificationBadgeClear: (listener: () => void) => () => void;
-  setDockMood?: (mood: DesktopMascotMood) => Promise<void>;
   onTrackpadScrollBegin: (listener: () => void) => () => void;
   onTrackpadScrollEnd: (listener: () => void) => () => void;
   /**

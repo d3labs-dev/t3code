@@ -6,24 +6,15 @@ const MAX_ANDROID_VERSION_CODE = 2_100_000_000;
 const CUSTOM_UPDATE_CHANNEL = "custom-nightly";
 
 /**
- * Gives the D3 Code (preview) build its mood launcher icons, and turns the
- * build into this fork's sideloaded Android release when
- * `T3CODE_ANDROID_UPDATE_RELEASES_URL` points at the GitHub releases API
- * listing its APKs. Once `T3CODE_EXPO_PROJECT_ID` names the fork's Expo
- * project, that release also takes over-the-air updates from it. Lives outside
+ * Turns the D3 Code (preview) build into this fork's sideloaded Android release when
+ * `T3CODE_ANDROID_UPDATE_RELEASES_URL` points at the GitHub releases API listing its APKs.
+ * With `T3CODE_EXPO_PROJECT_ID` it also takes the fork Expo project's OTA updates. Lives outside
  * app.config.ts so upstream merges stay clean.
  */
 function withSideloadedRelease(
-  baseConfig: ExpoConfig,
+  config: ExpoConfig,
   env: Readonly<Record<string, string | undefined>>,
 ): ExpoConfig {
-  const config: ExpoConfig =
-    baseConfig.extra?.appVariant === "preview"
-      ? {
-          ...baseConfig,
-          plugins: [...(baseConfig.plugins ?? []), "./plugins/withAndroidLauncherMoods.cjs"],
-        }
-      : baseConfig;
   const releasesUrl = env.T3CODE_ANDROID_UPDATE_RELEASES_URL?.trim();
   if (!releasesUrl) return config;
 
