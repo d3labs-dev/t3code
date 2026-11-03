@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   EnvironmentId,
@@ -187,7 +188,7 @@ const makeHarness = Effect.fn("makeHarness")(function* (baseDir: string) {
         ServerConfig.layerTest(process.cwd(), baseDir),
       ),
     ),
-    Layer.provideMerge(NodeServices.layer),
+    Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   );
 
   /** Publishes a thread change and waits until the server has handled it. */

@@ -20,7 +20,7 @@ import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -104,12 +104,12 @@ function terminalWorkSinceStart(
   );
 }
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const digest = yield* Digest.Digest;
   const httpClient = yield* HttpClient.HttpClient;
   const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
   const threads = yield* ThreadManagement.ThreadManagementService;
@@ -153,11 +153,11 @@ export const make = Effect.gen(function* () {
   );
 
   const hashAlertId = (alertId: string) =>
-    crypto
-      .digest("SHA-256", new TextEncoder().encode(alertId))
+    digest
+      .digest(Digest.sha256, new TextEncoder().encode(alertId))
       .pipe(
-        Effect.map((digest) =>
-          Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(""),
+        Effect.map((hash) =>
+          Array.from(hash, (byte) => byte.toString(16).padStart(2, "0")).join(""),
         ),
       );
 
