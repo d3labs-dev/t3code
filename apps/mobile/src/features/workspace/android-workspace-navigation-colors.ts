@@ -1,9 +1,23 @@
 import {
   flattenThemeColor,
+  isDarkThemeColor,
   themeColorWithAlpha,
   themeColorWithContrast,
   type MobileThemeVariables,
 } from "../../lib/mobileTheme";
+
+// A dark page swallows the native shadow, so the fill alone has to lift the pill off the page
+// and off the cards it floats over.
+function floatingContainerColor(colors: MobileThemeVariables) {
+  const screen = colors["--color-screen"];
+  const fill = flattenThemeColor(colors["--color-secondary"], screen);
+  if (!isDarkThemeColor(screen)) return fill;
+  return themeColorWithContrast(
+    fill,
+    [screen, flattenThemeColor(colors["--color-grouped-card"], screen)],
+    1.25,
+  );
+}
 
 /**
  * The selection stays visible against the bar's actual surface.
@@ -18,15 +32,18 @@ export function androidWorkspaceNavigationColors(input: {
   readonly floating?: boolean;
 }) {
   const { colors, phoneBackdropColor, rail, floating = false } = input;
-  const header =
-    phoneBackdropColor ?? flattenThemeColor(colors["--color-header"], colors["--color-screen"]);
+  const screen = colors["--color-screen"];
+  const header = phoneBackdropColor ?? flattenThemeColor(colors["--color-header"], screen);
   const containerColor = rail
     ? header
     : floating
-      ? flattenThemeColor(colors["--color-secondary"], colors["--color-screen"])
+      ? floatingContainerColor(colors)
       : flattenThemeColor(themeColorWithAlpha(colors["--color-header-foreground"], 0.05), header);
+  // The lifted dark pill already took the secondary fill's place, so its indicator lifts further.
   const indicatorColor = themeColorWithContrast(
-    flattenThemeColor(colors["--color-secondary"], containerColor),
+    floating && isDarkThemeColor(screen)
+      ? containerColor
+      : flattenThemeColor(colors["--color-secondary"], containerColor),
     containerColor,
     1.5,
   );
