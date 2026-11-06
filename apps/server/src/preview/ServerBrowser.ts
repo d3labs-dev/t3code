@@ -504,6 +504,7 @@ const make = Effect.gen(function* () {
   const contexts = new ServerBrowserContexts({
     platform: host.platform,
     profilesDir: NodePath.join(config.stateDir, "server-browser", "profiles"),
+    idleBrowserMs: 5 * 60_000,
     executable: () =>
       runPromise(
         Option.match(systemBrowser, {
