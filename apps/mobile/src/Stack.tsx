@@ -250,7 +250,7 @@ const SETTINGS_SCREENS = {
   SettingsPhoneBackground: createNativeStackScreen({
     screen: PhoneBackgroundRouteScreen,
     linking: "settings/appearance/background",
-    options: { ...SETTINGS_PAGE_OPTIONS, title: "Background" },
+    options: settingsPage("Background"),
   }),
   SettingsProjectGrouping: createNativeStackScreen({
     screen: SettingsProjectGroupingRouteScreen,
