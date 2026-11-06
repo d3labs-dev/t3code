@@ -9,6 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { AsyncResult } from "effect/reactivity";
@@ -20,12 +21,23 @@ import * as MobileStorage from "../../persistence/mobile-storage";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { mobilePreferencesAtom } from "../../state/preferences";
 import { configureAndroidAgentNotifications } from "../agent-awareness/androidNotifications";
-import { requestAgentNotificationPermission } from "../agent-awareness/notificationPermissions";
+import {
+  NotificationPermissionReadError,
+  requestAgentNotificationPermission,
+} from "../agent-awareness/notificationPermissions";
 import { SERVER_PUSH_USER_ID, serverPushExpoProjectId } from "./serverPushConfig";
 
 const REQUEST_TIMEOUT = "10 seconds";
 // Removing an environment waits on this request.
 const UNREGISTER_TIMEOUT = "3 seconds";
+
+class ExpoPushTokenError extends Schema.TaggedError<ExpoPushTokenError>()("ExpoPushTokenError", {
+  cause: Schema.Defect(),
+}) {
+  override get message(): string {
+    return "Failed to read the Expo push token.";
+  }
+}
 
 /** Which connected environments a registration round covers. */
 type RegistrationTargets = ReadonlyArray<EnvironmentId> | "all";
@@ -68,16 +80,20 @@ export const serverPushRegistrationLayer = Layer.effectDiscard(
     // prompt does not return on every foreground.
     const notificationsGranted = Effect.gen(function* () {
       if (permissionRequested) {
-        return (yield* Effect.tryPromise(() => Notifications.getPermissionsAsync())).granted;
+        return (yield* Effect.tryPromise({
+          try: () => Notifications.getPermissionsAsync(),
+          catch: (cause) => new NotificationPermissionReadError({ cause }),
+        })).granted;
       }
       permissionRequested = true;
       return (yield* requestAgentNotificationPermission).type === "granted";
     });
 
     const readExpoPushToken = Effect.gen(function* () {
-      expoPushToken ??= (yield* Effect.tryPromise(() =>
-        Notifications.getExpoPushTokenAsync({ projectId }),
-      )).data;
+      expoPushToken ??= (yield* Effect.tryPromise({
+        try: () => Notifications.getExpoPushTokenAsync({ projectId }),
+        catch: (cause) => new ExpoPushTokenError({ cause }),
+      })).data;
       return expoPushToken;
     });
 
