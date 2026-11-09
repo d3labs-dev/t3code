@@ -4,9 +4,7 @@ This fork follows released T3 Code nightlies from upstream `main` and publishes 
 
 GitHub Actions is off for the fork because its builds used up the free plan's minutes, so two machines publish releases instead (see [Publish a build](#publish-a-build)): a Linux machine creates each release with the Linux CLI archive, and a Mac attaches the macOS app and Android APK when it next runs. Windows builds are not published.
 
-The automation merges upstream nightly tags into the fork's default branch and builds the result. When the tag does not merge, or the merged commit does not build, it opens one issue for that tag, `Upstream nightly <tag>: make it merge and build on custom-nightly`, with the conflicted files or the failing build log. The issue carries the `chamaquita` and `automerge` labels, so Chamaquita fixes it on `chamaquita/upstream-<tag>` and merges her pull request; the pull request closes the issue. To fix it yourself, merge the tag, fix, and push; the next release closes the issue. A newer tag supersedes an older tag's issue and pull request. A failed build is retried once the upstream tag or the branch moves.
-
-Chamaquita's GitHub App has no Workflows permission, so GitHub refuses her push whenever the upstream merge changes a file in `.github/workflows/`, even though Actions is off. Her issue then ends blocked; resolve the merge by hand, check it with `vp run typecheck` and `vp run build:desktop`, and push it to `custom-nightly` with `Closes #<issue>` in the merge commit.
+Chamaquita merges upstream's nightlies into `custom-nightly`, and the Linux builder publishes whatever the branch holds. Every morning from 06:00 to 08:00 Peru time she checks upstream hourly; when its newest nightly is not an ancestor of `custom-nightly`, she files `Upstream nightly <tag>: make it merge and build on custom-nightly`, merges the tag on `chamaquita/upstream-<tag>`, runs `vp install`, `vp run typecheck`, `vp run build:desktop` and the tests beside what she resolved, and merges her pull request herself, since the fork has no CI. Her Job may push `.github/workflows/` changes. A newer tag supersedes an older tag's issue and pull request once that Job stops working. To merge a tag yourself, merge it and push to `custom-nightly`; her next check closes the issue.
 
 ## Keep customizations out of upstream files
 
@@ -104,7 +102,7 @@ Android refuses to install a lower version code than the installed one. Releases
 
 ## Publish a build
 
-`scripts/custom-nightly-linux.sh` publishes from a Linux machine with Docker, `gh`, `git`, and `jq`. Daily at 9:00 Peru time it checks upstream for a new nightly, merges it into `custom-nightly` and pushes, then builds the Linux x64 CLI archive inside the Ubuntu 24.04 image in `scripts/custom-nightly-linux.Dockerfile`, because `scripts/build-cli-archive.ts` bundles Ubuntu's libatomic and its package metadata. It smoke-tests the archive and publishes it with `SHA256SUMS` as a prerelease. The release starts as a draft and is published only once its files are attached, because servers take the newest published nightly.
+`scripts/custom-nightly-linux.sh` publishes from a Linux machine with Docker, `gh`, `git`, and `jq`. Daily at 9:00 Peru time, when `custom-nightly` has moved since the last release, it builds the Linux x64 CLI archive inside the Ubuntu 24.04 image in `scripts/custom-nightly-linux.Dockerfile`, because `scripts/build-cli-archive.ts` bundles Ubuntu's libatomic and its package metadata. It smoke-tests the archive and publishes it with `SHA256SUMS` as a prerelease. The release starts as a draft and is published only once its files are attached, because servers take the newest published nightly.
 
 The script resets its worktree to `origin/custom-nightly` on every run, so give it a worktree of its own and install its timer from there:
 
@@ -113,7 +111,7 @@ git worktree add --detach ../t3code-nightly-builder origin/custom-nightly
 ../t3code-nightly-builder/scripts/custom-nightly-linux.sh --install
 ```
 
-The timer runs as the `d3code-nightly` user service; if the machine is off at 9:00, it runs at the next boot. Watch it with `journalctl --user -u d3code-nightly`, and publish right away with `systemctl --user start d3code-nightly`. The last run's log and the build state live in `~/.local/state/d3code-nightly`. Pushes and releases use whichever `gh` account is active.
+The timer runs as the `d3code-nightly` user service; if the machine is off at 9:00, it runs at the next boot. Watch it with `journalctl --user -u d3code-nightly`, and publish right away with `systemctl --user start d3code-nightly`. The last run's log and the build state live in `~/.local/state/d3code-nightly`. Releases use whichever `gh` account is active. A failed build opens an issue assigned to that account and retries once the branch moves.
 
 The two machines never talk to each other; the release is the handoff. The Linux machine publishes on its own schedule, and the Mac pulls whatever the newest release lacks. The Mac is a laptop that is often asleep or away, and its signing identity, keystore password, and `gh` token sit in the login keychain, which only the logged-in session can use, never an SSH session. Neither machine waits for the other, and Remote Login can stay off.
 

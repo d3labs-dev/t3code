@@ -1,7 +1,7 @@
 #!/bin/bash
-# Publishes the fork's custom nightly from this machine: merges upstream's
-# latest nightly into the customization branch, builds the Linux x64 CLI
-# archive that `t3` servers update from, and attaches it to a new release.
+# Publishes the fork's custom nightly from this machine: builds the Linux x64
+# CLI archive of the customization branch, which Chamaquita keeps merged with
+# upstream's nightlies, and attaches it to a new release.
 # Runs from a dedicated worktree, which it resets on every run, so never point
 # it at a checkout you work in. Install the timer with `--install`; remove it
 # with `--uninstall`.
@@ -59,9 +59,33 @@ uninstall_timer() {
   log "Removed $unit_name.timer. The worktree, $state_dir, and the d3code-nightly-builder Docker image remain."
 }
 
-latest_upstream_nightly() {
+upstream_nightlies() {
   gh api "repos/${upstream_repository}/releases?per_page=30" \
-    --jq '[.[] | select(.draft == false and .prerelease == true and (.tag_name | contains("-nightly.")))][0].tag_name // ""'
+    --jq '.[] | select(.draft == false and .prerelease == true and (.tag_name | contains("-nightly."))) | .tag_name'
+}
+
+fetch_upstream_tag() {
+  git fetch --quiet --no-tags "https://github.com/${upstream_repository}.git" "refs/tags/$1:refs/tags/$1"
+}
+
+merged_upstream_nightly() {
+  local tag
+  for tag in $(upstream_nightlies); do
+    fetch_upstream_tag "$tag"
+    if git merge-base --is-ancestor "$tag" HEAD; then
+      echo "$tag"
+      return
+    fi
+  done
+}
+
+report_build_failure() {
+  local commit="$1" log_file="$2"
+  local title="Custom nightly build of ${commit:0:10} failed"
+  if gh issue list --repo "$repository" --state open --search "\"$title\" in:title" --json title --jq '.[].title' | grep -xF "$title" >/dev/null; then
+    return
+  fi
+  gh issue create --repo "$repository" --assignee @me --title "$title" --body "$(printf 'The Linux builder could not build `%s` on `%s`, so no release was published. It retries once `%s` moves.\n\n```text\n%s\n```\n' "$commit" "$branch" "$branch" "$(tail -n 60 "$log_file" | tail -c 6000)")"
 }
 
 latest_published_body() {
@@ -158,7 +182,6 @@ publish_nightly() {
   exec > >(tee "$log_file") 2>&1
 
   cd "$repo_root"
-  source scripts/lib/custom-nightly-jobs.sh
 
   git fetch --no-tags origin "$branch"
   git checkout --quiet --force --detach "origin/$branch"
@@ -166,39 +189,24 @@ publish_nightly() {
   git clean --quiet -fd
 
   local upstream_tag
-  upstream_tag="$(latest_upstream_nightly)"
+  upstream_tag="$(merged_upstream_nightly)"
   if [[ -z "$upstream_tag" ]]; then
-    log "No upstream nightly release was found."
+    log "${branch} holds none of upstream's recent nightlies."
     return 1
   fi
-  git fetch --no-tags "https://github.com/${upstream_repository}.git" "refs/tags/${upstream_tag}:refs/tags/${upstream_tag}"
 
   local published_body published_upstream_tag published_commit
   published_body="$(latest_published_body)"
   published_upstream_tag="$(marker upstream-release "$published_body")"
   published_commit="$(marker custom-commit "$published_body")"
-  if [[ "$published_upstream_tag" == "$upstream_tag" && "$published_commit" == "$(git rev-parse HEAD)" ]]; then
-    log "${upstream_tag} on $(git rev-parse --short HEAD) is already published."
+  if [[ "$published_commit" == "$(git rev-parse HEAD)" ]]; then
+    log "$(git rev-parse --short HEAD) is already published."
     return
   fi
 
-  if ! git merge-base --is-ancestor "$upstream_tag" HEAD; then
-    if ! git -c user.name="t3code-custom-nightly[bot]" -c user.email="t3code-custom-nightly[bot]@users.noreply.github.com" \
-      merge --quiet --no-edit "$upstream_tag"; then
-      local conflicted_files
-      conflicted_files="$(git diff --name-only --diff-filter=U | sed 's/.*/- `&`/')"
-      git merge --abort
-      file_job_issue "$upstream_tag" "$(printf 'Merging it stopped on conflicts in:\n\n%s' "${conflicted_files:-See the run log.}")"
-      log "Merging ${upstream_tag} conflicts with ${branch}."
-      return 1
-    fi
-    git push origin "HEAD:${branch}"
-  fi
-  close_job_work "$upstream_tag" "Superseded: ${branch} already includes ${upstream_tag} as of $(git rev-parse --short HEAD)."
-
   local commit
   commit="$(git rev-parse HEAD)"
-  # A build that failed retries only once the upstream tag or the branch moves.
+  # A build that failed retries only once the branch moves.
   local failed_marker="$state_dir/failed-build"
   if [[ "$(cat "$failed_marker" 2>/dev/null)" == "$upstream_tag $commit" ]]; then
     log "The build of ${upstream_tag} on ${commit} already failed; waiting for a new commit."
@@ -213,7 +221,7 @@ publish_nightly() {
 
   local upstream_changes=""
   if [[ -n "$published_upstream_tag" && "$published_upstream_tag" != "$upstream_tag" ]]; then
-    git fetch --no-tags "https://github.com/${upstream_repository}.git" "refs/tags/${published_upstream_tag}:refs/tags/${published_upstream_tag}"
+    fetch_upstream_tag "$published_upstream_tag"
     upstream_changes="$(git log --reverse --first-parent --format='- %s' "${published_upstream_tag}..${upstream_tag}")"
   fi
 
@@ -223,7 +231,7 @@ publish_nightly() {
   # A separate process, because bash ignores `set -e` inside an `if` condition.
   if ! bash "$repo_root/scripts/custom-nightly-linux.sh" --build-in-container "$version" "$assets_dir"; then
     echo "$upstream_tag $commit" > "$failed_marker"
-    file_job_issue "$upstream_tag" "$(printf 'The local build of `%s` failed:\n\n```text\n%s\n```\n' "$commit" "$(tail -n 60 "$log_file" | tail -c 6000)")"
+    report_build_failure "$commit" "$log_file"
     git reset --quiet --hard
     return 1
   fi
@@ -231,7 +239,6 @@ publish_nightly() {
 
   publish_release "$version" "$upstream_tag" "$commit" "$upstream_changes" "$assets_dir"
   rm -f "$failed_marker"
-  close_job_work "" "Published in v${version}."
   log "Published v${version}."
 }
 
