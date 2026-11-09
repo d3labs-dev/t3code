@@ -2,7 +2,7 @@
 
 This fork follows released T3 Code nightlies from upstream `main` and publishes them as D3 Code releases. `t3` servers update from the Linux x64 CLI archive in each release.
 
-GitHub Actions is off for the fork because its builds used up the free plan's minutes, so a Linux machine publishes releases instead (see [Publish a build](#publish-a-build)). Releases carry only the Linux CLI archive: the macOS, Windows, and Android apps below get no new builds until theirs run somewhere too.
+GitHub Actions is off for the fork because its builds used up the free plan's minutes, so two machines publish releases instead (see [Publish a build](#publish-a-build)): a Linux machine creates each release with the Linux CLI archive, and a Mac attaches the macOS app and Android APK when it next runs. Windows builds are not published.
 
 The automation merges upstream nightly tags into the fork's default branch and builds the result. When the tag does not merge, or the merged commit does not build, it opens one issue for that tag, `Upstream nightly <tag>: make it merge and build on custom-nightly`, with the conflicted files or the failing build log. The issue carries the `chamaquita` and `automerge` labels, so Chamaquita fixes it on `chamaquita/upstream-<tag>` and merges her pull request; the pull request closes the issue. To fix it yourself, merge the tag, fix, and push; the next release closes the issue. A newer tag supersedes an older tag's issue and pull request. A failed build is retried once the upstream tag or the branch moves.
 
@@ -53,10 +53,6 @@ Remove the hourly job without deleting the application, data, or signing identit
 ./scripts/custom-nightly-macos.sh uninstall
 ```
 
-## Windows app
-
-Install the `-x64.exe` from a release and accept the SmartScreen prompt; the installer is unsigned. Like the Mac app, it downloads later releases from the fork in the background and installs them on restart.
-
 ## Android app
 
 Install the `-android-arm64.apk` from a release. It installs as `com.t3tools.t3code.preview` under the name D3 Code, next to the Play Store app and local development builds. Its Clerk sign-in callback is already allowlisted, so T3 Connect works. It never takes upstream's over-the-air updates.
@@ -106,7 +102,7 @@ Android refuses to install a lower version code than the installed one. Releases
 
 ## Publish a build
 
-`scripts/custom-nightly-linux.sh` publishes from a Linux machine with Docker, `gh`, `git`, and `jq`. Every 30 minutes it checks upstream for a new nightly, merges it into `custom-nightly` and pushes, then builds the Linux x64 CLI archive inside the Ubuntu 24.04 image in `scripts/custom-nightly-linux.Dockerfile`, because `scripts/build-cli-archive.ts` bundles Ubuntu's libatomic and its package metadata. It smoke-tests the archive and publishes it with `SHA256SUMS` as a prerelease. The release starts as a draft and is published only once its files are attached, because servers take the newest published nightly.
+`scripts/custom-nightly-linux.sh` publishes from a Linux machine with Docker, `gh`, `git`, and `jq`. Daily at 9:00 Peru time it checks upstream for a new nightly, merges it into `custom-nightly` and pushes, then builds the Linux x64 CLI archive inside the Ubuntu 24.04 image in `scripts/custom-nightly-linux.Dockerfile`, because `scripts/build-cli-archive.ts` bundles Ubuntu's libatomic and its package metadata. It smoke-tests the archive and publishes it with `SHA256SUMS` as a prerelease. The release starts as a draft and is published only once its files are attached, because servers take the newest published nightly.
 
 The script resets its worktree to `origin/custom-nightly` on every run, so give it a worktree of its own and install its timer from there:
 
@@ -115,6 +111,41 @@ git worktree add --detach ../t3code-nightly-builder origin/custom-nightly
 ../t3code-nightly-builder/scripts/custom-nightly-linux.sh --install
 ```
 
-The timer runs as the `d3code-nightly` user service. Watch it with `journalctl --user -u d3code-nightly`, and run it now with `systemctl --user start d3code-nightly`. The last run's log and the build state live in `~/.local/state/d3code-nightly`. Pushes and releases use whichever `gh` account is active.
+The timer runs as the `d3code-nightly` user service; if the machine is off at 9:00, it runs at the next boot. Watch it with `journalctl --user -u d3code-nightly`, and publish right away with `systemctl --user start d3code-nightly`. The last run's log and the build state live in `~/.local/state/d3code-nightly`. Pushes and releases use whichever `gh` account is active.
+
+The Mac attaches its builds with `scripts/custom-nightly-mac-builder.sh`. Every 15 minutes and at login, while the Mac is on AC power, it finds the newest release missing the macOS app or the Android APK, checks out the commit the release records, and builds what is missing: the app signed with `T3 Code Local Development`, and the APK signed with the release keystore and checked against its certificate fingerprint. It attaches them and adds the `android-version-code` marker the Android app looks for. Until the Mac runs, the Mac app's update check finds no `nightly-mac.yml` in the newest release, and phones keep their version. A failed build shows a notification and retries only for a newer release.
+
+The Mac script also resets its clone on every run, so give it a clone of its own. A shallow one without the vendored `.repos/` is enough:
+
+```bash
+repo=~/.local/share/d3code-builder/repo
+git init "$repo" && cd "$repo"
+git remote add origin https://github.com/d3labs-dev/t3code.git
+git sparse-checkout set --no-cone '/*' '!/.repos/'
+git fetch --depth=1 origin custom-nightly && git checkout --detach FETCH_HEAD
+scripts/custom-nightly-mac-builder.sh --install
+```
+
+It needs Xcode, Java 17, the Android SDK in `~/Library/Android/sdk`, rustup, `gh`, and the signing identity and keystore described above; it downloads the Node.js and Vite+ versions each commit pins. Agent notifications need the Firebase `google-services.json` at `~/.local/share/d3code-builder/google-services.json` and `T3CODE_EXPO_PROJECT_ID` in `~/.local/share/d3code-builder/expo.env`; adding `EXPO_TOKEN` there also publishes over-the-air updates. The log is `~/.local/share/d3code-builder/builder.log`.
+
+### Remove the builders
+
+Each machine keeps everything in a few places. To stop the Linux builder and delete what it made:
+
+```bash
+../t3code-nightly-builder/scripts/custom-nightly-linux.sh --uninstall   # ~/.config/systemd/user/d3code-nightly.{service,timer}
+git worktree remove --force ../t3code-nightly-builder
+rm -rf ~/.local/state/d3code-nightly                                   # logs, build output, pnpm and cargo caches
+docker image rm d3code-nightly-builder
+```
+
+On the Mac:
+
+```bash
+~/.local/share/d3code-builder/repo/scripts/custom-nightly-mac-builder.sh --uninstall   # ~/Library/LaunchAgents/com.diegojohnson.d3code.builder.plist
+rm -rf ~/.local/share/d3code-builder   # the clone, Node.js, Vite+, logs, google-services.json, expo.env
+```
+
+The Mac builder also installed rustup in `~/.rustup` and `~/.cargo`; remove them with `rustup self uninstall` if nothing else uses Rust. The signing identity and the Android keystore predate the builder and stay.
 
 Pull requests into `custom-nightly` get no CI. Run `vp run typecheck` and `vp run build:desktop` before merging one.

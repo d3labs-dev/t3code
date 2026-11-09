@@ -3,7 +3,8 @@
 # latest nightly into the customization branch, builds the Linux x64 CLI
 # archive that `t3` servers update from, and attaches it to a new release.
 # Runs from a dedicated worktree, which it resets on every run, so never point
-# it at a checkout you work in. Install the timer with `--install`.
+# it at a checkout you work in. Install the timer with `--install`; remove it
+# with `--uninstall`.
 
 set -euo pipefail
 
@@ -30,18 +31,16 @@ Description=Publish the D3 Code custom nightly
 [Service]
 Type=oneshot
 Nice=10
-Environment=PATH=$(dirname "$(command -v gh)"):/usr/local/bin:/usr/bin
 ExecStart=/bin/bash $repo_root/scripts/custom-nightly-linux.sh
 EOF
-  # Upstream publishes nightlies at irregular times; a run with nothing new
-  # only makes two GitHub API calls.
+  # One build a day takes the newest upstream nightly. Persistent catches up
+  # at boot when the machine was off at 9:00.
   cat > "$unit_dir/$unit_name.timer" <<EOF
 [Unit]
-Description=Check for a new upstream nightly every 30 minutes
+Description=Publish the D3 Code custom nightly daily at 9:00 Peru time
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=30min
+OnCalendar=*-*-* 09:00:00 America/Lima
 Persistent=true
 
 [Install]
@@ -50,6 +49,14 @@ EOF
   systemctl --user daemon-reload
   systemctl --user enable --now "$unit_name.timer"
   log "Installed $unit_name.timer. Logs: journalctl --user -u $unit_name"
+}
+
+uninstall_timer() {
+  local unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+  systemctl --user disable --now "$unit_name.timer" 2>/dev/null || true
+  rm -f "$unit_dir/$unit_name.service" "$unit_dir/$unit_name.timer"
+  systemctl --user daemon-reload
+  log "Removed $unit_name.timer. The worktree, $state_dir, and the d3code-nightly-builder Docker image remain."
 }
 
 latest_upstream_nightly() {
@@ -124,7 +131,7 @@ publish_release() {
   local version="$1" upstream_tag="$2" commit="$3" upstream_changes="$4" assets_dir="$5"
   local notes_file="$state_dir/release-notes.md"
   cat > "$notes_file" <<EOF
-Automated custom build of T3 Code for Linux x64.
+Automated custom build of T3 Code for Linux x64. The macOS app and Android APK are attached once the Mac builder finishes them.
 
 Upstream release: \`${upstream_tag}\`
 
@@ -231,6 +238,7 @@ publish_nightly() {
 main() {
   case "${1:-}" in
     --install) install_timer ;;
+    --uninstall) uninstall_timer ;;
     --build-in-container) build_in_container "$2" "$3" ;;
     --build-cli-archive) cd "$repo_root" && build_cli_archive "$2" "$3" ;;
     *) publish_nightly ;;
