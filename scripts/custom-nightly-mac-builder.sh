@@ -229,7 +229,7 @@ run_builds() {
     fi
     cd "$repo_root"
     git fetch --quiet --no-tags --depth=1 origin "$commit"
-    git checkout --quiet --detach "$commit"
+    git checkout --quiet --force --detach "$commit"
     git reset --quiet --hard
     git clean --quiet -fd
     log "Building $platform for $tag."

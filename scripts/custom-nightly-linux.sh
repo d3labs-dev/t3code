@@ -161,7 +161,7 @@ publish_nightly() {
   source scripts/lib/custom-nightly-jobs.sh
 
   git fetch --no-tags origin "$branch"
-  git checkout --quiet --detach "origin/$branch"
+  git checkout --quiet --force --detach "origin/$branch"
   git reset --quiet --hard
   git clean --quiet -fd
 
