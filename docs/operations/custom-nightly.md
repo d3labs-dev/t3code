@@ -6,6 +6,8 @@ GitHub Actions is off for the fork because its builds used up the free plan's mi
 
 The automation merges upstream nightly tags into the fork's default branch and builds the result. When the tag does not merge, or the merged commit does not build, it opens one issue for that tag, `Upstream nightly <tag>: make it merge and build on custom-nightly`, with the conflicted files or the failing build log. The issue carries the `chamaquita` and `automerge` labels, so Chamaquita fixes it on `chamaquita/upstream-<tag>` and merges her pull request; the pull request closes the issue. To fix it yourself, merge the tag, fix, and push; the next release closes the issue. A newer tag supersedes an older tag's issue and pull request. A failed build is retried once the upstream tag or the branch moves.
 
+Chamaquita's GitHub App has no Workflows permission, so GitHub refuses her push whenever the upstream merge changes a file in `.github/workflows/`, even though Actions is off. Her issue then ends blocked; resolve the merge by hand, check it with `vp run typecheck` and `vp run build:desktop`, and push it to `custom-nightly` with `Closes #<issue>` in the merge commit.
+
 ## Keep customizations out of upstream files
 
 Conflicts come from fork edits inside lines upstream also changes. Upstream rewrites class strings, stylesheets, and shared components often, so fork changes live in files upstream never touches:
@@ -113,6 +115,8 @@ git worktree add --detach ../t3code-nightly-builder origin/custom-nightly
 
 The timer runs as the `d3code-nightly` user service; if the machine is off at 9:00, it runs at the next boot. Watch it with `journalctl --user -u d3code-nightly`, and publish right away with `systemctl --user start d3code-nightly`. The last run's log and the build state live in `~/.local/state/d3code-nightly`. Pushes and releases use whichever `gh` account is active.
 
+The two machines never talk to each other; the release is the handoff. The Linux machine publishes on its own schedule, and the Mac pulls whatever the newest release lacks. The Mac is a laptop that is often asleep or away, and its signing identity, keystore password, and `gh` token sit in the login keychain, which only the logged-in session can use, never an SSH session. Neither machine waits for the other, and Remote Login can stay off.
+
 The Mac attaches its builds with `scripts/custom-nightly-mac-builder.sh`. Every 15 minutes and at login, while the Mac is on AC power, it finds the newest release missing the macOS app or the Android APK, checks out the commit the release records, and builds what is missing: the app signed with `T3 Code Local Development`, and the APK signed with the release keystore and checked against its certificate fingerprint. It attaches them and adds the `android-version-code` marker the Android app looks for. Until the Mac runs, the Mac app's update check finds no `nightly-mac.yml` in the newest release, and phones keep their version. A failed build shows a notification and retries only for a newer release.
 
 The Mac script also resets its clone on every run, so give it a clone of its own. A shallow one without the vendored `.repos/` is enough:
@@ -127,6 +131,10 @@ scripts/custom-nightly-mac-builder.sh --install
 ```
 
 It needs Xcode, Java 17, the Android SDK in `~/Library/Android/sdk`, rustup, `gh`, and the signing identity and keystore described above; it downloads the Node.js and Vite+ versions each commit pins. Agent notifications need the Firebase `google-services.json` at `~/.local/share/d3code-builder/google-services.json` and `T3CODE_EXPO_PROJECT_ID` in `~/.local/share/d3code-builder/expo.env`; adding `EXPO_TOKEN` there also publishes over-the-air updates. The log is `~/.local/share/d3code-builder/builder.log`.
+
+To build right away, run the launch agent instead of the script: `launchctl kickstart -k gui/$(id -u)/com.diegojohnson.d3code.builder`. It still waits for AC power. Running `--build-mac` or `--build-android` directly over SSH fails, because signing needs the login keychain.
+
+The agent runs the script from its clone, which stays at the commit of the last release it built. A change to the script reaches the Mac with the next release; to apply it sooner, move the clone to `origin/custom-nightly` with `git fetch --depth=1 origin custom-nightly && git checkout --force --detach FETCH_HEAD`. Releases from before the script existed cannot build this way.
 
 ### Remove the builders
 
@@ -147,5 +155,15 @@ rm -rf ~/.local/share/d3code-builder   # the clone, Node.js, Vite+, logs, google
 ```
 
 The Mac builder also installed rustup in `~/.rustup` and `~/.cargo`; remove them with `rustup self uninstall` if nothing else uses Rust. The signing identity and the Android keystore predate the builder and stay.
+
+### Update a server to a release
+
+The app's update button installs the newest release it found when it last checked. If it keeps offering an older one, install a release by version with the running server's own CLI, which restarts the background service:
+
+```bash
+~/.t3/runtime/versions/<active-version>/t3 update <version> --yes
+```
+
+`activeVersion` in `~/.t3/runtime/service-state.json` names the running version. `~/.local/bin/t3` can be an older CLI than the one running.
 
 Pull requests into `custom-nightly` get no CI. Run `vp run typecheck` and `vp run build:desktop` before merging one.
