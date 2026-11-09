@@ -124,7 +124,7 @@ publish_release() {
   local version="$1" upstream_tag="$2" commit="$3" upstream_changes="$4" assets_dir="$5"
   local notes_file="$state_dir/release-notes.md"
   cat > "$notes_file" <<EOF
-Automated custom build of T3 Code for Linux x64.
+Automated custom build of T3 Code for Linux x64. The macOS app and Android APK are attached once the Mac builder finishes them.
 
 Upstream release: \`${upstream_tag}\`
 
