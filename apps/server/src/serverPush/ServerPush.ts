@@ -293,6 +293,7 @@ export const make = Effect.gen(function* () {
       environmentId,
       thread,
       project,
+      pendingSubagentRequest: null,
     });
     const previous = states.get(threadId);
     if (isTerminalState(state) && previous === undefined) {

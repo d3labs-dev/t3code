@@ -317,12 +317,9 @@ export function ResetCredits(props: {
 }
 
 /**
- * Re-probes every provider (and usage-limit source) on each connected
- * environment on request; the fresh snapshots then arrive over the config
- * stream, as they do after the server's own interval probes. Nothing probes on
- * open: clients only refresh when asked.
- * Environments whose probe failed are named, since their rows keep showing
- * the previous quota with nothing else to say so.
+ * Re-probes each connected environment only when asked; nothing probes on open.
+ * Results arrive over the config stream. Failed environments are named, since
+ * their rows keep showing the previous quota.
  */
 export function useRefreshLimits(selectedEnvironmentIds: ReadonlySet<EnvironmentId> | null = null) {
   const registry = useContext(RegistryContext);
@@ -344,18 +341,16 @@ export function useRefreshLimits(selectedEnvironmentIds: ReadonlySet<Environment
     .filter(([environmentId]) => failedIds.has(environmentId))
     .map(([, presentation]) => presentation.entry.target.label);
 
-  const refresh = (afterPending: boolean) =>
+  const refresh = () =>
     Promise.all(
-      connectedIds.map((environmentId) =>
-        refreshEnvironmentLimits(registry, environmentId, { afterPending }),
-      ),
+      connectedIds.map((environmentId) => refreshEnvironmentLimits(registry, environmentId)),
     );
   // Android RefreshControl needs a true-to-false cycle to stop, even with nothing to probe.
   const refreshManually = async () => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
     setRefreshing(true);
-    await refresh(false).finally(() => {
+    await refresh().finally(() => {
       refreshingRef.current = false;
       setRefreshing(false);
     });
@@ -365,6 +360,5 @@ export function useRefreshLimits(selectedEnvironmentIds: ReadonlySet<Environment
     refreshing,
     failedLabels,
     refresh: refreshManually,
-    refreshAfterEnable: () => refresh(true),
   };
 }
