@@ -30,7 +30,6 @@ Description=Publish the D3 Code custom nightly
 [Service]
 Type=oneshot
 Nice=10
-Environment=PATH=$(dirname "$(command -v gh)"):/usr/local/bin:/usr/bin
 ExecStart=/bin/bash $repo_root/scripts/custom-nightly-linux.sh
 EOF
   # Upstream publishes nightlies at irregular times; a run with nothing new
