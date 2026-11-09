@@ -32,15 +32,14 @@ Type=oneshot
 Nice=10
 ExecStart=/bin/bash $repo_root/scripts/custom-nightly-linux.sh
 EOF
-  # Upstream publishes nightlies at irregular times; a run with nothing new
-  # only makes two GitHub API calls.
+  # One build a day takes the newest upstream nightly. Persistent catches up
+  # at boot when the machine was off at 9:00.
   cat > "$unit_dir/$unit_name.timer" <<EOF
 [Unit]
-Description=Check for a new upstream nightly every 30 minutes
+Description=Publish the D3 Code custom nightly daily at 9:00 Peru time
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=30min
+OnCalendar=*-*-* 09:00:00 America/Lima
 Persistent=true
 
 [Install]

@@ -102,7 +102,7 @@ Android refuses to install a lower version code than the installed one. Releases
 
 ## Publish a build
 
-`scripts/custom-nightly-linux.sh` publishes from a Linux machine with Docker, `gh`, `git`, and `jq`. Every 30 minutes it checks upstream for a new nightly, merges it into `custom-nightly` and pushes, then builds the Linux x64 CLI archive inside the Ubuntu 24.04 image in `scripts/custom-nightly-linux.Dockerfile`, because `scripts/build-cli-archive.ts` bundles Ubuntu's libatomic and its package metadata. It smoke-tests the archive and publishes it with `SHA256SUMS` as a prerelease. The release starts as a draft and is published only once its files are attached, because servers take the newest published nightly.
+`scripts/custom-nightly-linux.sh` publishes from a Linux machine with Docker, `gh`, `git`, and `jq`. Daily at 9:00 Peru time it checks upstream for a new nightly, merges it into `custom-nightly` and pushes, then builds the Linux x64 CLI archive inside the Ubuntu 24.04 image in `scripts/custom-nightly-linux.Dockerfile`, because `scripts/build-cli-archive.ts` bundles Ubuntu's libatomic and its package metadata. It smoke-tests the archive and publishes it with `SHA256SUMS` as a prerelease. The release starts as a draft and is published only once its files are attached, because servers take the newest published nightly.
 
 The script resets its worktree to `origin/custom-nightly` on every run, so give it a worktree of its own and install its timer from there:
 
@@ -111,9 +111,9 @@ git worktree add --detach ../t3code-nightly-builder origin/custom-nightly
 ../t3code-nightly-builder/scripts/custom-nightly-linux.sh --install
 ```
 
-The timer runs as the `d3code-nightly` user service. Watch it with `journalctl --user -u d3code-nightly`, and run it now with `systemctl --user start d3code-nightly`. The last run's log and the build state live in `~/.local/state/d3code-nightly`. Pushes and releases use whichever `gh` account is active.
+The timer runs as the `d3code-nightly` user service; if the machine is off at 9:00, it runs at the next boot. Watch it with `journalctl --user -u d3code-nightly`, and publish right away with `systemctl --user start d3code-nightly`. The last run's log and the build state live in `~/.local/state/d3code-nightly`. Pushes and releases use whichever `gh` account is active.
 
-The Mac attaches its builds with `scripts/custom-nightly-mac-builder.sh`. Every 15 minutes it finds the newest release missing the macOS app or the Android APK, checks out the commit the release records, and builds what is missing: the app signed with `T3 Code Local Development`, and the APK signed with the release keystore and checked against its certificate fingerprint. It attaches them and adds the `android-version-code` marker the Android app looks for. Until the Mac runs, the Mac app's update check finds no `nightly-mac.yml` in the newest release, and phones keep their version. A failed build shows a notification and retries only for a newer release.
+The Mac attaches its builds with `scripts/custom-nightly-mac-builder.sh`. Every 15 minutes and at login, while the Mac is on AC power, it finds the newest release missing the macOS app or the Android APK, checks out the commit the release records, and builds what is missing: the app signed with `T3 Code Local Development`, and the APK signed with the release keystore and checked against its certificate fingerprint. It attaches them and adds the `android-version-code` marker the Android app looks for. Until the Mac runs, the Mac app's update check finds no `nightly-mac.yml` in the newest release, and phones keep their version. A failed build shows a notification and retries only for a newer release.
 
 The Mac script also resets its clone on every run, so give it a clone of its own. A shallow one without the vendored `.repos/` is enough:
 

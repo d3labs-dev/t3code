@@ -205,6 +205,15 @@ run_builds() {
     return
   fi
 
+  if [[ -z "$missing_mac$missing_android" ]]; then
+    log "$tag has every build."
+    return
+  fi
+  if ! pmset -g ps | grep -qF "AC Power"; then
+    log "$tag needs $missing_mac $missing_android builds; waiting for AC power."
+    return
+  fi
+
   local platform failures=()
   for platform in $missing_mac $missing_android; do
     local failed_marker="$builder_home/failed-$platform"
