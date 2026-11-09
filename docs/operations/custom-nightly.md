@@ -1,8 +1,10 @@
 # Custom nightly builds
 
-This fork follows released T3 Code nightlies from upstream `main` and publishes them as D3 Code: a macOS arm64 build signed with a private development certificate, plus a signed Android APK. Both apps update from the fork's GitHub releases.
+This fork follows released T3 Code nightlies from upstream `main` and publishes them as D3 Code releases. `t3` servers update from the Linux x64 CLI archive in each release.
 
-The automation merges upstream nightly tags into the fork's default branch and builds the result. When the tag does not merge, or the merged commit does not build, the workflow opens one issue for that tag, `Upstream nightly <tag>: make it merge and build on custom-nightly`, with the conflicted files or the failing build logs. The issue carries the `chamaquita` and `automerge` labels, so Chamaquita fixes it on `chamaquita/upstream-<tag>` and merges her pull request once Fork CI passes; the pull request closes the issue. To fix it yourself, merge the tag, fix, and push; the next release closes the issue. A newer tag supersedes an older tag's issue and pull request. The workflow retries the build until a release records the upstream tag it contains.
+GitHub Actions is off for the fork because its builds used up the free plan's minutes, so a Linux machine publishes releases instead (see [Publish a build](#publish-a-build)). Releases carry only the Linux CLI archive: the macOS, Windows, and Android apps below get no new builds until theirs run somewhere too.
+
+The automation merges upstream nightly tags into the fork's default branch and builds the result. When the tag does not merge, or the merged commit does not build, it opens one issue for that tag, `Upstream nightly <tag>: make it merge and build on custom-nightly`, with the conflicted files or the failing build log. The issue carries the `chamaquita` and `automerge` labels, so Chamaquita fixes it on `chamaquita/upstream-<tag>` and merges her pull request; the pull request closes the issue. To fix it yourself, merge the tag, fix, and push; the next release closes the issue. A newer tag supersedes an older tag's issue and pull request. A failed build is retried once the upstream tag or the branch moves.
 
 ## Keep customizations out of upstream files
 
@@ -20,7 +22,7 @@ Install and authenticate GitHub CLI, then run:
 ./scripts/custom-nightly-macos.sh install
 ```
 
-The first run creates a self-signed `T3 Code Local Development` code-signing identity. macOS may ask for permission to update the login keychain. GitHub Actions stores an encrypted PKCS#12 export of this identity so every update has the same signature.
+The first run creates a self-signed `T3 Code Local Development` code-signing identity. macOS may ask for permission to update the login keychain. Every build must be signed with this identity so updates keep the same signature.
 
 The bootstrap updater checks hourly and installs the app at:
 
@@ -63,11 +65,7 @@ The app checks the fork's releases at launch and after 15 minutes in the backgro
 
 ### Over-the-air updates
 
-Once the fork's Expo project is configured (see Agent notifications below) and `EXPO_TOKEN` holds an Expo access token for its account, each build also publishes its JavaScript to the project's `custom-nightly` channel. A phone whose installed APK has the same native code downloads it at launch and switches to it the next time the app goes to the background, with no install prompt. The release notes then carry an `android-runtime-version` marker, and the app skips offering that release's APK to phones on that runtime. A build that changes native code has a new runtime, so phones are offered its APK as before.
-
-```bash
-gh secret set EXPO_TOKEN --body <expo-access-token>
-```
+Once the fork's Expo project is configured (see Agent notifications below), each Android build can also publish its JavaScript to the project's `custom-nightly` channel. A phone whose installed APK has the same native code downloads it at launch and switches to it the next time the app goes to the background, with no install prompt. The release notes then carry an `android-runtime-version` marker, and the app skips offering that release's APK to phones on that runtime. A build that changes native code has a new runtime, so phones are offered its APK as before.
 
 The Expo project's slug must be `t3-code`, the slug in `app.config.ts`, or `eas update` refuses to publish. The runtime fingerprint leaves out the version name and code (`apps/mobile/fingerprint.config.js`), which change on every build. A failed publish does not block the release: it ships without the marker, so phones are offered the APK.
 
@@ -79,14 +77,7 @@ Notifications stay off until the build has both an Expo project and a Firebase a
 
 1. In Firebase, add an Android app for `com.t3tools.t3code.preview` and download its `google-services.json`.
 2. Create a service account key with the Firebase Cloud Messaging API (V1) and upload it to the Expo project under **Credentials > Android > FCM V1 service account key**.
-3. Give both to GitHub Actions:
-
-   ```bash
-   gh secret set CUSTOM_ANDROID_GOOGLE_SERVICES_JSON < google-services.json
-   gh variable set T3CODE_EXPO_PROJECT_ID --body <expo-project-id>
-   ```
-
-For a local build, set `T3CODE_ANDROID_GOOGLE_SERVICES_FILE` to the JSON's path and `T3CODE_EXPO_PROJECT_ID`. Servers keep their registered phones in `server-push-devices.json` in their state directory.
+3. For a build, set `T3CODE_ANDROID_GOOGLE_SERVICES_FILE` to the JSON's path and `T3CODE_EXPO_PROJECT_ID`. Servers keep their registered phones in `server-push-devices.json` in their state directory.
 
 ### Signing key
 
@@ -99,16 +90,7 @@ keytool -genkeypair -keystore release.p12 -storetype PKCS12 -alias t3code-custom
   -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=T3 Code Custom Android"
 ```
 
-Give it to GitHub Actions:
-
-```bash
-base64 -i "$HOME/Library/Application Support/T3 Code Custom Android/release.p12" \
-  | gh secret set CUSTOM_ANDROID_KEYSTORE
-security find-generic-password -s "T3 Code Custom Android signing" -w \
-  | gh secret set CUSTOM_ANDROID_KEYSTORE_PASSWORD
-```
-
-The workflow rejects an APK whose certificate does not match the key's SHA-256 fingerprint. Replacing the key means updating that fingerprint and reinstalling the app.
+Replacing the key means reinstalling the app.
 
 ### Build locally
 
@@ -124,6 +106,15 @@ Android refuses to install a lower version code than the installed one. Releases
 
 ## Publish a build
 
-The `Custom nightly` GitHub Actions workflow checks for a new upstream nightly every 30 minutes and builds every push to `custom-nightly`. A push cancels the build in progress, so only the newest commit finishes; scheduled and manual runs wait for it instead. Its manual dispatch has a `force` input for rebuilding the current upstream nightly. Each release contains a DMG, a signed zip, update metadata, a blockmap, and the zip's SHA-256 checksum. The Android APK is attached once its parallel build finishes. The Windows x64 installer and Linux x64 AppImage come from upstream's `release-desktop.yml`, so they ship the same payload as upstream, and are attached last: the Windows build embeds the Linux CLI archive as its WSL runtime, so it starts after the Linux build. The Windows installer is unsigned, so SmartScreen asks for confirmation on first install. A failed Android, Windows, or Linux build does not block the macOS release, and is only retried by a later build or a `force` dispatch.
+`scripts/custom-nightly-linux.sh` publishes from a Linux machine with Docker, `gh`, `git`, and `jq`. Every 30 minutes it checks upstream for a new nightly, merges it into `custom-nightly` and pushes, then builds the Linux x64 CLI archive inside the Ubuntu 24.04 image in `scripts/custom-nightly-linux.Dockerfile`, because `scripts/build-cli-archive.ts` bundles Ubuntu's libatomic and its package metadata. It smoke-tests the archive and publishes it with `SHA256SUMS` as a prerelease. The release starts as a draft and is published only once its files are attached, because servers take the newest published nightly.
 
-Inherited upstream workflows remain disabled in the fork. Some expect the maintainers' production credentials, and others would duplicate work after every automated merge. Fork CI on a pull request only typechecks and builds the desktop app: upstream's own CI already tested upstream's code, so a pull request into `custom-nightly` only has to prove the fork still builds on top of it. Behavior that only a test would catch can therefore merge. A manual dispatch runs the full suite: knip, lint, format, unit and server tests, Rust, mobile native lint, and the release smoke test.
+The script resets its worktree to `origin/custom-nightly` on every run, so give it a worktree of its own and install its timer from there:
+
+```bash
+git worktree add --detach ../t3code-nightly-builder origin/custom-nightly
+../t3code-nightly-builder/scripts/custom-nightly-linux.sh --install
+```
+
+The timer runs as the `d3code-nightly` user service. Watch it with `journalctl --user -u d3code-nightly`, and run it now with `systemctl --user start d3code-nightly`. The last run's log and the build state live in `~/.local/state/d3code-nightly`. Pushes and releases use whichever `gh` account is active.
+
+Pull requests into `custom-nightly` get no CI. Run `vp run typecheck` and `vp run build:desktop` before merging one.
