@@ -213,7 +213,7 @@ run_builds() {
       continue
     fi
     cd "$repo_root"
-    git fetch --quiet --no-tags origin "$commit"
+    git fetch --quiet --no-tags --depth=1 origin "$commit"
     git checkout --quiet --detach "$commit"
     git reset --quiet --hard
     git clean --quiet -fd

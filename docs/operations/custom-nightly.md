@@ -115,11 +115,15 @@ The timer runs as the `d3code-nightly` user service. Watch it with `journalctl -
 
 The Mac attaches its builds with `scripts/custom-nightly-mac-builder.sh`. Every 15 minutes it finds the newest release missing the macOS app or the Android APK, checks out the commit the release records, and builds what is missing: the app signed with `T3 Code Local Development`, and the APK signed with the release keystore and checked against its certificate fingerprint. It attaches them and adds the `android-version-code` marker the Android app looks for. Until the Mac runs, the Mac app's update check finds no `nightly-mac.yml` in the newest release, and phones keep their version. A failed build shows a notification and retries only for a newer release.
 
-The Mac script also resets its clone on every run, so give it a clone of its own:
+The Mac script also resets its clone on every run, so give it a clone of its own. A shallow one without the vendored `.repos/` is enough:
 
 ```bash
-git clone https://github.com/d3labs-dev/t3code.git ~/.local/share/d3code-builder/repo
-~/.local/share/d3code-builder/repo/scripts/custom-nightly-mac-builder.sh --install
+repo=~/.local/share/d3code-builder/repo
+git init "$repo" && cd "$repo"
+git remote add origin https://github.com/d3labs-dev/t3code.git
+git sparse-checkout set --no-cone '/*' '!/.repos/'
+git fetch --depth=1 origin custom-nightly && git checkout --detach FETCH_HEAD
+scripts/custom-nightly-mac-builder.sh --install
 ```
 
 It needs Xcode, Java 17, the Android SDK in `~/Library/Android/sdk`, rustup, `gh`, and the signing identity and keystore described above; it downloads the Node.js and Vite+ versions each commit pins. Agent notifications need the Firebase `google-services.json` at `~/.local/share/d3code-builder/google-services.json` and `T3CODE_EXPO_PROJECT_ID` in `~/.local/share/d3code-builder/expo.env`; adding `EXPO_TOKEN` there also publishes over-the-air updates. The log is `~/.local/share/d3code-builder/builder.log`.
