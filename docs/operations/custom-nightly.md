@@ -128,4 +128,24 @@ scripts/custom-nightly-mac-builder.sh --install
 
 It needs Xcode, Java 17, the Android SDK in `~/Library/Android/sdk`, rustup, `gh`, and the signing identity and keystore described above; it downloads the Node.js and Vite+ versions each commit pins. Agent notifications need the Firebase `google-services.json` at `~/.local/share/d3code-builder/google-services.json` and `T3CODE_EXPO_PROJECT_ID` in `~/.local/share/d3code-builder/expo.env`; adding `EXPO_TOKEN` there also publishes over-the-air updates. The log is `~/.local/share/d3code-builder/builder.log`.
 
+### Remove the builders
+
+Each machine keeps everything in a few places. To stop the Linux builder and delete what it made:
+
+```bash
+../t3code-nightly-builder/scripts/custom-nightly-linux.sh --uninstall   # ~/.config/systemd/user/d3code-nightly.{service,timer}
+git worktree remove --force ../t3code-nightly-builder
+rm -rf ~/.local/state/d3code-nightly                                   # logs, build output, pnpm and cargo caches
+docker image rm d3code-nightly-builder
+```
+
+On the Mac:
+
+```bash
+~/.local/share/d3code-builder/repo/scripts/custom-nightly-mac-builder.sh --uninstall   # ~/Library/LaunchAgents/com.diegojohnson.d3code.builder.plist
+rm -rf ~/.local/share/d3code-builder   # the clone, Node.js, Vite+, logs, google-services.json, expo.env
+```
+
+The Mac builder also installed rustup in `~/.rustup` and `~/.cargo`; remove them with `rustup self uninstall` if nothing else uses Rust. The signing identity and the Android keystore predate the builder and stay.
+
 Pull requests into `custom-nightly` get no CI. Run `vp run typecheck` and `vp run build:desktop` before merging one.

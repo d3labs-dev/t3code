@@ -3,7 +3,8 @@
 # latest nightly into the customization branch, builds the Linux x64 CLI
 # archive that `t3` servers update from, and attaches it to a new release.
 # Runs from a dedicated worktree, which it resets on every run, so never point
-# it at a checkout you work in. Install the timer with `--install`.
+# it at a checkout you work in. Install the timer with `--install`; remove it
+# with `--uninstall`.
 
 set -euo pipefail
 
@@ -48,6 +49,14 @@ EOF
   systemctl --user daemon-reload
   systemctl --user enable --now "$unit_name.timer"
   log "Installed $unit_name.timer. Logs: journalctl --user -u $unit_name"
+}
+
+uninstall_timer() {
+  local unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+  systemctl --user disable --now "$unit_name.timer" 2>/dev/null || true
+  rm -f "$unit_dir/$unit_name.service" "$unit_dir/$unit_name.timer"
+  systemctl --user daemon-reload
+  log "Removed $unit_name.timer. The worktree, $state_dir, and the d3code-nightly-builder Docker image remain."
 }
 
 latest_upstream_nightly() {
@@ -229,6 +238,7 @@ publish_nightly() {
 main() {
   case "${1:-}" in
     --install) install_timer ;;
+    --uninstall) uninstall_timer ;;
     --build-in-container) build_in_container "$2" "$3" ;;
     --build-cli-archive) cd "$repo_root" && build_cli_archive "$2" "$3" ;;
     *) publish_nightly ;;

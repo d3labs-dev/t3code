@@ -3,7 +3,7 @@
 # them to the newest release that lacks them. scripts/custom-nightly-linux.sh
 # creates the releases on the Linux machine. Runs from a dedicated clone, which
 # it resets to each release's commit, so never point it at a checkout you work
-# in. Install the launch agent with `--install`.
+# in. Install the launch agent with `--install`; remove it with `--uninstall`.
 
 set -euo pipefail
 
@@ -67,6 +67,12 @@ EOF
   launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" "$launch_agent_path"
   log "Installed $label. Log: $builder_home/builder.log"
+}
+
+uninstall_agent() {
+  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+  rm -f "$launch_agent_path"
+  log "Removed $label. $builder_home, with this clone, its toolchains, and its config, remains."
 }
 
 # Node.js and Vite+ at the versions the checked-out commit pins, kept apart from
@@ -246,6 +252,7 @@ run_builds() {
 main() {
   case "${1:-}" in
     --install) install_agent ;;
+    --uninstall) uninstall_agent ;;
     --build-mac) build_mac "$2" ;;
     --build-android) build_android "$2" ;;
     *) run_builds ;;
