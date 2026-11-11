@@ -262,10 +262,6 @@ run_builds() {
         log "The $platform build of $tag already failed; waiting for a newer release."
         continue
       fi
-      if ! pmset -g ps | grep -qF "AC Power"; then
-        log "$tag needs the $platform build; waiting for AC power."
-        continue
-      fi
       cd "$repo_root"
       git fetch --quiet --no-tags --depth=1 origin "$commit"
       git checkout --quiet --force --detach "$commit"
