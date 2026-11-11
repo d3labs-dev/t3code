@@ -8,6 +8,8 @@
 set -euo pipefail
 
 readonly repository="d3labs-dev/t3code"
+# Work switches the active gh account to one that cannot write to the fork.
+readonly github_account="DiegoJohnsonL"
 readonly builder_home="$HOME/.local/share/d3code-builder"
 readonly label="com.diegojohnson.d3code.builder"
 readonly launch_agent_path="$HOME/Library/LaunchAgents/$label.plist"
@@ -19,6 +21,7 @@ readonly android_certificate_sha256="c4dec69aca9c6c1da72b2bf83d506222359bf69067c
 # (EXPO_TOKEN and T3CODE_EXPO_PROJECT_ID) turns on over-the-air updates.
 readonly google_services_file="$builder_home/google-services.json"
 readonly expo_env_file="$builder_home/expo.env"
+readonly built_root="$builder_home/built"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly repo_root
@@ -134,8 +137,7 @@ build_mac() {
   grep -F "repo: ${repository#*/}" "$app_bundle/Contents/Resources/app-update.yml"
   rm -rf "$verification_dir"
 
-  gh release upload "$tag" release/*.dmg release/*.zip release/*.blockmap release/nightly-mac.yml \
-    release/*.zip.sha256 --repo "$repository" --clobber
+  stage_build "$tag" mac release/*.dmg release/*.zip release/*.blockmap release/nightly-mac.yml release/*.zip.sha256
 }
 
 build_android() {
@@ -175,17 +177,45 @@ build_android() {
       log "Over-the-air publish failed; phones are offered the APK instead."
   fi
 
-  gh release upload "$tag" "$apk" --repo "$repository" --clobber
-  # The app only offers releases that carry this marker next to an uploaded APK.
-  local notes_file="$builder_home/release-notes.md"
-  gh release view "$tag" --repo "$repository" --json body --jq .body > "$notes_file"
-  printf '\n<!-- android-version-code: %s -->\n' "$version_code" >> "$notes_file"
+  local markers="$builder_home/release-notes-markers"
+  printf '<!-- android-version-code: %s -->\n' "$version_code" > "$markers"
   # Phones on this runtime take the release over the air, so the app skips its APK.
   if [[ -n "$runtime_version" ]]; then
-    printf '<!-- android-runtime-version: %s -->\n' "$runtime_version" >> "$notes_file"
+    printf '<!-- android-runtime-version: %s -->\n' "$runtime_version" >> "$markers"
   fi
-  gh release edit "$tag" --repo "$repository" --notes-file "$notes_file"
-  rm -f "$apk"
+  stage_build "$tag" android "$apk" "$markers"
+}
+
+# Keeps a verified build until its upload succeeds, so a failed upload retries
+# without rebuilding. The folder appears whole or not at all.
+stage_build() {
+  local tag="$1" platform="$2"
+  shift 2
+  local staging
+  mkdir -p "$built_root/$tag"
+  staging="$(mktemp -d "$built_root/$tag/.staging.XXXXXX")"
+  mv "$@" "$staging"
+  rm -rf "${built_root:?}/$tag/$platform"
+  mv "$staging" "$built_root/$tag/$platform"
+}
+
+upload_mac() {
+  local tag="$1"
+  gh release upload "$tag" "$built_root/$tag/mac"/* --repo "$repository" --clobber
+}
+
+# Runs inside an `if`, where `set -e` is off, so every step checks its own
+# failure. The app only offers releases whose notes carry these markers next to
+# an uploaded APK. The APK goes last because its presence marks the release built.
+upload_android() {
+  local tag="$1" built="$built_root/$1/android"
+  local notes_file="$builder_home/release-notes.md"
+  gh release view "$tag" --repo "$repository" --json body --jq .body > "$notes_file" || return
+  if ! grep -qF "$(head -1 "$built/release-notes-markers")" "$notes_file"; then
+    { printf '\n' && cat "$built/release-notes-markers"; } >> "$notes_file" || return
+    gh release edit "$tag" --repo "$repository" --notes-file "$notes_file" || return
+  fi
+  gh release upload "$tag" "$built"/*.apk --repo "$repository" --clobber
 }
 
 # Prints the tag, commit, and missing platforms of the newest custom nightly.
@@ -203,50 +233,70 @@ newest_release() {
 }
 
 run_builds() {
-  mkdir -p "$builder_home"
+  mkdir -p "$built_root"
+  if ! GH_TOKEN="$(gh auth token --user "$github_account")"; then
+    notify "gh has no login for $github_account. Run gh auth login."
+    return 1
+  fi
+  export GH_TOKEN
+
   local tag commit missing_mac missing_android
   IFS=$'\t' read -r tag commit missing_mac missing_android < <(newest_release) || true
   if [[ -z "${tag:-}" ]]; then
     log "No custom nightly release was found."
     return
   fi
+  find "$built_root" -mindepth 1 -maxdepth 1 ! -name "$tag" -exec rm -rf {} +
 
   if [[ -z "$missing_mac$missing_android" ]]; then
     log "$tag has every build."
     return
   fi
-  if ! pmset -g ps | grep -qF "AC Power"; then
-    log "$tag needs $missing_mac $missing_android builds; waiting for AC power."
-    return
-  fi
 
-  local platform failures=()
+  local platform failed=false
   for platform in $missing_mac $missing_android; do
+    local built="$built_root/$tag/$platform"
     local failed_marker="$builder_home/failed-$platform"
-    if [[ "$(cat "$failed_marker" 2>/dev/null)" == "$tag" ]]; then
-      log "The $platform build of $tag already failed; waiting for a newer release."
-      continue
-    fi
-    cd "$repo_root"
-    git fetch --quiet --no-tags --depth=1 origin "$commit"
-    git checkout --quiet --force --detach "$commit"
-    git reset --quiet --hard
-    git clean --quiet -fd
-    log "Building $platform for $tag."
-    # A separate process, because bash ignores `set -e` inside an `if` condition.
-    if bash "$script_path" "--build-$platform" "$tag"; then
+    if [[ ! -d "$built" ]]; then
+      if [[ "$(cat "$failed_marker" 2>/dev/null)" == "$tag" ]]; then
+        log "The $platform build of $tag already failed; waiting for a newer release."
+        continue
+      fi
+      if ! pmset -g ps | grep -qF "AC Power"; then
+        log "$tag needs the $platform build; waiting for AC power."
+        continue
+      fi
+      cd "$repo_root"
+      git fetch --quiet --no-tags --depth=1 origin "$commit"
+      git checkout --quiet --force --detach "$commit"
+      git reset --quiet --hard
+      git clean --quiet -fd
+      log "Building $platform for $tag."
+      # A separate process, because bash ignores `set -e` inside an `if` condition.
+      if ! bash "$script_path" "--build-$platform" "$tag"; then
+        git -C "$repo_root" reset --quiet --hard
+        echo "$tag" > "$failed_marker"
+        notify "The $platform build of $tag failed. See $builder_home/builder.log."
+        failed=true
+        continue
+      fi
+      git -C "$repo_root" reset --quiet --hard
       rm -f "$failed_marker"
+    fi
+    # In this process: the checkout above replaced this file with the release's copy.
+    if "upload_$platform" "$tag"; then
+      rm -rf "$built"
       log "Attached the $platform build to $tag."
     else
-      echo "$tag" > "$failed_marker"
-      failures+=("$platform")
+      log "Uploading the $platform build of $tag failed; retrying next run."
+      if [[ ! -e "$built/.upload-failure-notified" ]]; then
+        touch "$built/.upload-failure-notified"
+        notify "Uploading the $platform build of $tag failed; it retries every 15 minutes. See $builder_home/builder.log."
+      fi
+      failed=true
     fi
-    git -C "$repo_root" reset --quiet --hard
   done
-  if [[ ${#failures[@]} -gt 0 ]]; then
-    notify "The ${failures[*]} build of $tag failed. See $builder_home/builder.log."
-    return 1
-  fi
+  [[ "$failed" == false ]]
 }
 
 main() {

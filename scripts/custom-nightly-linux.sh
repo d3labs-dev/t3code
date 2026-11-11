@@ -10,6 +10,8 @@ set -euo pipefail
 
 readonly repository="d3labs-dev/t3code"
 readonly upstream_repository="pingdotgg/t3code"
+# Work switches the active gh account to one that cannot write to the fork.
+readonly github_account="DiegoJohnsonL"
 readonly branch="custom-nightly"
 readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/d3code-nightly"
 readonly unit_name="d3code-nightly"
@@ -182,6 +184,8 @@ publish_nightly() {
   exec > >(tee "$log_file") 2>&1
 
   cd "$repo_root"
+  GH_TOKEN="$(gh auth token --user "$github_account")"
+  export GH_TOKEN
 
   git fetch --no-tags origin "$branch"
   git checkout --quiet --force --detach "origin/$branch"
