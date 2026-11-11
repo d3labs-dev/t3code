@@ -453,7 +453,7 @@ function RotationSection(props: { readonly source: CustomBackgroundImageSource }
         onChange={(order) => setSource({ order })}
       />
       <ChoiceRow
-        icon={{ ios: "sparkles", android: "auto_awesome" }}
+        icon={{ ios: "sparkles", android: "bolt" }}
         label="Transition"
         value={props.source.transition}
         options={TRANSITION_OPTIONS}
