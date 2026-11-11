@@ -15,6 +15,10 @@
       "types": "./src/customBackgroundRotation.ts",
       "import": "./src/customBackgroundRotation.ts"
     },
+    "./pullRequestAnchor": {
+      "types": "./src/pullRequestAnchor.ts",
+      "import": "./src/pullRequestAnchor.ts"
+    },
     "./changedFileKind": {
       "types": "./src/changedFileKind.ts",
       "import": "./src/changedFileKind.ts"
