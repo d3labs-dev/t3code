@@ -40,6 +40,21 @@ html[data-theme-id]:not([data-theme-id=""]) {
   --chat-composer-glass-surface: var(--glass-surface);
 }
 
+/* Upstream fills the context strip with page-coloured glass so it blends into
+   the page; the raised glass above would draw a square slab under the card. */
+[data-slot="composer-context-strip"] {
+  --glass-fill: var(--background);
+}
+
+/* Over a picture any fill reads as a square slab, so the strip stays bare and
+   the wallpaper runs under it. Unlayered so it beats the surface-glass utility. */
+[data-chat-background-pane]:has(> [data-chat-backdrop="source"])
+  [data-slot="composer-context-strip"] {
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 ::-webkit-scrollbar-thumb {
   background: transparent;
 }
