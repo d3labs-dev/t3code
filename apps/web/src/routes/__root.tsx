@@ -35,6 +35,7 @@ import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoo
 import { BackgroundStudioHost } from "../components/background/BackgroundStudioHost";
 import { BackgroundFolderSync } from "../components/background/BackgroundFolderSync";
 import { BackgroundThemeSync } from "../components/background/BackgroundThemeSync";
+import { ConnectDeviceApprovalCoordinator } from "../components/ConnectDeviceApprovalCoordinator";
 import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
@@ -195,6 +196,7 @@ function RootRouteBranch() {
       <CustomSnoozeDialogHost />
       <GuestShareDialogHost />
       <ProjectCloneToastCoordinator />
+      <ConnectDeviceApprovalCoordinator />
       <AddProjectToMachineDialogHost />
       <UseInAnotherAppDialogHost />
       {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
