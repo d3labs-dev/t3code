@@ -2,7 +2,15 @@ import { Hct, argbFromHex } from "@material/material-color-utilities";
 import { THEME_COLOR_ROLES } from "@t3tools/shared/themePalettes";
 import { expect, it } from "vite-plus/test";
 
-import { backgroundTheme, backgroundThemeColors } from "./dynamicTheme";
+import {
+  getThemeDefinition,
+  getThemeModes,
+  isKnownThemePreference,
+  themeAllowsSidebarArtwork,
+} from "~/themePalette";
+
+import { backgroundThemeColors, pictureThemeDefinition } from "./dynamicTheme";
+import { PICTURE_THEME_ID, setPictureThemeSeed } from "./pictureTheme";
 
 const TEAL = argbFromHex("#2f8f93");
 
@@ -36,9 +44,10 @@ it("puts the canvas on opposite sides of the tone scale per appearance", () => {
 
 it("repaints the sidebar header art in the seed's hue", () => {
   const orange = argbFromHex("#fc7346");
-  const { artwork } = backgroundTheme(orange, "dark");
+  const { css } = pictureThemeDefinition(orange);
   for (const name of ["--stage-art-mid", "--stage-night-base-top"]) {
-    expect(Math.abs(hue(artwork[name]!) - Hct.fromInt(orange).hue), name).toBeLessThan(20);
+    const color = new RegExp(`${name}:(#[0-9a-f]{6});`).exec(css ?? "")?.[1];
+    expect(Math.abs(hue(color!) - Hct.fromInt(orange).hue), name).toBeLessThan(20);
   }
 });
 
@@ -67,4 +76,14 @@ it("steps sidebar rows away from the sidebar in both appearances", () => {
     expect(distance(colors.sidebarRowSelected)).toBeGreaterThan(distance(colors.sidebarRowHover));
     expect(distance(colors.sidebarRowActive)).toBeGreaterThan(distance(colors.sidebarRowSelected));
   }
+});
+
+it("resolves the picture theme in both appearances once a picture seeds it", () => {
+  expect(getThemeDefinition(PICTURE_THEME_ID)).toBeNull();
+  expect(setPictureThemeSeed(TEAL)).toBe(true);
+  expect(setPictureThemeSeed(TEAL)).toBe(false);
+  const theme = getThemeDefinition(PICTURE_THEME_ID);
+  expect(theme && getThemeModes(theme)).toEqual(["light", "dark"]);
+  expect(isKnownThemePreference(PICTURE_THEME_ID)).toBe(true);
+  expect(themeAllowsSidebarArtwork(PICTURE_THEME_ID)).toBe(true);
 });

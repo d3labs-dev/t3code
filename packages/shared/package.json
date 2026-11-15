@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./customBackgroundThemeCss": {
+      "types": "./src/customBackgroundThemeCss.ts",
+      "import": "./src/customBackgroundThemeCss.ts"
+    },
     "./customBackgroundFade": {
       "types": "./src/customBackgroundFade.ts",
       "import": "./src/customBackgroundFade.ts"

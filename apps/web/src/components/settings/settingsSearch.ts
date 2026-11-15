@@ -331,11 +331,12 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "background-dynamic-theme",
-    title: "Theme from image colors",
+    title: "Picture colors theme",
     to: "/settings/appearance",
-    searchTerms: ["material you dynamic color wallpaper palette accent tint background playlist"],
-    // The switch lives in the background studio, which this row opens.
-    targetId: "custom-background",
+    searchTerms: [
+      "theme from image colors material you dynamic color wallpaper palette accent tint background",
+    ],
+    targetId: "appearance",
   },
   {
     id: "background-agent-bubbles",

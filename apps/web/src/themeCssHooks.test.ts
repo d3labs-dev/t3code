@@ -2,6 +2,7 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
+import { CUSTOM_BACKGROUND_THEME_CSS_HOOKS } from "@t3tools/shared/customBackgroundThemeCss";
 import { THEME_CSS_HOOKS } from "@t3tools/shared/themeCss";
 import { expect, it } from "vite-plus/test";
 
@@ -20,7 +21,7 @@ function sourcePattern(selector: string): RegExp {
 }
 
 // Theme CSS and the agent guide rely on these selectors. Rename one in the guide too.
-it.each(THEME_CSS_HOOKS.map((hook) => hook.selector))(
+it.each([...THEME_CSS_HOOKS, ...CUSTOM_BACKGROUND_THEME_CSS_HOOKS].map((hook) => hook.selector))(
   "%s is still in the web source",
   (selector) => {
     expect(source).toMatch(sourcePattern(selector));

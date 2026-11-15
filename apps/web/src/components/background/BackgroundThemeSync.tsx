@@ -9,21 +9,20 @@ import { useBackgroundImageSourceColor } from "~/customBackground/imageStore";
 import { resolveActiveBackground } from "~/customBackground/records";
 import { useRotatingBackgroundImage } from "~/customBackground/rotation";
 import { useActiveBackground } from "~/customBackground/useActiveBackground";
-import { useDynamicBackgroundTheme } from "~/customBackground/useDynamicBackgroundTheme";
+import { usePictureThemeSync } from "~/customBackground/usePictureTheme";
 import { useClientSettings } from "~/hooks/useSettings";
 
 const NO_SOURCE = { kind: "none" } as const;
 
 /**
- * Keeps the image-colors theme, the bubble surfaces, and the input box glass
- * applied on every route. The picture itself only draws behind chats, but the
+ * Keeps the picture theme seeded, and the bubble surfaces and input box glass
+ * applied, on every route. The picture itself only draws behind chats, but the
  * palette it seeds stays put in settings and the rest of the app, the way a
  * phone keeps its wallpaper colors on every screen.
  */
 export function BackgroundThemeSync() {
   const selected = useActiveBackground();
   const enabled = useClientSettings((settings) => settings.customBackgroundEnabled);
-  const dynamicTheme = useClientSettings((settings) => settings.customBackgroundDynamicTheme);
   const bubbleOpacity = useClientSettings(
     (settings) => settings.customBackgroundAgentBubbleOpacity,
   );
@@ -32,6 +31,7 @@ export function BackgroundThemeSync() {
     (settings) => settings.customBackgroundAgentBubblePadding,
   );
   const textShadow = useClientSettings((settings) => settings.customBackgroundReplyTextShadow);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the slider values as CSS variables on the document root
   useEffect(() => {
     applyAgentBubbleSurface(document.documentElement, {
       opacity: bubbleOpacity,
@@ -48,6 +48,7 @@ export function BackgroundThemeSync() {
   );
   const composerOpacity = useClientSettings((settings) => settings.customBackgroundComposerOpacity);
   const composerBlur = useClientSettings((settings) => settings.customBackgroundComposerBlur);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the slider values as CSS variables on the document root
   useEffect(() => {
     const { style } = document.documentElement;
     style.setProperty("--hero-composer-glass-opacity", `${heroComposerOpacity}%`);
@@ -57,11 +58,9 @@ export function BackgroundThemeSync() {
   }, [heroComposerOpacity, heroComposerBlur, composerOpacity, composerBlur]);
   const editing = useBackgroundStudioOpen();
   const preview = useBackgroundStudioStore((store) => store.preview);
-  const record = dynamicTheme
-    ? resolveActiveBackground({ selected, preview, enabled, editing })
-    : null;
+  const record = resolveActiveBackground({ selected, preview, enabled, editing });
   const { current, upcoming } = useRotatingBackgroundImage(record?.source ?? NO_SOURCE);
-  useDynamicBackgroundTheme(current);
+  usePictureThemeSync(current);
   // Warm the next picture's colors so the theme switches in the same frame as
   // the picture, which CustomBackground preloads the same way.
   useBackgroundImageSourceColor(upcoming);

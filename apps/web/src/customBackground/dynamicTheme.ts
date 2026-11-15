@@ -6,7 +6,7 @@ import {
   hexFromArgb,
 } from "@material/material-color-utilities";
 
-import type { DynamicTheme, ThemeAppearance, ThemeColors } from "~/themePalette";
+import type { ThemeAppearance, ThemeColors, ThemeDefinition } from "@t3tools/shared/themePalettes";
 
 /**
  * Tonal spot is the scheme Android defaults to for wallpaper colors. It keeps
@@ -27,11 +27,9 @@ const SIDEBAR_MAX_CHROMA = 14;
 const SIDEBAR_MAX_LIFT = { dark: 6, light: 3 } as const;
 
 /**
- * Repaints every theme role from one seed color the way Material builds a
- * scheme from a wallpaper. Roles Material names directly are taken as they
- * come; the rest are pulled to an explicit tone so T3's own contrast steps
- * (raised surfaces lighter than flat ones, sidebar rows stepping off the
- * sidebar) survive the translation.
+ * Roles Material names directly are taken as they come; the rest are pulled to
+ * an explicit tone so T3's own contrast steps (raised surfaces lighter than flat
+ * ones, sidebar rows stepping off the sidebar) survive the translation.
  */
 export function backgroundThemeColors(
   sourceColor: number,
@@ -131,19 +129,13 @@ export function backgroundThemeColors(
  * mirror the shipped artwork's own light-to-dark run rather than the surface
  * ladder: this is illustration, and it stays brighter than any surface.
  */
-function stageArtworkVariables(scheme: SchemeTonalSpot): Record<string, string> {
+function stageArtworkCss(sourceColor: number): string {
+  const seed = Hct.fromInt(sourceColor);
   const primary = (value: number): string =>
-    hexFromArgb(
-      Hct.from(
-        scheme.sourceColorHct.hue,
-        Math.max(48, scheme.sourceColorHct.chroma),
-        value,
-      ).toInt(),
-    );
-  const accentHue = (scheme.sourceColorHct.hue + 40) % 360;
+    hexFromArgb(Hct.from(seed.hue, Math.max(48, seed.chroma), value).toInt());
+  const accentHue = (seed.hue + 40) % 360;
   const accent = (value: number): string => hexFromArgb(Hct.from(accentHue, 60, value).toInt());
-
-  return {
+  const variables = {
     "--stage-art-top": primary(78),
     "--stage-art-mid": primary(62),
     "--stage-art-bottom": primary(44),
@@ -166,17 +158,21 @@ function stageArtworkVariables(scheme: SchemeTonalSpot): Record<string, string> 
     "--stage-night-glow-secondary": primary(35),
     "--stage-night-sparkle": primary(88),
   };
+  const declarations = Object.entries(variables).map(([name, value]) => `${name}:${value};`);
+  return `:root{${declarations.join("")}}`;
 }
 
-/** The full repaint for one picture: interface roles plus the header artwork. */
-export function backgroundTheme(sourceColor: number, appearance: ThemeAppearance): DynamicTheme {
-  const scheme = new SchemeTonalSpot(
-    Hct.fromInt(sourceColor),
-    appearance === "dark",
-    CONTRAST_LEVEL,
-  );
+export const PICTURE_THEME_ID = "__picture";
+
+/** Both appearances of the theme one picture seeds, with the header art in its hue. */
+export function pictureThemeDefinition(sourceColor: number): ThemeDefinition {
   return {
-    colors: backgroundThemeColors(sourceColor, appearance),
-    artwork: stageArtworkVariables(scheme),
+    id: PICTURE_THEME_ID,
+    label: "Picture colors",
+    appearance: "dark",
+    colors: backgroundThemeColors(sourceColor, "dark"),
+    variants: { light: backgroundThemeColors(sourceColor, "light") },
+    sidebarArtwork: true,
+    css: stageArtworkCss(sourceColor),
   };
 }

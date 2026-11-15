@@ -30,7 +30,7 @@ import {
   Undo2Icon,
   XIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useBackgroundStudioStore } from "~/customBackground/backgroundStudioStore";
 import {
@@ -40,6 +40,8 @@ import {
 } from "~/customBackground/folderSync";
 import { storeBackgroundImages, useBackgroundImageTone } from "~/customBackground/imageStore";
 import { stepBackgroundImage, useRotatingBackgroundImage } from "~/customBackground/rotation";
+import { PICTURE_THEME_ID } from "~/customBackground/pictureTheme";
+import { usePictureTheme, usePictureThemeActive } from "~/customBackground/usePictureTheme";
 import { isWebGlAvailable } from "~/customBackground/webgl";
 import {
   type CustomBackgroundLibrary,
@@ -55,6 +57,7 @@ import {
   withFilterKind,
 } from "~/customBackground/records";
 import { getClientSettings, useClientSettings, updateClientSettings } from "~/hooks/useSettings";
+import { useStableCallback } from "~/hooks/useStableCallback";
 import { useTheme } from "~/hooks/useTheme";
 import { cn, randomUUID } from "~/lib/utils";
 import { ensureLocalApi } from "~/localApi";
@@ -554,6 +557,7 @@ function LibraryPicker({
 
 export function BackgroundStudioPanel() {
   const mounted = useRef(true);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tracks mount so an async delete confirm does not write after close
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -563,7 +567,9 @@ export function BackgroundStudioPanel() {
   const library = useClientSettings((settings) => settings.customBackgrounds);
   const activeId = useClientSettings((settings) => settings.activeCustomBackgroundId);
   const enabled = useClientSettings((settings) => settings.customBackgroundEnabled);
-  const dynamicTheme = useClientSettings((settings) => settings.customBackgroundDynamicTheme);
+  const pictureTheme = usePictureTheme();
+  const pictureThemeActive = usePictureThemeActive();
+  const { appearanceMode, setTheme } = useTheme();
   const agentBubbles = useClientSettings((settings) => settings.customBackgroundAgentBubbles);
   const userBubbles = useClientSettings((settings) => settings.customBackgroundUserBubbles);
   const bubbleOpacity = useClientSettings(
@@ -599,26 +605,21 @@ export function BackgroundStudioPanel() {
   // Flush the latest edit on unmount without waiting for a React update.
   const pendingRef = useRef<CustomBackgroundRecord | null>(null);
 
-  const storedRecord = useMemo(
-    () => (selectedId === null ? null : (library.find((r) => r.id === selectedId) ?? null)),
-    [library, selectedId],
-  );
+  const storedRecord =
+    selectedId === null ? null : (library.find((r) => r.id === selectedId) ?? null);
   const record = liveRecord && liveRecord.id === selectedId ? liveRecord : storedRecord;
-  const persistLibrary = useCallback(
-    (next: CustomBackgroundLibrary, nextActiveId?: string | null) => {
-      updateClientSettings(
-        nextActiveId === undefined
-          ? { customBackgrounds: next }
-          : {
-              customBackgrounds: next,
-              activeCustomBackgroundId: nextActiveId,
-            },
-      );
-    },
-    [],
-  );
+  const persistLibrary = (next: CustomBackgroundLibrary, nextActiveId?: string | null) => {
+    updateClientSettings(
+      nextActiveId === undefined
+        ? { customBackgrounds: next }
+        : {
+            customBackgrounds: next,
+            activeCustomBackgroundId: nextActiveId,
+          },
+    );
+  };
 
-  const flushPending = useCallback(() => {
+  const flushPending = useStableCallback(() => {
     if (persistTimer.current) {
       clearTimeout(persistTimer.current);
       persistTimer.current = null;
@@ -629,18 +630,16 @@ export function BackgroundStudioPanel() {
       persistLibrary(upsertBackground(getClientSettings().customBackgrounds, pending));
     }
     setLiveRecord(null);
-  }, [persistLibrary, setLiveRecord]);
+  });
 
-  const commitRecord = useCallback(
-    (next: CustomBackgroundRecord) => {
-      pendingRef.current = next;
-      setLiveRecord(next);
-      if (persistTimer.current) clearTimeout(persistTimer.current);
-      persistTimer.current = setTimeout(flushPending, PERSIST_DEBOUNCE_MS);
-    },
-    [flushPending, setLiveRecord],
-  );
+  const commitRecord = (next: CustomBackgroundRecord) => {
+    pendingRef.current = next;
+    setLiveRecord(next);
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(flushPending, PERSIST_DEBOUNCE_MS);
+  };
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the debounce timer and saves the last edit when the studio closes
   useEffect(() => flushPending, [flushPending]);
 
   const selectRow = (id: string | null) => {
@@ -724,13 +723,12 @@ export function BackgroundStudioPanel() {
     );
   };
 
-  const referencedImageIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const entry of library) {
-      if (entry.source.kind === "image") for (const id of entry.source.imageIds) ids.add(id);
+  const referencedImageIds = new Set<string>();
+  for (const entry of library) {
+    if (entry.source.kind === "image") {
+      for (const id of entry.source.imageIds) referencedImageIds.add(id);
     }
-    return ids;
-  }, [library]);
+  }
 
   const filtersAvailable = isWebGlAvailable();
   const filterIsDefault =
@@ -992,9 +990,16 @@ export function BackgroundStudioPanel() {
         <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           Theme from image colors
           <Switch
-            checked={dynamicTheme}
+            checked={pictureThemeActive}
+            disabled={pictureTheme === null}
             onCheckedChange={(checked) =>
-              updateClientSettings({ customBackgroundDynamicTheme: checked })
+              setTheme(
+                checked
+                  ? PICTURE_THEME_ID
+                  : appearanceMode === "system"
+                    ? "system"
+                    : appearanceMode,
+              )
             }
           />
         </label>

@@ -445,10 +445,6 @@ export const ClientSettingsSchema = Schema.Struct({
   activeCustomBackgroundId: Schema.NullOr(CustomBackgroundId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
-  /** Repaints the interface from the colors of whichever picture is showing. */
-  customBackgroundDynamicTheme: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-  ),
   /** Sets agent replies on a translucent bubble over a background, like user messages. */
   customBackgroundAgentBubbles: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
@@ -2121,7 +2117,6 @@ export const ClientSettingsPatch = Schema.Struct({
   customBackgrounds: Schema.optionalKey(CustomBackgroundRecords),
   customBackgroundEnabled: Schema.optionalKey(Schema.Boolean),
   activeCustomBackgroundId: Schema.optionalKey(Schema.NullOr(CustomBackgroundId)),
-  customBackgroundDynamicTheme: Schema.optionalKey(Schema.Boolean),
   customBackgroundAgentBubbles: Schema.optionalKey(Schema.Boolean),
   customBackgroundAgentBubbleOpacity: Schema.optionalKey(AgentBubbleOpacity),
   customBackgroundAgentBubbleBlur: Schema.optionalKey(AgentBubbleBlur),

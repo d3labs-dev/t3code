@@ -59,6 +59,21 @@ and **Bubble blur** tune both kinds of bubble; blur costs some scrolling smoothn
 **Brighter reply text** draws agent replies in the same full-strength color as your own
 messages instead of the slightly dimmer default. The pencil next to the playlist renames it.
 
+## Picture colors and themes
+
+On web and desktop, the picture showing seeds a **Picture colors** theme. It appears in
+**Settings → Appearance** and **Change theme** once a picture with color has shown, and works like
+any other theme: pick it for both appearances or for one, or **Duplicate** it into a theme you can
+edit. **Theme from image colors**, under **Theme and chats** in the panel, picks it; turning that
+off returns to the standard theme. While it is selected, the app recolors as the pictures rotate.
+A black-and-white picture has no color to lend, so the last colorful picture's palette stays, and
+it also stays with the background off until you pick another theme.
+
+The bubble, glass, and reply text sliders set CSS variables, so a theme's
+[custom CSS](./appearance.md#custom-css) can restyle the look over a picture too. A value the theme
+sets on `[data-chat-background-pane]` wins over the sliders. An agent asked to restyle T3 Code
+learns these variables from its theme guide, so you can ask it for, say, clearer reply bubbles.
+
 ## Images
 
 Images are resized, converted to WebP, and stored on this client only. Uploading the same
@@ -99,10 +114,8 @@ behind home and threads** hides the background without deleting it. Turn on **Qu
 button** to get a small button on home and threads that opens the fade, blur, and bubble
 controls in a drawer, so you see each change on the screen behind it.
 
-While a picture's colors theme the app, on the phone or the desktop, the theme cards are hidden,
-since no theme choice would show. Turn off the picture colors to pick a theme again. On the
-desktop and web, a black-and-white picture has no color to lend, so your selected theme stays
-while it shows.
+While a picture's colors theme the phone, its theme cards are hidden, since no theme choice would
+show. Turn off **Colors from pictures** to pick a theme again.
 
 ## New chats and conversations
 

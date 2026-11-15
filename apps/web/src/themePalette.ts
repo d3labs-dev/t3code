@@ -30,6 +30,7 @@ import {
 } from "./lib/contextChipAccents";
 
 import { appAtomRegistry, subscribeAtomChanges } from "./rpc/atomRegistry";
+import { PICTURE_THEME_ID, getPictureTheme } from "./customBackground/pictureTheme";
 import { applyThemeCss } from "./themeCss";
 import { themeServerEnvironmentThemesAtom } from "./state/server";
 
@@ -1225,15 +1226,17 @@ export function getThemeDefinition(theme: ThemePreference): ThemeDefinition | nu
     BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === themeId) ??
     getCustomThemes().find((definition) => definition.id === themeId) ??
     getEnvironmentThemes().find((definition) => definition.id === themeId) ??
-    null
+    (themeId === PICTURE_THEME_ID ? getPictureTheme() : null)
   );
 }
 
 export function themeAllowsSidebarArtwork(theme: ThemePreference): boolean {
   const themeId = themeIdFromPreference(theme);
   return (
-    BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === themeId)?.sidebarArtwork ===
-    true
+    (
+      (themeId === PICTURE_THEME_ID ? getPictureTheme() : null) ??
+      BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === themeId)
+    )?.sidebarArtwork === true
   );
 }
 
@@ -1650,46 +1653,6 @@ export function getThemeColorVariable(role: ThemeColorRole): string {
 
 export const THEME_PREVIEW_ID = "__preview";
 
-/** Marks the document as wearing colors pulled from the background picture. */
-const DYNAMIC_THEME_ID = "__background";
-
-export interface DynamicTheme {
-  readonly colors: ThemeColors;
-  /** Stage artwork custom properties, keyed by CSS variable name. */
-  readonly artwork: Readonly<Record<string, string>>;
-}
-
-let dynamicTheme: DynamicTheme | null = null;
-let appliedArtworkVariables: ReadonlyArray<string> = [];
-
-/**
- * A palette derived from whichever background picture is showing. It stands in
- * for the selected theme until cleared, so the next `applyThemePalette` repaints
- * from the picture instead of the library entry. Callers own the repaint: set
- * the theme, then refresh.
- */
-export function setDynamicTheme(next: DynamicTheme | null): void {
-  dynamicTheme = next;
-}
-
-function writeThemeColors(root: HTMLElement, colors: ThemeColors): void {
-  for (const [role, value] of Object.entries(colors) as Array<[ThemeColorRole, string]>) {
-    root.style.setProperty(APP_THEME_VARIABLES[role], value);
-  }
-}
-
-// The stage artwork reads its own variables, and whichever theme is selected
-// still defines them. Clearing the previous set by name is what lets a picture
-// hand the header art back when the dynamic theme goes away.
-function writeArtworkVariables(root: HTMLElement): void {
-  for (const name of appliedArtworkVariables) root.style.removeProperty(name);
-  appliedArtworkVariables = dynamicTheme ? Object.keys(dynamicTheme.artwork) : [];
-  if (!dynamicTheme) return;
-  for (const [name, value] of Object.entries(dynamicTheme.artwork)) {
-    root.style.setProperty(name, value);
-  }
-}
-
 /** Callers must restore the stored theme with refreshTheme when the draft closes. */
 export function applyThemeColorPreview(
   colors: ThemeColors,
@@ -1720,21 +1683,14 @@ export function applyThemePalette(theme: ThemePreference, appearance?: ThemeAppe
   const palette = getThemeDefinition(theme);
   applyThemeCss(palette?.css);
 
-  writeArtworkVariables(root);
-
   if (palette) {
-    root.dataset.themeId = dynamicTheme ? DYNAMIC_THEME_ID : palette.id;
+    root.dataset.themeId = palette.id;
     const mode = appearance ?? legacyThemeMode(theme) ?? palette.appearance;
-    const colors = dynamicTheme?.colors ?? getThemeColorsForMode(palette, mode) ?? palette.colors;
-    writeThemeColors(root, colors);
+    const colors = getThemeColorsForMode(palette, mode) ?? palette.colors;
+    for (const [role, value] of Object.entries(colors) as Array<[ThemeColorRole, string]>) {
+      root.style.setProperty(APP_THEME_VARIABLES[role], value);
+    }
     applyContextChipVariables(root, colors);
-    return;
-  }
-
-  if (dynamicTheme) {
-    root.dataset.themeId = DYNAMIC_THEME_ID;
-    writeThemeColors(root, dynamicTheme.colors);
-    applyContextChipVariables(root, dynamicTheme.colors);
     return;
   }
 

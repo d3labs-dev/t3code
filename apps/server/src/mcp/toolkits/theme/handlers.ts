@@ -1,4 +1,5 @@
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
+import { CUSTOM_BACKGROUND_THEME_GUIDE } from "@t3tools/shared/customBackgroundThemeCss";
 import { THEME_GUIDE } from "@t3tools/shared/themeCss";
 import { BUILT_IN_THEME_IDS } from "@t3tools/shared/themePalettes";
 import * as Effect from "effect/Effect";
@@ -32,7 +33,7 @@ export const layer = McpToolAccess.toLayer(ThemeToolkit, {
         builtIn: BUILT_IN_THEME_IDS,
         published: published.map(({ id, name, css }) => ({ id, name, hasCss: Boolean(css) })),
         ...(theme === undefined ? {} : { theme: Struct.omit(theme, ["id"]) }),
-        guide: THEME_GUIDE,
+        guide: `${THEME_GUIDE}\n\n${CUSTOM_BACKGROUND_THEME_GUIDE}`,
       };
     }),
   ),

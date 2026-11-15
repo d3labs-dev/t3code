@@ -1,4 +1,3 @@
-import { PictureColorsThemeGate } from "../background/PictureColorsThemeGate";
 import {
   CheckIcon,
   CopyIcon,
@@ -54,6 +53,7 @@ import {
   type ThemeMode,
 } from "./ThemePreviewCircles";
 import { ThemeWireframe } from "./ThemeWireframe";
+import { usePictureTheme } from "../../customBackground/usePictureTheme";
 
 const MAINTAINER_THEMES: ReadonlyArray<ThemeDefinition> = [
   T3_CHAT_THEME,
@@ -522,6 +522,7 @@ export function ThemeLibrary({
 }) {
   const openThemeEditor = useThemeEditorStore((store) => store.openThemeEditor);
   const environmentThemes = useEnvironmentThemeDefinitions();
+  const pictureTheme = usePictureTheme();
   const [themeRemovalTarget, setThemeRemovalTarget] = useState<{
     theme: ThemeDefinition;
     collectionThemes: ReadonlyArray<ThemeDefinition>;
@@ -762,6 +763,23 @@ export function ThemeLibrary({
             />
           );
         })}
+        {pictureTheme ? (
+          <ThemeLibraryCard
+            activeModes={pickedModesFor(pictureTheme.id)}
+            isActive={false}
+            onDuplicate={() =>
+              openThemeEditor({
+                editingThemeId: null,
+                seedThemeId: pictureTheme.id,
+                seedName: `${pictureTheme.label} copy`,
+                initialAppearance,
+              })
+            }
+            onUse={() => persistTheme(pictureTheme.id)}
+            onUseMode={handlePairPick(pictureTheme.id)}
+            theme={getThemeCardDefinition(pictureTheme)}
+          />
+        ) : null}
         {environmentThemes
           .filter(
             // Saved themes win id resolution; show only their card to avoid duplicate keys.
@@ -858,7 +876,7 @@ export function ThemeLibrary({
           </Button>
         </div>
       </div>
-      <PictureColorsThemeGate>{renderPairGrid()}</PictureColorsThemeGate>
+      {renderPairGrid()}
       <ThemeImportDialog
         onImportedMany={(importedThemes, { updated }) => {
           if (updated) refreshTheme();
