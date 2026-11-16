@@ -40,8 +40,6 @@ import {
 } from "~/customBackground/folderSync";
 import { storeBackgroundImages, useBackgroundImageTone } from "~/customBackground/imageStore";
 import { stepBackgroundImage, useRotatingBackgroundImage } from "~/customBackground/rotation";
-import { PICTURE_THEME_ID } from "~/customBackground/pictureTheme";
-import { usePictureTheme, usePictureThemeActive } from "~/customBackground/usePictureTheme";
 import { isWebGlAvailable } from "~/customBackground/webgl";
 import {
   type CustomBackgroundLibrary,
@@ -105,13 +103,6 @@ function isFilterKind(value: unknown): value is CustomBackgroundFilterKind {
 }
 
 const PERSIST_DEBOUNCE_MS = 150;
-
-const FADE_CONTROLS = [
-  { key: "fade", label: "Bottom fade" },
-  { key: "fadeHeight", label: "Fade height" },
-  { key: "fadeSoftness", label: "Fade softness" },
-  { key: "opacity", label: "Image opacity" },
-] as const satisfies ReadonlyArray<{ key: keyof CustomBackgroundRecord; label: string }>;
 
 function describeUploadFailure(reason: string): string {
   switch (reason) {
@@ -212,12 +203,7 @@ function DitheringPresetRow({
         aria-label="Dithering look"
       >
         {IMAGE_DITHERING_PRESETS.map((preset) => {
-          const active =
-            filtersEqual(current, preset.filter) &&
-            (preset.fade === undefined ||
-              (record.fade === preset.fade.fade &&
-                record.fadeHeight === preset.fade.fadeHeight &&
-                record.fadeSoftness === preset.fade.fadeSoftness));
+          const active = filtersEqual(current, preset.filter);
           return (
             <Button
               key={preset.id}
@@ -271,7 +257,7 @@ function BrightnessAdaptControl({
         <StudioField label="This picture">
           <span className="text-xs text-muted-foreground tabular-nums">
             {Math.round(tone.lightness * 100)}% light, {Math.round(tone.colorfulness * 100)}%
-            colorful, shows at {look.opacity}% opacity and {look.fade}% fade
+            colorful, shows at {look.opacity}% opacity
           </span>
         </StudioField>
       ) : null}
@@ -567,11 +553,6 @@ export function BackgroundStudioPanel() {
   const library = useClientSettings((settings) => settings.customBackgrounds);
   const activeId = useClientSettings((settings) => settings.activeCustomBackgroundId);
   const enabled = useClientSettings((settings) => settings.customBackgroundEnabled);
-  const pictureTheme = usePictureTheme();
-  const pictureThemeActive = usePictureThemeActive();
-  const { appearanceMode, setTheme } = useTheme();
-  const agentBubbles = useClientSettings((settings) => settings.customBackgroundAgentBubbles);
-  const userBubbles = useClientSettings((settings) => settings.customBackgroundUserBubbles);
   const bubbleOpacity = useClientSettings(
     (settings) => settings.customBackgroundAgentBubbleOpacity,
   );
@@ -933,9 +914,7 @@ export function BackgroundStudioPanel() {
             {filtersAvailable ? (
               <DitheringPresetRow
                 record={record}
-                onPick={(preset) =>
-                  commitRecord({ ...record, filter: preset.filter, ...preset.fade })
-                }
+                onPick={(preset) => commitRecord({ ...record, filter: preset.filter })}
               />
             ) : null}
             {filtersAvailable ? (
@@ -949,23 +928,15 @@ export function BackgroundStudioPanel() {
                 }
               />
             ) : null}
-            {FADE_CONTROLS.map(({ key, label }) => (
-              <RangeControl
-                key={key}
-                label={label}
-                min={MIN_CUSTOM_BACKGROUND_FADE}
-                max={MAX_CUSTOM_BACKGROUND_FADE}
-                step={1}
-                value={record[key]}
-                format={(value) => `${Math.round(value)}%`}
-                onChange={(value) =>
-                  commitRecord({
-                    ...record,
-                    [key]: Math.round(value),
-                  })
-                }
-              />
-            ))}
+            <RangeControl
+              label="Image opacity"
+              min={MIN_CUSTOM_BACKGROUND_FADE}
+              max={MAX_CUSTOM_BACKGROUND_FADE}
+              step={1}
+              value={record.opacity}
+              format={(value) => `${Math.round(value)}%`}
+              onChange={(value) => commitRecord({ ...record, opacity: Math.round(value) })}
+            />
             <BrightnessAdaptControl
               record={record}
               onChange={(brightnessAdapt) => commitRecord({ ...record, brightnessAdapt })}
@@ -986,76 +957,34 @@ export function BackgroundStudioPanel() {
           Add a playlist to get started, or pick one to edit.
         </div>
       )}
-      <StudioSection title="Theme and chats">
-        <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          Theme from image colors
-          <Switch
-            checked={pictureThemeActive}
-            disabled={pictureTheme === null}
-            onCheckedChange={(checked) =>
-              setTheme(
-                checked
-                  ? PICTURE_THEME_ID
-                  : appearanceMode === "system"
-                    ? "system"
-                    : appearanceMode,
-              )
-            }
-          />
-        </label>
-        <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          Bubbles behind agent replies
-          <Switch
-            checked={agentBubbles}
-            onCheckedChange={(checked) =>
-              updateClientSettings({ customBackgroundAgentBubbles: checked })
-            }
-          />
-        </label>
-        <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          Bubbles behind your messages
-          <Switch
-            checked={userBubbles}
-            onCheckedChange={(checked) =>
-              updateClientSettings({ customBackgroundUserBubbles: checked })
-            }
-          />
-        </label>
-        {agentBubbles || userBubbles ? (
-          <>
-            <RangeControl
-              label="Bubble opacity"
-              min={0}
-              max={100}
-              step={1}
-              value={bubbleOpacity}
-              format={(value) => `${value}%`}
-              onChange={(value) =>
-                updateClientSettings({ customBackgroundAgentBubbleOpacity: value })
-              }
-            />
-            <RangeControl
-              label="Bubble blur"
-              min={0}
-              max={MAX_AGENT_BUBBLE_BLUR}
-              step={1}
-              value={bubbleBlur}
-              format={(value) => `${value}px`}
-              onChange={(value) => updateClientSettings({ customBackgroundAgentBubbleBlur: value })}
-            />
-            <RangeControl
-              label="Bubble padding"
-              min={0}
-              max={MAX_AGENT_BUBBLE_PADDING}
-              step={1}
-              value={bubblePadding}
-              format={(value) => `${value}px`}
-              onChange={(value) =>
-                updateClientSettings({ customBackgroundAgentBubblePadding: value })
-              }
-            />
-          </>
-        ) : null}
+      <StudioSection title="Chats">
+        <RangeControl
+          label="Bubble opacity"
+          min={0}
+          max={100}
+          step={1}
+          value={bubbleOpacity}
+          format={(value) => `${value}%`}
+          onChange={(value) => updateClientSettings({ customBackgroundAgentBubbleOpacity: value })}
+        />
+        <RangeControl
+          label="Bubble blur"
+          min={0}
+          max={MAX_AGENT_BUBBLE_BLUR}
+          step={1}
+          value={bubbleBlur}
+          format={(value) => `${value}px`}
+          onChange={(value) => updateClientSettings({ customBackgroundAgentBubbleBlur: value })}
+        />
+        <RangeControl
+          label="Bubble padding"
+          min={0}
+          max={MAX_AGENT_BUBBLE_PADDING}
+          step={1}
+          value={bubblePadding}
+          format={(value) => `${value}px`}
+          onChange={(value) => updateClientSettings({ customBackgroundAgentBubblePadding: value })}
+        />
         <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           Brighter reply text
           <Switch

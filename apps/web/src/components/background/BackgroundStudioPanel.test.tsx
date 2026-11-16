@@ -1,3 +1,4 @@
+// oxlint-disable t3code/require-disposable-render -- a react-test-renderer unit test that drives child props, not a browser test
 import {
   DEFAULT_CLIENT_SETTINGS,
   type ClientSettings,
@@ -160,10 +161,7 @@ it("preserves both persisted and pending edits when encoding finishes", async ()
   expect(state.settings?.customBackgrounds[0]).toEqual({
     ...original,
     name: "Renamed",
-    fade: 35,
-    fadeHeight: 60,
-    fadeSoftness: 30,
-    opacity: 100,
+    opacity: 35,
     blur: 0,
     brightnessAdapt: 0,
     source: {
@@ -201,7 +199,7 @@ it("keeps pending changes and selection on another background", async () => {
         transition: "fade",
       },
     },
-    { ...other, fade: 20 },
+    { ...other, opacity: 20 },
   ]);
 });
 

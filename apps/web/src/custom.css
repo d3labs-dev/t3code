@@ -127,7 +127,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
   /* Only the reply's text sits on the bubble, not its copy button or timestamp.
      Blur is off by default: backdrop blur on every reply re-samples the
      picture on each scrolled frame. BackgroundThemeSync sets both variables. */
-  [data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-agent-bubbles])
+  [data-chat-background-pane]:has(> [data-chat-backdrop="source"])
     [data-assistant-reply]
     [data-assistant-citation-source] {
     width: fit-content;
@@ -146,8 +146,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
 
   /* An agent's HTML render page is transparent over a background, so it takes
      the reply bubble's look; the padding sits outside the measured frame. */
-  [data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-agent-bubbles])
-    [data-html-render-bubble] {
+  [data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-html-render-bubble] {
     margin-inline: calc(var(--agent-bubble-padding, 10px) * -1);
     border-radius: var(--radius-2xl);
     padding: var(--agent-bubble-padding, 10px);
@@ -163,7 +162,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
   /* Each row clips its overflow at the lane's padding edge, which would cut the
      bubble's sides where it reaches past the column. Widen the lane by the
      bubble padding and pad it back, so text stays put and the clip moves out. */
-  [data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-agent-bubbles])
+  [data-chat-background-pane]:has(> [data-chat-backdrop="source"])
     .chat-content-lane[data-timeline-root] {
     max-width: calc(var(--chat-content-max-width) + var(--agent-bubble-padding, 10px) * 2);
     padding-inline: var(--agent-bubble-padding, 10px);
@@ -190,18 +189,6 @@ html[data-theme-id]:not([data-theme-id=""]) {
     );
   }
 
-  /* Wallpaper is painted at viewport width and shifted left by this amount so
-     cover/center stays on the window. Mobile uses a sheet, so stay at 0. */
-  [data-slot="sidebar-wrapper"] {
-    --sidebar-occupied-width: 0px;
-  }
-
-  @media (min-width: 768px) {
-    [data-slot="sidebar-wrapper"][data-sidebar-state="expanded"] {
-      --sidebar-occupied-width: var(--sidebar-width);
-    }
-  }
-
   /* Outgoing picture sits above the incoming one and animates out; one
      shot per switch, nothing repaints between rotations. */
   .custom-background-slide[data-leaving] {
@@ -225,20 +212,6 @@ html[data-theme-id]:not([data-theme-id=""]) {
   ::view-transition-new(root) {
     animation-duration: 1400ms;
     animation-timing-function: ease-in-out;
-  }
-
-  .custom-background-layer {
-    pointer-events: none;
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: calc(var(--sidebar-occupied-width, 0px) * -1);
-    z-index: -10;
-    width: 100vw;
-  }
-
-  [data-panel-animations="true"] .custom-background-layer {
-    transition: left var(--panel-animation-duration) ease-out;
   }
 }
 
@@ -289,8 +262,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
 /* Your messages share the reply bubbles' padding, opacity, and blur. Unlayered so it
    beats the surface-glass utility; set on the bubble alone so the glass tiles
    inside it keep their own look. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-user-bubbles])
-  [data-user-message-bubble] {
+[data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-user-message-bubble] {
   padding: var(--agent-bubble-padding, 10px);
   background: color-mix(
     in srgb,
@@ -299,16 +271,6 @@ html[data-theme-id]:not([data-theme-id=""]) {
   );
   -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
   backdrop-filter: var(--agent-bubble-backdrop, none);
-}
-
-/* Without its bubble, your message sits on the picture with its text against
-   the column edge, the way a reply without a bubble does. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"]:not([data-user-bubbles]))
-  [data-user-message-bubble] {
-  padding-inline: 0;
-  background: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
 /* Replies draw at 90% foreground; this gives them the full color your own
@@ -323,9 +285,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
 [data-chat-background-pane]:has(> [data-chat-backdrop="source"])
   [data-assistant-reply]
   [data-assistant-citation-source]
-  .chat-markdown,
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"]:not([data-user-bubbles]))
-  [data-user-message-bubble] {
+  .chat-markdown {
   --reply-text-shadow-color: rgb(255 255 255 / var(--reply-text-shadow-opacity, 40%));
   text-shadow:
     0 1px 2px var(--reply-text-shadow-color),
@@ -429,4 +389,18 @@ html[data-theme-id="t3-chat"] {
 
 [data-app-sidebar][data-peek="shown"] {
   translate: none;
+}
+
+/* Subagent rows sit on the reply bubble's surface over a picture; a group's
+   own rows share the group's bubble. */
+[data-chat-background-pane]:has(> [data-chat-backdrop="source"])
+  :is([data-subagent-group], [data-v2-item-type="subagent"]:not([data-subagent-group] *)) {
+  border-radius: var(--radius-lg);
+  background-color: color-mix(
+    in srgb,
+    var(--bubble-surface) var(--agent-bubble-opacity, 25%),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
+  backdrop-filter: var(--agent-bubble-backdrop, none);
 }

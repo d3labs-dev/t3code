@@ -1,15 +1,11 @@
 import { ImageDithering } from "@paper-design/shaders-react";
 import type { CustomBackgroundFilter, CustomBackgroundTransition } from "@t3tools/contracts";
-import {
-  type CustomBackgroundFadeLevels,
-  customBackgroundFadeStops,
-} from "@t3tools/shared/customBackgroundFade";
 import { memo, useEffect, useState } from "react";
 
 import { BACKGROUND_WEBGL_CONTEXT_ATTRIBUTES } from "~/customBackground/webgl";
 import { backgroundDrawMode } from "~/customBackground/records";
 
-// Cap GPU work on high-resolution displays; the background sits under a fade.
+// Cap GPU work on high-resolution displays; the background sits under glass and bubbles.
 const MAX_PIXEL_COUNT = 1920 * 1200;
 
 const SHADER_PROPS = {
@@ -38,36 +34,15 @@ function ShaderLayer({ filter, image }: { filter: CustomBackgroundFilter; image:
   }
 }
 
-const themeOverlay = (opacity: number) =>
-  `color-mix(in srgb, var(--background) ${Math.round(opacity)}%, transparent)`;
-
-function fadeOverlayGradient(fade: CustomBackgroundFadeLevels): string {
-  const stops = customBackgroundFadeStops(fade).map(
-    ({ opacity, position }) => `${themeOverlay(opacity)} ${Math.round(position)}%`,
-  );
-  return `linear-gradient(to top, ${stops.join(", ")})`;
-}
-
 const TRANSITION_MS = 1400;
-
-interface SlideLook {
-  /** Picture opacity, 0 to 100; the theme background shows through the rest. */
-  opacity: number;
-  fade: CustomBackgroundFadeLevels;
-}
 
 interface Slide {
   key: number;
   image: string | null;
   leaving: boolean;
-  look: SlideLook;
+  /** Picture opacity, 0 to 100; the theme background shows through the rest. */
+  opacity: number;
 }
-
-const sameLook = (a: SlideLook, b: SlideLook) =>
-  a.opacity === b.opacity &&
-  a.fade.fade === b.fade.fade &&
-  a.fade.fadeHeight === b.fade.fadeHeight &&
-  a.fade.fadeSoftness === b.fade.fadeSoftness;
 
 /**
  * The outgoing picture stays on top and animates out over the incoming one,
@@ -77,25 +52,26 @@ const sameLook = (a: SlideLook, b: SlideLook) =>
  */
 function useSlides(
   image: string | null,
-  look: SlideLook,
+  opacity: number,
   transition: CustomBackgroundTransition,
 ): Slide[] {
-  const [slides, setSlides] = useState<Slide[]>(() => [{ key: 0, image, leaving: false, look }]);
+  const [slides, setSlides] = useState<Slide[]>(() => [{ key: 0, image, leaving: false, opacity }]);
   const current = slides.find((slide) => !slide.leaving);
   if (current && current.image !== image) {
     const key = current.key + 1;
     setSlides(
       transition === "cut"
-        ? [{ key, image, leaving: false, look }]
+        ? [{ key, image, leaving: false, opacity }]
         : [
             ...slides.map((slide) => ({ ...slide, leaving: true })),
-            { key, image, leaving: false, look },
+            { key, image, leaving: false, opacity },
           ],
     );
-  } else if (current && !sameLook(current.look, look)) {
-    setSlides(slides.map((slide) => (slide === current ? { ...slide, look } : slide)));
+  } else if (current && current.opacity !== opacity) {
+    setSlides(slides.map((slide) => (slide === current ? { ...slide, opacity } : slide)));
   }
   const leavingCount = slides.length - 1;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a timer drops the outgoing slides once their animation ends
   useEffect(() => {
     if (leavingCount === 0) return;
     const timer = setTimeout(
@@ -103,7 +79,7 @@ function useSlides(
       TRANSITION_MS,
     );
     return () => clearTimeout(timer);
-  }, [leavingCount, slides]);
+  }, [leavingCount]);
   return slides;
 }
 
@@ -112,7 +88,6 @@ export interface BackgroundRendererProps {
   /** Object URL of the source image; null while it loads. */
   image: string | null;
   transition: CustomBackgroundTransition;
-  fade: CustomBackgroundFadeLevels;
   /** Picture opacity, 0 to 100; the theme background shows through the rest. */
   opacity: number;
   /** Picture blur in pixels; 0 applies no filter. */
@@ -125,7 +100,6 @@ export const BackgroundRenderer = memo(function BackgroundRenderer({
   filter,
   image,
   transition,
-  fade,
   opacity,
   blur,
   filtersAvailable,
@@ -135,7 +109,7 @@ export const BackgroundRenderer = memo(function BackgroundRenderer({
     hasImage: typeof image === "string",
     filtersAvailable,
   });
-  const slides = useSlides(image, { opacity, fade }, transition);
+  const slides = useSlides(image, opacity, transition);
   if (mode === "none") return null;
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -144,8 +118,8 @@ export const BackgroundRenderer = memo(function BackgroundRenderer({
         className="absolute inset-0"
         style={blur === 0 ? undefined : { filter: `blur(${blur}px)`, inset: -blur }}
       >
-        {/* Each slide paints the theme background under its picture and fade,
-            so two slides crossfade cleanly instead of stacking their dimming. */}
+        {/* Each slide paints the theme background under its picture, so two
+            slides crossfade cleanly instead of stacking their dimming. */}
         {slides.map((slide) => (
           <div
             key={slide.key}
@@ -153,17 +127,13 @@ export const BackgroundRenderer = memo(function BackgroundRenderer({
             data-transition={transition}
             data-leaving={slide.leaving || undefined}
           >
-            <div className="absolute inset-0" style={{ opacity: slide.look.opacity / 100 }}>
+            <div className="absolute inset-0" style={{ opacity: slide.opacity / 100 }}>
               {mode === "image" && typeof slide.image === "string" ? (
                 <img src={slide.image} alt="" className="absolute size-full object-cover" />
               ) : (
                 <ShaderLayer filter={filter} image={slide.image} />
               )}
             </div>
-            <div
-              className="absolute inset-0"
-              style={{ background: fadeOverlayGradient(slide.look.fade) }}
-            />
           </div>
         ))}
       </div>

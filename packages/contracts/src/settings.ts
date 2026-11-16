@@ -445,14 +445,6 @@ export const ClientSettingsSchema = Schema.Struct({
   activeCustomBackgroundId: Schema.NullOr(CustomBackgroundId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
-  /** Sets agent replies on a translucent bubble over a background, like user messages. */
-  customBackgroundAgentBubbles: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-  ),
-  /** Sets your messages on a translucent bubble over a background; off, they sit on the picture like replies. */
-  customBackgroundUserBubbles: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-  ),
   customBackgroundAgentBubbleOpacity: AgentBubbleOpacity.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_BUBBLE_OPACITY)),
   ),
@@ -2117,13 +2109,11 @@ export const ClientSettingsPatch = Schema.Struct({
   customBackgrounds: Schema.optionalKey(CustomBackgroundRecords),
   customBackgroundEnabled: Schema.optionalKey(Schema.Boolean),
   activeCustomBackgroundId: Schema.optionalKey(Schema.NullOr(CustomBackgroundId)),
-  customBackgroundAgentBubbles: Schema.optionalKey(Schema.Boolean),
   customBackgroundAgentBubbleOpacity: Schema.optionalKey(AgentBubbleOpacity),
   customBackgroundAgentBubbleBlur: Schema.optionalKey(AgentBubbleBlur),
   customBackgroundReplyTextEmphasis: Schema.optionalKey(Schema.Boolean),
   customBackgroundAgentBubblePadding: Schema.optionalKey(AgentBubblePadding),
   customBackgroundReplyTextShadow: Schema.optionalKey(ReplyTextShadow),
-  customBackgroundUserBubbles: Schema.optionalKey(Schema.Boolean),
   customBackgroundHeroComposerOpacity: Schema.optionalKey(ComposerGlassOpacity),
   customBackgroundHeroComposerBlur: Schema.optionalKey(ComposerGlassBlur),
   customBackgroundComposerOpacity: Schema.optionalKey(ComposerGlassOpacity),

@@ -62,7 +62,6 @@ export function useChatBackdrop(
     filter: record.filter,
     image: shownImage,
     transition: source.kind === "image" ? source.transition : "cut",
-    fade: { fade: look.fade, fadeHeight: record.fadeHeight, fadeSoftness: record.fadeSoftness },
     opacity: look.opacity,
     blur: record.blur,
     filtersAvailable,
