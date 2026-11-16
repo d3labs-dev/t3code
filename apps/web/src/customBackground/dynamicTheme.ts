@@ -113,7 +113,7 @@ export function backgroundThemeColors(
     sidebarRowHover: sidebarStep(4),
     sidebarRowActive: sidebarStep(10),
     sidebarRowSelected: sidebarStep(7),
-    sidebarBorder: sidebarStep(8),
+    sidebarBorder: sidebarStep(12),
     terminalBackground: color(Material.surface),
     terminalForeground: color(Material.onSurface),
     terminalCursor: color(Material.primary),
@@ -123,48 +123,9 @@ export function backgroundThemeColors(
   };
 }
 
-/**
- * The sidebar header art paints itself from its own variables, so the seed has
- * to reach them too or a blue header sits above an orange interface. Tones
- * mirror the shipped artwork's own light-to-dark run rather than the surface
- * ladder: this is illustration, and it stays brighter than any surface.
- */
-function stageArtworkCss(sourceColor: number): string {
-  const seed = Hct.fromInt(sourceColor);
-  const primary = (value: number): string =>
-    hexFromArgb(Hct.from(seed.hue, Math.max(48, seed.chroma), value).toInt());
-  const accentHue = (seed.hue + 40) % 360;
-  const accent = (value: number): string => hexFromArgb(Hct.from(accentHue, 60, value).toInt());
-  const variables = {
-    "--stage-art-top": primary(78),
-    "--stage-art-mid": primary(62),
-    "--stage-art-bottom": primary(44),
-    "--stage-art-highlight": primary(95),
-    "--stage-art-secondary": accent(79),
-    "--stage-art-tertiary": accent(68),
-    "--stage-art-line": primary(96),
-    "--stage-art-grid-line": primary(97),
-    "--stage-art-celeste-highlight": accent(97),
-    "--stage-art-celeste-secondary": accent(83),
-    "--stage-art-violet-highlight": primary(90),
-    "--stage-night-base-top": primary(28),
-    "--stage-night-base-mid": primary(23),
-    "--stage-night-base-bottom": primary(20),
-    "--stage-night-highlight": primary(71),
-    "--stage-night-secondary": accent(60),
-    "--stage-night-tertiary": accent(63),
-    "--stage-night-line": primary(94),
-    "--stage-night-glow-highlight": primary(55),
-    "--stage-night-glow-secondary": primary(35),
-    "--stage-night-sparkle": primary(88),
-  };
-  const declarations = Object.entries(variables).map(([name, value]) => `${name}:${value};`);
-  return `:root{${declarations.join("")}}`;
-}
-
 export const PICTURE_THEME_ID = "__picture";
 
-/** Both appearances of the theme one picture seeds, with the header art in its hue. */
+/** Both appearances of the theme one picture seeds. The sidebar header shows the version pill, not artwork. */
 export function pictureThemeDefinition(sourceColor: number): ThemeDefinition {
   return {
     id: PICTURE_THEME_ID,
@@ -172,7 +133,5 @@ export function pictureThemeDefinition(sourceColor: number): ThemeDefinition {
     appearance: "dark",
     colors: backgroundThemeColors(sourceColor, "dark"),
     variants: { light: backgroundThemeColors(sourceColor, "light") },
-    sidebarArtwork: true,
-    css: stageArtworkCss(sourceColor),
   };
 }

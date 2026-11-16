@@ -19,8 +19,6 @@ export const CustomBackground = memo(function CustomBackground({
   routeKind: CustomBackgroundRouteKind;
 }) {
   const backdrop = useChatBackdrop(routeKind);
-  const agentBubbles = useClientSettings((settings) => settings.customBackgroundAgentBubbles);
-  const userBubbles = useClientSettings((settings) => settings.customBackgroundUserBubbles);
   const replyTextEmphasis = useClientSettings(
     (settings) => settings.customBackgroundReplyTextEmphasis,
   );
@@ -28,8 +26,6 @@ export const CustomBackground = memo(function CustomBackground({
   return (
     <div
       data-chat-backdrop="source"
-      data-agent-bubbles={agentBubbles || undefined}
-      data-user-bubbles={userBubbles || undefined}
       data-reply-text-emphasis={replyTextEmphasis || undefined}
       className="pointer-events-none absolute inset-0 -z-10"
     >
@@ -48,16 +44,15 @@ interface PaneFrame {
 }
 
 /**
- * Chromium's `backdrop-filter` only sees up to the nearest masked ancestor, so
- * a mask fade on the timeline left reply bubbles and code blocks blurring an
- * empty scroller. Over a background the timeline drops its mask (custom.css)
- * and this strip repaints the pane's picture over the top edge instead, lined
- * up with the pane, so the text still dissolves into it.
+ * Chromium's `backdrop-filter` stops at the nearest masked ancestor, so over a
+ * picture the timeline drops its mask (custom.css) and this strip repaints the
+ * pane's picture over its top edge instead.
  */
 export const ChatBackdropTopFade = memo(function ChatBackdropTopFade() {
   const backdrop = useChatBackdrop("conversation");
   const [strip, setStrip] = useState<HTMLDivElement | null>(null);
   const [frame, setFrame] = useState<PaneFrame | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tracks the strip's offset from the pane through a ResizeObserver
   useLayoutEffect(() => {
     const pane = strip?.closest("[data-chat-background-pane]");
     if (!strip || !pane) return;

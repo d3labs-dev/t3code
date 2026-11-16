@@ -339,8 +339,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "appearance",
   },
   {
-    id: "background-agent-bubbles",
-    title: "Bubbles behind agent replies",
+    id: "background-bubbles",
+    title: "Message bubbles",
     to: "/settings/appearance",
     searchTerms: [
       "readability card assistant response your user sent message wallpaper background blur opacity padding spacing",

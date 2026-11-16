@@ -33,7 +33,7 @@ export function usePictureTheme() {
   return useSyncExternalStore(subscribeToPictureTheme, getPictureTheme, () => null);
 }
 
-export function usePictureThemeActive(): boolean {
+function usePictureThemeActive(): boolean {
   const { theme, themeHalves, resolvedTheme } = useTheme();
   return resolveThemeHalf(theme, themeHalves, resolvedTheme) === PICTURE_THEME_ID;
 }

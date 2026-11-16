@@ -9,7 +9,7 @@ import {
   themeAllowsSidebarArtwork,
 } from "~/themePalette";
 
-import { backgroundThemeColors, pictureThemeDefinition } from "./dynamicTheme";
+import { backgroundThemeColors } from "./dynamicTheme";
 import { PICTURE_THEME_ID, setPictureThemeSeed } from "./pictureTheme";
 
 const TEAL = argbFromHex("#2f8f93");
@@ -40,15 +40,6 @@ it("puts the canvas on opposite sides of the tone scale per appearance", () => {
   const light = Hct.fromInt(argbFromHex(backgroundThemeColors(TEAL, "light").canvas)).tone;
   expect(dark).toBeLessThan(20);
   expect(light).toBeGreaterThan(80);
-});
-
-it("repaints the sidebar header art in the seed's hue", () => {
-  const orange = argbFromHex("#fc7346");
-  const { css } = pictureThemeDefinition(orange);
-  for (const name of ["--stage-art-mid", "--stage-night-base-top"]) {
-    const color = new RegExp(`${name}:(#[0-9a-f]{6});`).exec(css ?? "")?.[1];
-    expect(Math.abs(hue(color!) - Hct.fromInt(orange).hue), name).toBeLessThan(20);
-  }
 });
 
 function tone(color: string): number {
@@ -85,5 +76,5 @@ it("resolves the picture theme in both appearances once a picture seeds it", () 
   const theme = getThemeDefinition(PICTURE_THEME_ID);
   expect(theme && getThemeModes(theme)).toEqual(["light", "dark"]);
   expect(isKnownThemePreference(PICTURE_THEME_ID)).toBe(true);
-  expect(themeAllowsSidebarArtwork(PICTURE_THEME_ID)).toBe(true);
+  expect(themeAllowsSidebarArtwork(PICTURE_THEME_ID)).toBe(false);
 });

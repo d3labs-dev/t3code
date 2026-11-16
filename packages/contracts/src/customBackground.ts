@@ -268,8 +268,6 @@ export interface ImageDitheringPreset {
   readonly id: string;
   readonly name: string;
   readonly filter: ImageDitheringFilter;
-  /** Only presets that define a look for the overlay set the fade sliders. */
-  readonly fade?: Pick<CustomBackgroundRecord, "fade" | "fadeHeight" | "fadeSoftness">;
 }
 
 /**
@@ -282,12 +280,6 @@ export const IMAGE_DITHERING_PRESETS: ReadonlyArray<ImageDitheringPreset> = [
     id: "original",
     name: "Original",
     filter: IMAGE_DITHERING_FILTER.defaults,
-  },
-  {
-    id: "faded",
-    name: "Faded",
-    filter: IMAGE_DITHERING_FILTER.defaults,
-    fade: { fade: 100, fadeHeight: 85, fadeSoftness: 47 },
   },
   {
     id: "violet",
@@ -446,11 +438,9 @@ const RetiredCustomBackgroundFilter = Schema.Struct({
 );
 
 /**
- * A folder whose pictures the playlist follows. On the desktop, `path` is the
- * folder's path and `imageIds` is what it held at its last sync, so a picture
- * the user deselected is told apart from one newly added to the folder. On the
- * phone, `path` is a media library album ID and `imageIds` stays empty: the
- * phone reads the album each time it rotates instead of copying its photos.
+ * Desktop: `path` is a folder and `imageIds` what it held at its last sync, so
+ * a deselected picture differs from a new one. Phone: `path` is a media library
+ * album ID and `imageIds` stays empty, since it reads the album on each rotation.
  */
 export const CustomBackgroundFolder = Schema.Struct({
   path: TrimmedNonEmptyString,

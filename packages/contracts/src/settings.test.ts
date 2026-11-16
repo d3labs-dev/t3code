@@ -493,7 +493,6 @@ describe("ClientSettings custom backgrounds", () => {
 
   it("starts with light, compact bubbles and a subtle text shadow", () => {
     const settings = decodeClientSettings({});
-    expect(settings.customBackgroundAgentBubbles).toBe(true);
     expect(settings.customBackgroundAgentBubbleOpacity).toBe(25);
     expect(settings.customBackgroundAgentBubbleBlur).toBe(0);
     expect(settings.customBackgroundAgentBubblePadding).toBe(10);
@@ -501,18 +500,16 @@ describe("ClientSettings custom backgrounds", () => {
     expect(() => decodeClientSettingsPatch({ customBackgroundAgentBubbleBlur: 21 })).toThrow();
   });
 
-  it("starts with bubbled user messages and a more opaque new-thread input box", () => {
+  it("starts with a more opaque new-thread input box", () => {
     const settings = decodeClientSettings({});
-    expect(settings.customBackgroundUserBubbles).toBe(true);
     expect(settings.customBackgroundHeroComposerOpacity).toBe(94);
     expect(settings.customBackgroundComposerOpacity).toBe(80);
     expect(settings.customBackgroundHeroComposerBlur).toBe(16);
     expect(settings.customBackgroundComposerBlur).toBe(16);
   });
 
-  it("persists the user bubble switch and both input box looks, including clear glass", () => {
+  it("persists both input box looks, including clear glass", () => {
     const patch = decodeClientSettingsPatch({
-      customBackgroundUserBubbles: false,
       customBackgroundHeroComposerOpacity: 0,
       customBackgroundHeroComposerBlur: 0,
       customBackgroundComposerOpacity: 100,
@@ -526,7 +523,6 @@ describe("ClientSettings custom backgrounds", () => {
 
   it("persists readability controls, including zero padding and disabled shadows", () => {
     const patch = decodeClientSettingsPatch({
-      customBackgroundAgentBubbles: false,
       customBackgroundAgentBubbleOpacity: 30,
       customBackgroundAgentBubbleBlur: 0,
       customBackgroundAgentBubblePadding: 0,
