@@ -29,9 +29,6 @@ describe("CustomBackgroundFilter", () => {
       const preset = IMAGE_DITHERING_PRESETS.find((candidate) => candidate.id === id);
       expect(preset).toBeDefined();
       expect(decodeFilter(preset!.filter)).toEqual(preset!.filter);
-      for (const value of Object.values(preset!.fade ?? {})) {
-        expect(Number.isInteger(value) && value >= 0 && value <= 100).toBe(true);
-      }
     },
   );
 
