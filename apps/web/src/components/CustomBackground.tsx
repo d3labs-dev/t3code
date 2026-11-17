@@ -1,7 +1,6 @@
 import { lazy, memo, Suspense, useEffect, useLayoutEffect, useState } from "react";
 
 import { observeResize } from "~/lib/observeResize";
-import { useClientSettings } from "~/hooks/useSettings";
 import type { CustomBackgroundRouteKind } from "~/customBackground/records";
 import { useChatBackdrop } from "~/customBackground/useChatBackdrop";
 
@@ -23,9 +22,6 @@ export const CustomBackground = memo(function CustomBackground({
   routeKind: CustomBackgroundRouteKind;
 }) {
   const backdrop = useChatBackdrop(routeKind);
-  const replyTextEmphasis = useClientSettings(
-    (settings) => settings.customBackgroundReplyTextEmphasis,
-  );
   const readableOpacity = backdrop?.readableOpacity ?? null;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes the picture's readable floor to the panels' CSS on the document root
   useEffect(() => {
@@ -38,11 +34,7 @@ export const CustomBackground = memo(function CustomBackground({
   }, [readableOpacity]);
   if (!backdrop) return null;
   return (
-    <div
-      data-chat-backdrop="source"
-      data-reply-text-emphasis={replyTextEmphasis || undefined}
-      className="pointer-events-none fixed inset-0"
-    >
+    <div data-chat-backdrop="source" className="pointer-events-none fixed inset-0">
       <Suspense fallback={null}>
         <BackgroundRenderer {...backdrop.renderer} />
       </Suspense>

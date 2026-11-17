@@ -497,63 +497,15 @@ describe("ClientSettings custom backgrounds", () => {
     expect(decodeClientSettings({}).customBackgroundEnabled).toBe(true);
   });
 
-  it("starts with light, compact bubbles and a subtle text shadow", () => {
-    const settings = decodeClientSettings({});
-    expect(settings.customBackgroundAgentBubbleOpacity).toBe(25);
-    expect(settings.customBackgroundAgentBubbleBlur).toBe(0);
-    expect(settings.customBackgroundAgentBubblePadding).toBe(10);
-    expect(settings.customBackgroundReplyTextShadow).toBe(40);
-    expect(() => decodeClientSettingsPatch({ customBackgroundAgentBubbleBlur: 21 })).toThrow();
-  });
-
-  it("starts with clear panel glass and a more opaque new-thread input box", () => {
-    const settings = decodeClientSettings({});
-    expect(settings.customBackgroundHeroComposerOpacity).toBe(94);
-    expect(settings.customBackgroundComposerOpacity).toBe(55);
-    expect(settings.customBackgroundHeroComposerBlur).toBe(0);
-    expect(settings.customBackgroundComposerBlur).toBe(0);
-  });
-
-  it("persists both input box looks, including clear glass", () => {
-    const patch = decodeClientSettingsPatch({
-      customBackgroundHeroComposerOpacity: 0,
-      customBackgroundHeroComposerBlur: 0,
-      customBackgroundComposerOpacity: 100,
-      customBackgroundComposerBlur: 40,
-    });
-    const settings = decodeClientSettings(patch);
-    expect(decodeClientSettings(encodeClientSettings(settings))).toMatchObject(patch);
-    expect(() => decodeClientSettingsPatch({ customBackgroundComposerOpacity: 101 })).toThrow();
-    expect(() => decodeClientSettingsPatch({ customBackgroundHeroComposerBlur: 41 })).toThrow();
-  });
-
-  it("persists readability controls, including zero padding and disabled shadows", () => {
-    const patch = decodeClientSettingsPatch({
-      customBackgroundAgentBubbleOpacity: 30,
-      customBackgroundAgentBubbleBlur: 0,
-      customBackgroundAgentBubblePadding: 0,
-      customBackgroundReplyTextShadow: 0,
+  it("still decodes settings saved with the retired bubble and input box controls", () => {
+    const settings = decodeClientSettings({
+      customBackgroundEnabled: false,
+      customBackgroundAgentBubbleOpacity: 61,
       customBackgroundReplyTextEmphasis: true,
+      customBackgroundComposerBlur: 4,
     });
-    const settings = decodeClientSettings(patch);
-    expect(decodeClientSettings(encodeClientSettings(settings))).toMatchObject(patch);
-    expect(
-      decodeClientSettingsPatch({
-        customBackgroundAgentBubblePadding: 24,
-        customBackgroundReplyTextShadow: 100,
-      }),
-    ).toMatchObject({
-      customBackgroundAgentBubblePadding: 24,
-      customBackgroundReplyTextShadow: 100,
-    });
-    for (const value of [-1, 25, 1.5]) {
-      expect(() =>
-        decodeClientSettingsPatch({ customBackgroundAgentBubblePadding: value }),
-      ).toThrow();
-    }
-    for (const value of [-1, 101, 1.5]) {
-      expect(() => decodeClientSettingsPatch({ customBackgroundReplyTextShadow: value })).toThrow();
-    }
+    expect(settings.customBackgroundEnabled).toBe(false);
+    expect(settings).not.toHaveProperty("customBackgroundAgentBubbleOpacity");
   });
 
   it("gives playlists saved before blur and brightness adapt existed neither", () => {
