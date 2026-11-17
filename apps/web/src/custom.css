@@ -453,3 +453,9 @@ html[data-theme-id="t3-chat"] {
   border-radius: var(--radius-lg);
   background-color: var(--wallpaper-glass);
 }
+
+/* The group header has no inset of its own, so its avatar rings would spill
+   past the bubble's edge. */
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"]) [data-subagent-group] {
+  padding-inline: --spacing(2);
+}
