@@ -55,6 +55,11 @@ export function BackgroundThemeSync() {
     style.setProperty("--hero-composer-glass-blur", `${heroComposerBlur}px`);
     style.setProperty("--composer-glass-opacity", `${composerOpacity}%`);
     style.setProperty("--composer-glass-blur", `${composerBlur}px`);
+    // A zero blur still costs a backdrop pass per frame while saturate is on.
+    style.setProperty(
+      "--wallpaper-panel-backdrop",
+      composerBlur === 0 ? "none" : `blur(${composerBlur}px) saturate(var(--glass-saturation))`,
+    );
   }, [heroComposerOpacity, heroComposerBlur, composerOpacity, composerBlur]);
   const editing = useBackgroundStudioOpen();
   const preview = useBackgroundStudioStore((store) => store.preview);

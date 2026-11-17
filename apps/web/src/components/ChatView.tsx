@@ -1,4 +1,3 @@
-import { CustomBackground } from "./CustomBackground";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -3329,9 +3328,8 @@ export default function ChatView(props: ChatViewProps) {
       ref={setWorkspaceLayoutElement}
       data-chat-background-pane
       data-chat-draft-hero={isDraftHeroState || undefined}
-      className="relative isolate flex min-h-0 min-w-0 flex-1 overflow-hidden"
+      className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
     >
-      <CustomBackground routeKind={isDraftHeroState ? "draft" : "conversation"} />
       {embedded ? null : (
         <DeviceSetupDialogHost
           threadKey={activeThreadKey}

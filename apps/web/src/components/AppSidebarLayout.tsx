@@ -53,7 +53,8 @@ const BackgroundStudioSidebar = lazy(() =>
 );
 import { SidebarBrandWidthProbe, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarPeek } from "./sidebar/SidebarPeek";
-import { isAppModalPage } from "./sidebar/mainAppLocation";
+import { isAppModalPage, isSidebarUtilityPage } from "./sidebar/mainAppLocation";
+import { CustomBackground } from "./CustomBackground";
 import type { SidebarRouteReveal } from "./sidebar/routeReveal";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import {
@@ -481,6 +482,9 @@ export function AppSidebarLayout({
         storageKey="chat_thread_sidebar_open"
         style={sidebarProviderStyle}
       >
+        <CustomBackground
+          routeKind={showSidebar && !isSidebarUtilityPage(pathname) ? "conversation" : "other"}
+        />
         {showSidebar ? (
           <>
             <SidebarBrandWidthProbe isElectron={isElectron} onWidthChange={setBrandWidth} />

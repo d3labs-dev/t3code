@@ -17,7 +17,7 @@ import {
   type CustomBackgroundSource,
   type PhoneBackground,
 } from "@t3tools/contracts";
-import type { PictureTone } from "@t3tools/shared/customBackgroundBrightness";
+import { type PictureTone, summarizePictureTone } from "@t3tools/shared/customBackgroundBrightness";
 import {
   type CustomBackgroundFadeLevels,
   customBackgroundFadeStops,
@@ -127,24 +127,9 @@ export function sourceColorFromPixels(rgba: Uint8Array): number | null {
   return Score.score(QuantizerCelebi.quantize(pixels, 128))[0] ?? null;
 }
 
-// Material's chroma tops out near 120 for the most saturated sRGB colors.
-const FULL_CHROMA = 100;
-
-/** The desktop's picture tone: mean HCT tone and chroma of the opaque pixels. */
+/** The desktop's picture tone measures over the opaque pixels. */
 export function toneFromPixels(rgba: Uint8Array): PictureTone | null {
-  const pixels = opaqueArgb(rgba);
-  if (pixels.length === 0) return null;
-  let tone = 0;
-  let chroma = 0;
-  for (const pixel of pixels) {
-    const hct = Hct.fromInt(pixel);
-    tone += hct.tone;
-    chroma += Math.min(FULL_CHROMA, hct.chroma);
-  }
-  return {
-    lightness: tone / pixels.length / 100,
-    colorfulness: chroma / pixels.length / FULL_CHROMA,
-  };
+  return summarizePictureTone(opaqueArgb(rgba).map((pixel) => Hct.fromInt(pixel)));
 }
 
 // A phone screen is small and busy, so its picture starts faint behind the list.

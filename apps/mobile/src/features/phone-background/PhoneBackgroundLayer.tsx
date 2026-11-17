@@ -1,4 +1,4 @@
-import { adaptToBrightness } from "@t3tools/shared/customBackgroundBrightness";
+import { ADAPT_MAX_REDUCTION, adaptToBrightness } from "@t3tools/shared/customBackgroundBrightness";
 import { Image } from "expo-image";
 import { StyleSheet, View } from "react-native";
 
@@ -29,7 +29,14 @@ export function PhoneBackgroundLayer() {
   // Measured ahead so the next picture arrives with its own look already known.
   usePhonePictureMeasure(record === null ? null : (image.upcoming?.uri ?? null));
   if (record === null || phoneBackdropColor === null) return null;
-  const look = tone ? adaptToBrightness({ ...record, tone, appearance: themeAppearance }) : record;
+  const look = tone
+    ? adaptToBrightness({
+        ...record,
+        tone,
+        appearance: themeAppearance,
+        maxReduction: ADAPT_MAX_REDUCTION.behindBubbles,
+      })
+    : record;
 
   return (
     <View

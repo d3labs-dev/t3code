@@ -249,14 +249,14 @@ export const ComposerGlassOpacity = Schema.Int.check(
 export type ComposerGlassOpacity = typeof ComposerGlassOpacity.Type;
 /** The new-thread input floats mid-pane where the picture is brightest, so it starts more opaque. */
 export const DEFAULT_HERO_COMPOSER_GLASS_OPACITY: ComposerGlassOpacity = 94;
-export const DEFAULT_COMPOSER_GLASS_OPACITY: ComposerGlassOpacity = 80;
+export const DEFAULT_COMPOSER_GLASS_OPACITY: ComposerGlassOpacity = 55;
 
 export const MAX_COMPOSER_GLASS_BLUR = 40;
 export const ComposerGlassBlur = Schema.Int.check(
   Schema.isBetween({ minimum: 0, maximum: MAX_COMPOSER_GLASS_BLUR }),
 );
 export type ComposerGlassBlur = typeof ComposerGlassBlur.Type;
-export const DEFAULT_COMPOSER_GLASS_BLUR: ComposerGlassBlur = 16;
+export const DEFAULT_COMPOSER_GLASS_BLUR: ComposerGlassBlur = 0;
 
 export const ReplyTextShadow = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 }));
 export type ReplyTextShadow = typeof ReplyTextShadow.Type;
