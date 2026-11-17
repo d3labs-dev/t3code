@@ -387,11 +387,11 @@ html[data-theme-id="t3-chat"] {
 
   /* Upstream's draft tint is 4% amber, which the glass swallows. */
   & [data-app-sidebar] .bg-warning\/4 {
-    background-color: color-mix(in srgb, var(--warning) 24%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 30%, transparent);
+    background-color: color-mix(in srgb, var(--warning) 20%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 15%, transparent);
 
     &:hover {
-      background-color: color-mix(in srgb, var(--warning) 30%, transparent);
+      background-color: color-mix(in srgb, var(--warning) 26%, transparent);
     }
   }
 
