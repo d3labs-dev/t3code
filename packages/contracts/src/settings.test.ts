@@ -500,12 +500,12 @@ describe("ClientSettings custom backgrounds", () => {
     expect(() => decodeClientSettingsPatch({ customBackgroundAgentBubbleBlur: 21 })).toThrow();
   });
 
-  it("starts with a more opaque new-thread input box", () => {
+  it("starts with clear panel glass and a more opaque new-thread input box", () => {
     const settings = decodeClientSettings({});
     expect(settings.customBackgroundHeroComposerOpacity).toBe(94);
-    expect(settings.customBackgroundComposerOpacity).toBe(80);
-    expect(settings.customBackgroundHeroComposerBlur).toBe(16);
-    expect(settings.customBackgroundComposerBlur).toBe(16);
+    expect(settings.customBackgroundComposerOpacity).toBe(55);
+    expect(settings.customBackgroundHeroComposerBlur).toBe(0);
+    expect(settings.customBackgroundComposerBlur).toBe(0);
   });
 
   it("persists both input box looks, including clear glass", () => {

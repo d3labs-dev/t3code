@@ -48,7 +48,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
 
 /* Over a picture any fill reads as a square slab, so the strip stays bare and
    the wallpaper runs under it. Unlayered so it beats the surface-glass utility. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"])
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"])
   [data-slot="composer-context-strip"] {
   background: none;
   -webkit-backdrop-filter: none;
@@ -109,25 +109,29 @@ html[data-theme-id]:not([data-theme-id=""]) {
 
 @layer components {
   /* BackgroundThemeSync sets the input box glass for new and ongoing threads. */
-  [data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-chat-composer-stack] {
-    --glass-opacity: var(--composer-glass-opacity, 80%);
-    --glass-blur: var(--composer-glass-blur, 16px);
+  [data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"]) [data-chat-composer-stack] {
+    --glass-opacity: max(var(--composer-glass-opacity, 55%), var(--wallpaper-readable-opacity, 0%));
+    --glass-blur: var(--composer-glass-blur, 0px);
   }
 
-  [data-chat-background-pane][data-chat-draft-hero]:has(> [data-chat-backdrop="source"])
+  [data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"])
+    [data-chat-draft-hero]
     [data-chat-composer-stack] {
-    --glass-opacity: var(--hero-composer-glass-opacity, 94%);
-    --glass-blur: var(--hero-composer-glass-blur, 16px);
+    --glass-opacity: max(
+      var(--hero-composer-glass-opacity, 94%),
+      var(--wallpaper-readable-opacity, 0%)
+    );
+    --glass-blur: var(--hero-composer-glass-blur, 0px);
   }
 
-  [data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-chat-header] {
+  [data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"]) [data-chat-header] {
     z-index: 10;
   }
 
   /* Only the reply's text sits on the bubble, not its copy button or timestamp.
      Blur is off by default: backdrop blur on every reply re-samples the
      picture on each scrolled frame. BackgroundThemeSync sets both variables. */
-  [data-chat-background-pane]:has(> [data-chat-backdrop="source"])
+  [data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"])
     [data-assistant-reply]
     [data-assistant-citation-source] {
     width: fit-content;
@@ -137,7 +141,8 @@ html[data-theme-id]:not([data-theme-id=""]) {
     padding: var(--agent-bubble-padding, 10px);
     background-color: color-mix(
       in srgb,
-      var(--bubble-surface) var(--agent-bubble-opacity, 25%),
+      var(--bubble-surface)
+        max(var(--agent-bubble-opacity, 25%), var(--wallpaper-readable-opacity, 0%)),
       transparent
     );
     -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
@@ -146,13 +151,14 @@ html[data-theme-id]:not([data-theme-id=""]) {
 
   /* An agent's HTML render page is transparent over a background, so it takes
      the reply bubble's look; the padding sits outside the measured frame. */
-  [data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-html-render-bubble] {
+  [data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"]) [data-html-render-bubble] {
     margin-inline: calc(var(--agent-bubble-padding, 10px) * -1);
     border-radius: var(--radius-2xl);
     padding: var(--agent-bubble-padding, 10px);
     background-color: color-mix(
       in srgb,
-      var(--bubble-surface) var(--agent-bubble-opacity, 25%),
+      var(--bubble-surface)
+        max(var(--agent-bubble-opacity, 25%), var(--wallpaper-readable-opacity, 0%)),
       transparent
     );
     -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
@@ -162,7 +168,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
   /* Each row clips its overflow at the lane's padding edge, which would cut the
      bubble's sides where it reaches past the column. Widen the lane by the
      bubble padding and pad it back, so text stays put and the clip moves out. */
-  [data-chat-background-pane]:has(> [data-chat-backdrop="source"])
+  [data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"])
     .chat-content-lane[data-timeline-root] {
     max-width: calc(var(--chat-content-max-width) + var(--agent-bubble-padding, 10px) * 2);
     padding-inline: var(--agent-bubble-padding, 10px);
@@ -221,22 +227,15 @@ html[data-theme-id]:not([data-theme-id=""]) {
   color: var(--contrast-foreground);
 }
 
-/* The no-projects screen paints its wallpaper inside the inset itself. */
-[data-slot="sidebar-inset"]:has(> [data-chat-backdrop="source"]) {
-  position: relative;
-  isolation: isolate;
+/* The page beside the sidebar stays clear so the one picture behind the window shows. */
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"]) [data-slot="sidebar-inset"] {
   background-color: transparent;
-  color: var(--foreground);
-
-  & > :not([data-chat-backdrop]) {
-    background-color: transparent;
-  }
 }
 
 /* A mask here would hide the picture from every backdrop-filter in the
    timeline; ChatBackdropTopFade paints the fade instead. Unlayered so it beats
    the topbar-scroll-fade utility. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"])
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"])
   [data-assistant-citation-viewport]
   .topbar-scroll-fade {
   -webkit-mask-image: none;
@@ -251,7 +250,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
 /* Dark themes draw the composer outline in an opaque near-background color,
    which reads as a black line over a picture. Use the context strip's white/7
    edge instead. Unlayered so it beats the theme utilities. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"]) {
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"]) {
   @variant dark {
     & [data-slot="composer-shell"] {
       --chat-composer-outline: color-mix(in srgb, var(--color-white) 7%, transparent);
@@ -262,11 +261,12 @@ html[data-theme-id]:not([data-theme-id=""]) {
 /* Your messages share the reply bubbles' padding, opacity, and blur. Unlayered so it
    beats the surface-glass utility; set on the bubble alone so the glass tiles
    inside it keep their own look. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-user-message-bubble] {
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"]) [data-user-message-bubble] {
   padding: var(--agent-bubble-padding, 10px);
   background: color-mix(
     in srgb,
-    var(--bubble-surface) var(--agent-bubble-opacity, 25%),
+    var(--bubble-surface)
+      max(var(--agent-bubble-opacity, 25%), var(--wallpaper-readable-opacity, 0%)),
     transparent
   );
   -webkit-backdrop-filter: var(--agent-bubble-backdrop, none);
@@ -275,38 +275,64 @@ html[data-theme-id]:not([data-theme-id=""]) {
 
 /* Replies draw at 90% foreground; this gives them the full color your own
    messages use. Unlayered so it beats ChatMarkdown's text color utility. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"][data-reply-text-emphasis])
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"][data-reply-text-emphasis])
   [data-assistant-reply]
   [data-assistant-citation-source]
   .chat-markdown {
   color: var(--contrast-message-foreground);
 }
 
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"])
-  [data-assistant-reply]
-  [data-assistant-citation-source]
-  .chat-markdown {
-  --reply-text-shadow-color: rgb(255 255 255 / var(--reply-text-shadow-opacity, 40%));
+/* Text that sits on the picture, from replies to the header and the "Worked
+   for" rows, carries a halo that strengthens with the picture's readable
+   floor, and muted text leans toward the foreground; code keeps its glass. */
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"])
+  :is([data-chat-header], [data-workspace-area="conversation"]) {
+  --muted-foreground: color-mix(in srgb, var(--foreground) 70%, var(--muted-foreground));
+  --reply-text-shadow-strength: max(
+    var(--reply-text-shadow-opacity, 40%),
+    var(--wallpaper-readable-opacity, 0%)
+  );
+  --reply-text-shadow-color: rgb(255 255 255 / var(--reply-text-shadow-strength));
   text-shadow:
-    0 1px 2px var(--reply-text-shadow-color),
-    0 0 4px var(--reply-text-shadow-color);
+    0 0 1px var(--reply-text-shadow-color),
+    0 1px 3px var(--reply-text-shadow-color);
 
   @variant dark {
-    --reply-text-shadow-color: rgb(0 0 0 / var(--reply-text-shadow-opacity, 40%));
+    --reply-text-shadow-color: rgb(0 0 0 / var(--reply-text-shadow-strength));
   }
 
   & pre,
   & code,
-  & button {
+  & [data-slot="button"] {
     text-shadow: none;
+  }
+
+  /* Chromium's form control defaults drop the inherited shadow. */
+  & button:not([data-slot="button"]) {
+    text-shadow: inherit;
   }
 }
 
-/* Over a wallpaper the header stays clear so the picture runs to the top edge;
-   the timeline's scroll fade keeps text from meeting the header. More specific
-   than the palette's header rule, so it wins for every theme. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"]) [data-chat-header] {
-  background-color: transparent;
+/* Small labels with no surface of their own get a wide, soft shadow under
+   the halo, so they read as on a faint backing rather than a pill. */
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"])
+  :is([data-timeline-row-kind="turn-fold"], [data-chat-thread-status-line]) {
+  text-shadow:
+    0 0 1px var(--reply-text-shadow-color),
+    0 1px 3px var(--reply-text-shadow-color),
+    0 0 10px var(--reply-text-shadow-color);
+}
+
+/* Over a wallpaper the header fades from panel glass to clear, so its title
+   reads on any picture and the picture still runs to the top edge. More
+   specific than the palette's header rule, so it wins for every theme. */
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"]) [data-chat-header] {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--glass-surface) var(--wallpaper-panel-opacity), transparent) 0%,
+    color-mix(in srgb, var(--glass-surface) var(--wallpaper-panel-opacity), transparent) 45%,
+    transparent 100%
+  );
 }
 
 /* Code surfaces are frosted glass over the wallpaper. Code inside a code
@@ -360,6 +386,47 @@ html[data-theme-id="t3-chat"] {
   z-index: 150;
 }
 
+/* The sidebar and the thread details card wear the input box's glass over a
+   wallpaper, so every panel on the picture reads as the same material.
+   CustomBackground sets the readable floor from the picture showing. */
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"]) {
+  --wallpaper-panel-opacity: max(
+    var(--composer-glass-opacity, 55%),
+    var(--wallpaper-readable-opacity, 0%)
+  );
+
+  & [data-app-sidebar] [data-slot="sidebar-inner"],
+  & [data-thread-details-card] {
+    background: color-mix(
+      in srgb,
+      var(--glass-surface) var(--wallpaper-panel-opacity),
+      transparent
+    );
+    -webkit-backdrop-filter: var(--wallpaper-panel-backdrop, none);
+    backdrop-filter: var(--wallpaper-panel-backdrop, none);
+  }
+
+  /* The edge reads as depth rather than a hairline cut through the picture. */
+  & [data-app-sidebar]:not([data-peek]) {
+    border-color: transparent;
+    box-shadow:
+      inset -1px 0 0 color-mix(in srgb, var(--contrast-foreground) 14%, transparent),
+      1px 0 14px rgb(0 0 0 / 18%);
+  }
+
+  /* The channel artwork is a picture of its own; over a wallpaper it clashes. */
+  & .sidebar-stage-backdrop {
+    display: none;
+  }
+
+  /* Code keeps its fill but never blurs: a backdrop pass per code block per
+     scrolled frame, and the picture should stay sharp. */
+  & .chat-markdown :is(pre, .chat-markdown-codeblock) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
 /* SidebarPeek floats the collapsed sidebar as a card over the main pane and
    above the sidebar toggle, without reflowing the pane. The slide length
    matches SLIDE_MS in SidebarPeek.tsx. */
@@ -393,7 +460,7 @@ html[data-theme-id="t3-chat"] {
 
 /* Subagent rows sit on the reply bubble's surface over a picture; a group's
    own rows share the group's bubble. */
-[data-chat-background-pane]:has(> [data-chat-backdrop="source"])
+[data-slot="sidebar-wrapper"]:has(> [data-chat-backdrop="source"])
   :is([data-subagent-group], [data-v2-item-type="subagent"]:not([data-subagent-group] *)) {
   border-radius: var(--radius-lg);
   background-color: color-mix(

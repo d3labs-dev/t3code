@@ -1,4 +1,8 @@
-import { adaptToBrightness } from "@t3tools/shared/customBackgroundBrightness";
+import {
+  ADAPT_MAX_REDUCTION,
+  adaptToBrightness,
+  readableSurfaceOpacity,
+} from "@t3tools/shared/customBackgroundBrightness";
 import { useState } from "react";
 
 import type { BackgroundRendererProps } from "~/components/background/BackgroundRenderer";
@@ -19,10 +23,14 @@ import { isWebGlAvailable } from "./webgl";
 
 const NO_SOURCE = { kind: "none" } as const;
 
-/** What the chat pane's background draws right now, or null when it draws nothing. */
-export function useChatBackdrop(
-  routeKind: CustomBackgroundRouteKind,
-): BackgroundRendererProps | null {
+export interface ChatBackdrop {
+  readonly renderer: BackgroundRendererProps;
+  /** Least panel opacity, 0 to 100, that keeps text readable over the picture shown. */
+  readonly readableOpacity: number;
+}
+
+/** What the window's background draws right now, or null when it draws nothing. */
+export function useChatBackdrop(routeKind: CustomBackgroundRouteKind): ChatBackdrop | null {
   const selected = useActiveBackground();
   const enabled = useClientSettings((settings) => settings.customBackgroundEnabled);
   const editing = useBackgroundStudioOpen();
@@ -57,13 +65,25 @@ export function useChatBackdrop(
   const shownImage = typeof image === "string" ? image : image === null ? lastImage : null;
   if (!record || !backgroundIsRenderable(record, filtersAvailable)) return null;
   if (imageId !== null && shownImage === null) return null;
-  const look = tone ? adaptToBrightness({ ...record, tone, appearance: resolvedTheme }) : record;
+  const look = tone
+    ? adaptToBrightness({
+        ...record,
+        tone,
+        appearance: resolvedTheme,
+        maxReduction: ADAPT_MAX_REDUCTION.behindReadablePanels,
+      })
+    : record;
   return {
-    filter: record.filter,
-    image: shownImage,
-    transition: source.kind === "image" ? source.transition : "cut",
-    opacity: look.opacity,
-    blur: record.blur,
-    filtersAvailable,
+    renderer: {
+      filter: record.filter,
+      image: shownImage,
+      transition: source.kind === "image" ? source.transition : "cut",
+      opacity: look.opacity,
+      blur: record.blur,
+      filtersAvailable,
+    },
+    readableOpacity: tone
+      ? readableSurfaceOpacity({ tone, pictureOpacity: look.opacity, appearance: resolvedTheme })
+      : 0,
   };
 }

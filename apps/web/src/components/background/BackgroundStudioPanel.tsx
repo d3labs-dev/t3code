@@ -18,7 +18,7 @@ import {
   MIN_CUSTOM_BACKGROUND_FADE,
   defaultCustomBackgroundFilter,
 } from "@t3tools/contracts";
-import { adaptToBrightness } from "@t3tools/shared/customBackgroundBrightness";
+import { ADAPT_MAX_REDUCTION, adaptToBrightness } from "@t3tools/shared/customBackgroundBrightness";
 import {
   BanIcon,
   ChevronLeftIcon,
@@ -241,7 +241,14 @@ function BrightnessAdaptControl({
   const { current } = useRotatingBackgroundImage(record.source);
   const tone = useBackgroundImageTone(current);
   const { resolvedTheme } = useTheme();
-  const look = tone ? adaptToBrightness({ ...record, tone, appearance: resolvedTheme }) : null;
+  const look = tone
+    ? adaptToBrightness({
+        ...record,
+        tone,
+        appearance: resolvedTheme,
+        maxReduction: ADAPT_MAX_REDUCTION.behindReadablePanels,
+      })
+    : null;
   return (
     <>
       <RangeControl

@@ -1,6 +1,6 @@
 import { Hct, QuantizerCelebi, Score } from "@material/material-color-utilities";
 
-import type { PictureTone } from "@t3tools/shared/customBackgroundBrightness";
+import { type PictureTone, summarizePictureTone } from "@t3tools/shared/customBackgroundBrightness";
 
 import { createCanvas } from "~/lib/imageCompression";
 
@@ -75,22 +75,9 @@ export function seedFromPixels(pixels: number[]): number | null {
   return seed === undefined || seed === UNSCORED ? null : seed;
 }
 
-// Material's chroma tops out near 120 for the most saturated sRGB colors.
-const FULL_CHROMA = 100;
-
-/** Mean HCT tone and chroma of the picture; null when it cannot be decoded. */
+/** The picture's tone measures; null when it cannot be decoded. */
 export async function toneFromImage(blob: Blob): Promise<PictureTone | null> {
   const pixels = await samplePixels(blob);
   if (!pixels) return null;
-  let tone = 0;
-  let chroma = 0;
-  for (const pixel of pixels) {
-    const hct = Hct.fromInt(pixel);
-    tone += hct.tone;
-    chroma += Math.min(FULL_CHROMA, hct.chroma);
-  }
-  return {
-    lightness: tone / pixels.length / 100,
-    colorfulness: chroma / pixels.length / FULL_CHROMA,
-  };
+  return summarizePictureTone(pixels.map((pixel) => Hct.fromInt(pixel)));
 }

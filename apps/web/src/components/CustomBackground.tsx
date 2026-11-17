@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useLayoutEffect, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useLayoutEffect, useState } from "react";
 
 import { observeResize } from "~/lib/observeResize";
 import { useClientSettings } from "~/hooks/useSettings";
@@ -13,6 +13,10 @@ const BackgroundRenderer = lazy(() =>
   })),
 );
 
+/**
+ * One picture behind the whole window, sidebar included. custom.css reads the
+ * flags on this layer to clear the surfaces above it and give them glass.
+ */
 export const CustomBackground = memo(function CustomBackground({
   routeKind,
 }: {
@@ -22,21 +26,31 @@ export const CustomBackground = memo(function CustomBackground({
   const replyTextEmphasis = useClientSettings(
     (settings) => settings.customBackgroundReplyTextEmphasis,
   );
+  const readableOpacity = backdrop?.readableOpacity ?? null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes the picture's readable floor to the panels' CSS on the document root
+  useEffect(() => {
+    if (readableOpacity === null) return;
+    const { style } = document.documentElement;
+    style.setProperty("--wallpaper-readable-opacity", `${readableOpacity}%`);
+    return () => {
+      style.removeProperty("--wallpaper-readable-opacity");
+    };
+  }, [readableOpacity]);
   if (!backdrop) return null;
   return (
     <div
       data-chat-backdrop="source"
       data-reply-text-emphasis={replyTextEmphasis || undefined}
-      className="pointer-events-none absolute inset-0 -z-10"
+      className="pointer-events-none fixed inset-0"
     >
       <Suspense fallback={null}>
-        <BackgroundRenderer {...backdrop} />
+        <BackgroundRenderer {...backdrop.renderer} />
       </Suspense>
     </div>
   );
 });
 
-interface PaneFrame {
+interface WindowFrame {
   top: number;
   left: number;
   width: number;
@@ -45,28 +59,31 @@ interface PaneFrame {
 
 /**
  * Chromium's `backdrop-filter` stops at the nearest masked ancestor, so over a
- * picture the timeline drops its mask (custom.css) and this strip repaints the
- * pane's picture over its top edge instead.
+ * background the timeline drops its fade mask (custom.css). This strip
+ * repaints the window's picture over the top edge so text still dissolves.
  */
 export const ChatBackdropTopFade = memo(function ChatBackdropTopFade() {
   const backdrop = useChatBackdrop("conversation");
   const [strip, setStrip] = useState<HTMLDivElement | null>(null);
-  const [frame, setFrame] = useState<PaneFrame | null>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tracks the strip's offset from the pane through a ResizeObserver
+  const [frame, setFrame] = useState<WindowFrame | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tracks the strip's place in the window through resize observers and window resizes
   useLayoutEffect(() => {
-    const pane = strip?.closest("[data-chat-background-pane]");
-    if (!strip || !pane) return;
+    if (!strip) return;
     const measure = () => {
       const stripRect = strip.getBoundingClientRect();
-      const paneRect = pane.getBoundingClientRect();
       setFrame({
-        top: paneRect.top - stripRect.top,
-        left: paneRect.left - stripRect.left,
-        width: paneRect.width,
-        height: paneRect.height,
+        top: -stripRect.top,
+        left: -stripRect.left,
+        width: window.innerWidth,
+        height: window.innerHeight,
       });
     };
-    return observeResize([strip, pane], measure);
+    window.addEventListener("resize", measure);
+    const stopObserving = observeResize(strip, measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      stopObserving();
+    };
   }, [strip]);
   if (!backdrop) return null;
   return (
@@ -74,7 +91,7 @@ export const ChatBackdropTopFade = memo(function ChatBackdropTopFade() {
       {frame ? (
         <div className="absolute" style={frame}>
           <Suspense fallback={null}>
-            <BackgroundRenderer {...backdrop} />
+            <BackgroundRenderer {...backdrop.renderer} />
           </Suspense>
         </div>
       ) : null}
