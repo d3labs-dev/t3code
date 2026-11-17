@@ -39,21 +39,8 @@ import { ProjectScript, type ProjectMutation } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
 import {
-  AgentBubbleBlur,
-  AgentBubbleOpacity,
-  AgentBubblePadding,
-  ComposerGlassBlur,
-  ComposerGlassOpacity,
-  ReplyTextShadow,
   CustomBackgroundId,
   CustomBackgroundRecords,
-  DEFAULT_AGENT_BUBBLE_BLUR,
-  DEFAULT_AGENT_BUBBLE_OPACITY,
-  DEFAULT_AGENT_BUBBLE_PADDING,
-  DEFAULT_COMPOSER_GLASS_BLUR,
-  DEFAULT_COMPOSER_GLASS_OPACITY,
-  DEFAULT_HERO_COMPOSER_GLASS_OPACITY,
-  DEFAULT_REPLY_TEXT_SHADOW,
   StoredCustomBackgroundRecords,
 } from "./customBackground.ts";
 import {
@@ -444,36 +431,6 @@ export const ClientSettingsSchema = Schema.Struct({
   /** Which library entry renders behind chats; null keeps the plain theme. */
   activeCustomBackgroundId: Schema.NullOr(CustomBackgroundId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
-  ),
-  customBackgroundAgentBubbleOpacity: AgentBubbleOpacity.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_BUBBLE_OPACITY)),
-  ),
-  customBackgroundAgentBubbleBlur: AgentBubbleBlur.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_BUBBLE_BLUR)),
-  ),
-  customBackgroundAgentBubblePadding: AgentBubblePadding.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_BUBBLE_PADDING)),
-  ),
-  customBackgroundReplyTextShadow: ReplyTextShadow.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_REPLY_TEXT_SHADOW)),
-  ),
-  /** Glass of the input box over a background on a new thread. */
-  customBackgroundHeroComposerOpacity: ComposerGlassOpacity.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_HERO_COMPOSER_GLASS_OPACITY)),
-  ),
-  customBackgroundHeroComposerBlur: ComposerGlassBlur.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_COMPOSER_GLASS_BLUR)),
-  ),
-  /** Glass of the input box over a background once the thread has messages. */
-  customBackgroundComposerOpacity: ComposerGlassOpacity.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_COMPOSER_GLASS_OPACITY)),
-  ),
-  customBackgroundComposerBlur: ComposerGlassBlur.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_COMPOSER_GLASS_BLUR)),
-  ),
-  /** Makes agent reply text bolder, and brighter in dark mode, over a background. */
-  customBackgroundReplyTextEmphasis: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
   ),
   appearanceContrast: AppearanceContrast.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_APPEARANCE_CONTRAST)),
@@ -2124,15 +2081,6 @@ export const ClientSettingsPatch = Schema.Struct({
   customBackgrounds: Schema.optionalKey(CustomBackgroundRecords),
   customBackgroundEnabled: Schema.optionalKey(Schema.Boolean),
   activeCustomBackgroundId: Schema.optionalKey(Schema.NullOr(CustomBackgroundId)),
-  customBackgroundAgentBubbleOpacity: Schema.optionalKey(AgentBubbleOpacity),
-  customBackgroundAgentBubbleBlur: Schema.optionalKey(AgentBubbleBlur),
-  customBackgroundReplyTextEmphasis: Schema.optionalKey(Schema.Boolean),
-  customBackgroundAgentBubblePadding: Schema.optionalKey(AgentBubblePadding),
-  customBackgroundReplyTextShadow: Schema.optionalKey(ReplyTextShadow),
-  customBackgroundHeroComposerOpacity: Schema.optionalKey(ComposerGlassOpacity),
-  customBackgroundHeroComposerBlur: Schema.optionalKey(ComposerGlassBlur),
-  customBackgroundComposerOpacity: Schema.optionalKey(ComposerGlassOpacity),
-  customBackgroundComposerBlur: Schema.optionalKey(ComposerGlassBlur),
   appearanceContrast: Schema.optionalKey(AppearanceContrast),
   panelAnimationDurationMs: Schema.optionalKey(PanelAnimationDurationMs),
   browserDefaultViewport: Schema.optionalKey(PreviewViewportSetting),

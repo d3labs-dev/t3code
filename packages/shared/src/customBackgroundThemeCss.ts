@@ -6,34 +6,26 @@ export const CUSTOM_BACKGROUND_THEME_CSS_HOOKS = [
   {
     selector: '[data-chat-backdrop="source"]',
     styles:
-      "the picture layer behind the whole window, sidebar included, present while a picture shows; carries data-reply-text-emphasis when that is on",
+      "the picture layer behind the whole window, sidebar included, present while a picture shows",
   },
   { selector: ".custom-background-slide", styles: "the picture itself" },
 ] as const;
 
-/**
- * Each slider in Customize background writes one of these on the document root.
- * Theme CSS that sets one on the scope below wins, since it is closer to what reads it.
- */
+/** Theme CSS that sets one of these on the scope below changes every surface that reads it. */
 const LOOK_VARIABLES = [
-  ["--agent-bubble-opacity", "fill of reply and message bubbles, a percentage"],
-  ["--agent-bubble-backdrop", "`none` or a filter such as `blur(8px)` behind bubbles"],
-  ["--agent-bubble-padding", "bubble padding, a length"],
-  ["--reply-text-shadow-opacity", "shadow behind reply text, a percentage"],
   [
-    "--composer-glass-opacity",
-    "fill of the composer, sidebar, and thread details card, a percentage",
+    "--wallpaper-panel-opacity",
+    "fill of the sidebar, details card, input box, and bubbles, a percentage; defaults to max(55%, var(--wallpaper-readable-opacity))",
   ],
-  ["--composer-glass-blur", "blur behind the composer, sidebar, and details card, a length"],
-  ["--hero-composer-glass-opacity", "composer fill on a new thread, a percentage"],
-  ["--hero-composer-glass-blur", "composer blur on a new thread, a length"],
+  ["--wallpaper-glass", "the fill color those surfaces share, built from that opacity"],
+  ["--wallpaper-bubble-padding", "bubble padding, a length"],
 ] as const;
 
 export const CUSTOM_BACKGROUND_THEME_GUIDE = [
   "Custom background: the user can show their own pictures behind the chat. Pictures, filters, fade, and rotation are set in Customize background, not by themes.",
   `Scope rules to a showing picture with \`${SHOWING}\`.`,
-  "Its look reads these variables. Set them in that scope so they win over the user's sliders:",
+  "Its look reads these variables, set in that scope:",
   ...LOOK_VARIABLES.map(([name, meaning]) => `- ${name}: ${meaning}`),
-  "The app sets --wallpaper-readable-opacity from the picture showing; panel and bubble fills never drop under it, so text stays readable.",
+  "The app sets --wallpaper-readable-opacity from the picture showing, the least fill that keeps text readable on it.",
   ...CUSTOM_BACKGROUND_THEME_CSS_HOOKS.map((hook) => `- ${hook.selector}: ${hook.styles}`),
 ].join("\n");
