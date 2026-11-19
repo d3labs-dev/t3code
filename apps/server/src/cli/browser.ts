@@ -9,6 +9,7 @@ import { Command } from "effect/cli";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
+import * as PreviewBrowser from "../preview/PreviewBrowser.ts";
 import * as PreviewBrowserHost from "../preview/PreviewBrowserHost.ts";
 import { resolveBaseDir } from "../os-jank.ts";
 import { baseDirFlag } from "./config.ts";
@@ -64,21 +65,25 @@ const aptOffers = Effect.fn("browserSetup.aptOffers")(function* (name: string) {
   return candidate !== undefined && candidate !== "(none)";
 });
 
-const installedBrowser = Effect.fn("browserSetup.installedBrowser")(function* (baseDir: string) {
+/** Setup runs only on Linux, where each build's executable carries the build's name. */
+const installedBrowsers = Effect.fn("browserSetup.installedBrowsers")(function* (baseDir: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const root = path.join(baseDir, "tools", "chrome-headless-shell");
-  for (const platform of yield* fs.readDirectory(root).pipe(Effect.orElseSucceed(() => []))) {
-    for (const version of yield* fs
-      .readDirectory(path.join(root, platform))
-      .pipe(Effect.orElseSucceed(() => []))) {
-      const executable = path.join(root, platform, version, "chrome-headless-shell");
-      if (yield* fs.exists(executable).pipe(Effect.orElseSucceed(() => false))) {
-        return Option.some(executable);
+  const executables: Array<string> = [];
+  for (const build of [PreviewBrowser.HEADLESS_SHELL, PreviewBrowser.FULL_CHROME]) {
+    const root = path.join(baseDir, "tools", build.name);
+    for (const platform of yield* fs.readDirectory(root).pipe(Effect.orElseSucceed(() => []))) {
+      for (const version of yield* fs
+        .readDirectory(path.join(root, platform))
+        .pipe(Effect.orElseSucceed(() => []))) {
+        const executable = path.join(root, platform, version, build.executable("linux"));
+        if (yield* fs.exists(executable).pipe(Effect.orElseSucceed(() => false))) {
+          executables.push(executable);
+        }
       }
     }
   }
-  return Option.none<string>();
+  return executables;
 });
 
 /**
@@ -127,25 +132,28 @@ const browserSetupCommand = Command.make("setup", { baseDir: baseDirFlag }).pipe
           ? new PreviewBrowserHost.PreviewBrowserRootError().message
           : undefined;
 
+      const profilePaths = PreviewBrowserHost.APPARMOR_PROFILES.map((profile) => profile.path).join(
+        " and ",
+      );
       const restricted = yield* PreviewBrowserHost.usernsRestricted;
       // The kernel can lack a profile that is on disk, as on a host restored from an image,
       // and only root can read the loaded list, so root reloads it on every run.
       const needsProfile = isRoot ? restricted : yield* PreviewBrowserHost.sandboxBlocked;
       const reloadHint =
         restricted && !isRoot
-          ? `\nIf the browser still reports a blocked sandbox, the AppArmor profile at ${PreviewBrowserHost.APPARMOR_PROFILE_PATH} is not loaded. To load it, run:\n\n  ${setupCommand}\n`
+          ? `\nIf the browser still reports a blocked sandbox, the AppArmor profiles at ${profilePaths} are not loaded. To load them, run:\n\n  ${setupCommand}\n`
           : "";
-      const browser = yield* installedBrowser(baseDirPath);
-      const missing = Option.isSome(browser)
-        ? yield* PreviewBrowserHost.missingLibraries(browser.value)
-        : [];
+      const browsers = yield* installedBrowsers(baseDirPath);
+      const missing = [
+        ...new Set((yield* Effect.forEach(browsers, PreviewBrowserHost.missingLibraries)).flat()),
+      ];
       const needsFonts = !(yield* fontAvailable);
       const hasApt = yield* fs.exists("/usr/bin/apt-get").pipe(Effect.orElseSucceed(() => false));
 
       if (!needsProfile && missing.length === 0 && !needsFonts) {
         return yield* Console.log(
           rootWarning ??
-            (Option.isSome(browser)
+            (browsers.length > 0
               ? "This host is ready for T3's browser."
               : "Chrome's sandbox is allowed here. T3's browser installs on first use; if it then reports missing libraries, run this again.") +
               reloadHint,
@@ -155,7 +163,7 @@ const browserSetupCommand = Command.make("setup", { baseDir: baseDirFlag }).pipe
       if (!isRoot) {
         if (needsProfile) {
           yield* Console.log(
-            `This host blocks the sandbox T3's browser runs in. Setup installs an AppArmor profile at ${PreviewBrowserHost.APPARMOR_PROFILE_PATH} that allows it.`,
+            `This host blocks the sandbox T3's browser runs in. Setup installs AppArmor profiles at ${profilePaths} that allow it.`,
           );
         }
         if (missing.length > 0) {
@@ -170,35 +178,29 @@ const browserSetupCommand = Command.make("setup", { baseDir: baseDirFlag }).pipe
       }
 
       if (needsProfile) {
-        // An existing profile may carry an administrator's edits, so it is reloaded as is.
-        const profileOnDisk = yield* fs
-          .exists(PreviewBrowserHost.APPARMOR_PROFILE_PATH)
-          .pipe(Effect.orElseSucceed(() => false));
-        if (!profileOnDisk) {
-          yield* fs
-            .writeFileString(
-              PreviewBrowserHost.APPARMOR_PROFILE_PATH,
-              PreviewBrowserHost.APPARMOR_PROFILE,
-            )
-            .pipe(
+        for (const profile of PreviewBrowserHost.APPARMOR_PROFILES) {
+          // An existing profile may carry an administrator's edits, so it is reloaded as is.
+          const profileOnDisk = yield* fs
+            .exists(profile.path)
+            .pipe(Effect.orElseSucceed(() => false));
+          if (!profileOnDisk) {
+            yield* fs.writeFileString(profile.path, profile.content).pipe(
               Effect.mapError(
                 (cause) =>
                   new BrowserSetupStepError({
-                    step: `write ${PreviewBrowserHost.APPARMOR_PROFILE_PATH}`,
+                    step: `write ${profile.path}`,
                     detail: cause.message,
                   }),
               ),
             );
+          }
+          yield* runStep("load the AppArmor profile", "apparmor_parser", ["-r", profile.path]);
+          yield* Console.log(
+            profileOnDisk
+              ? `Reloaded the AppArmor profile at ${profile.path} that allows Chrome's sandbox for T3's browser.`
+              : `Wrote and loaded the AppArmor profile at ${profile.path} that allows Chrome's sandbox for T3's browser.`,
+          );
         }
-        yield* runStep("load the AppArmor profile", "apparmor_parser", [
-          "-r",
-          PreviewBrowserHost.APPARMOR_PROFILE_PATH,
-        ]);
-        yield* Console.log(
-          profileOnDisk
-            ? `Reloaded the AppArmor profile at ${PreviewBrowserHost.APPARMOR_PROFILE_PATH} that allows Chrome's sandbox for T3's browser.`
-            : `Wrote and loaded the AppArmor profile at ${PreviewBrowserHost.APPARMOR_PROFILE_PATH} that allows Chrome's sandbox for T3's browser.`,
-        );
       }
 
       if ((missing.length > 0 || needsFonts) && !hasApt) {

@@ -73,8 +73,23 @@ const browserArchive = makeZip([
   { name: `${ROOT}locales/en-US.pak`, data: "strings", mode: 0o100644 },
 ]);
 
+const BUNDLE_BUILD: PreviewBrowser.ChromeBuild = {
+  name: "bundle",
+  archives: PreviewBrowser.FULL_CHROME.archives,
+  executable: () => "App.app/Contents/MacOS/App",
+};
+const BUNDLE_ROOT = "bundle-fixture/";
+const FRAMEWORK = `${BUNDLE_ROOT}App.app/Contents/Frameworks/F.framework/`;
+const bundleArchive = (linkTarget: string) =>
+  makeZip([
+    { name: `${FRAMEWORK}Versions/1/Resources/strings.pak`, data: "strings", mode: 0o100644 },
+    { name: `${FRAMEWORK}Versions/Current`, data: linkTarget, mode: 0o120755 },
+    { name: `${BUNDLE_ROOT}App.app/Contents/MacOS/App`, data: "#!/bin/sh\n", mode: 0o100755 },
+  ]);
+
 const makeHarness = Effect.fn("test.makePreviewBrowser")(function* (
   options: {
+    readonly build?: PreviewBrowser.ChromeBuild;
     readonly version?: string;
     readonly archive?: Buffer;
     readonly sha256?: string;
@@ -93,6 +108,7 @@ const makeHarness = Effect.fn("test.makePreviewBrowser")(function* (
   const requests: Array<string> = [];
   const browser = yield* PreviewBrowser.makePreviewBrowser({
     baseDir,
+    build: options.build ?? PreviewBrowser.HEADLESS_SHELL,
     release: options.unsupported
       ? null
       : {
@@ -119,7 +135,12 @@ const makeHarness = Effect.fn("test.makePreviewBrowser")(function* (
       ),
     ),
   );
-  const installRoot = path.join(baseDir, "tools", "chrome-headless-shell", "fixture");
+  const installRoot = path.join(
+    baseDir,
+    "tools",
+    (options.build ?? PreviewBrowser.HEADLESS_SHELL).name,
+    "fixture",
+  );
   return { browser, fs, path, baseDir, installRoot, requests };
 });
 
@@ -200,5 +221,40 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("PreviewBrowser",
         false,
       );
     }),
+  );
+
+  it.effect("installs an app bundle whose framework links to its current version", () =>
+    Effect.gen(function* () {
+      if (hostPlatform === "win32") return;
+      const { browser, fs, path, installRoot } = yield* makeHarness({
+        build: BUNDLE_BUILD,
+        archive: bundleArchive("1"),
+      });
+
+      const executable = yield* browser.executable;
+
+      const framework = path.join(installRoot, "1.2.3", "App.app/Contents/Frameworks/F.framework");
+      expect(executable).toBe(path.join(installRoot, "1.2.3", "App.app/Contents/MacOS/App"));
+      expect(yield* fs.readLink(path.join(framework, "Versions", "Current"))).toBe("1");
+      expect(
+        yield* fs.readFileString(path.join(framework, "Versions/Current/Resources/strings.pak")),
+      ).toBe("strings");
+    }),
+  );
+
+  it.effect.each(["../../../../../../escape", "/etc"])(
+    "rejects an archive with a link to %s outside the install",
+    (linkTarget) =>
+      Effect.gen(function* () {
+        const { browser, fs, installRoot } = yield* makeHarness({
+          build: BUNDLE_BUILD,
+          archive: bundleArchive(linkTarget),
+        });
+
+        const error = yield* browser.executable.pipe(Effect.flip);
+
+        expect(error._tag).toBe("PreviewBrowserInstallError");
+        expect(yield* fs.readDirectory(installRoot)).toEqual([]);
+      }),
   );
 });

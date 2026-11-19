@@ -15,6 +15,10 @@ import packageJson from "../../package.json" with { type: "json" };
 import * as PreviewBrowserHost from "../preview/PreviewBrowserHost.ts";
 import { browserCommand } from "./browser.ts";
 
+const [SHELL_PROFILE, CHROME_PROFILE] = PreviewBrowserHost.APPARMOR_PROFILES as [
+  (typeof PreviewBrowserHost.APPARMOR_PROFILES)[number],
+  (typeof PreviewBrowserHost.APPARMOR_PROFILES)[number],
+];
 const USERNS_RESTRICTION = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns";
 const BROWSER_ROOT = "/home/me/.t3/tools/chrome-headless-shell";
 const BROWSER = `${BROWSER_ROOT}/linux64/154/chrome-headless-shell`;
@@ -34,7 +38,7 @@ const runSetupAsRoot = (input: { readonly profile: string | undefined }) => {
     [BROWSER, ""],
   ]);
   if (input.profile !== undefined) {
-    files.set(PreviewBrowserHost.APPARMOR_PROFILE_PATH, input.profile);
+    files.set(SHELL_PROFILE.path, input.profile);
   }
   const directories = new Map([
     [BROWSER_ROOT, ["linux64"]],
@@ -89,7 +93,8 @@ const runSetupAsRoot = (input: { readonly profile: string | undefined }) => {
     ]);
     return {
       output: (yield* TestConsole.logLines).join("\n"),
-      profile: files.get(PreviewBrowserHost.APPARMOR_PROFILE_PATH),
+      profile: files.get(SHELL_PROFILE.path),
+      chromeProfile: files.get(CHROME_PROFILE.path),
       loads: commands.filter((command) => command.startsWith("apparmor_parser")),
     };
   }).pipe(
@@ -102,9 +107,11 @@ const runSetupAsRoot = (input: { readonly profile: string | undefined }) => {
   );
 };
 
-const LOAD = `apparmor_parser -r ${PreviewBrowserHost.APPARMOR_PROFILE_PATH}`;
+const LOADS = PreviewBrowserHost.APPARMOR_PROFILES.map(
+  (profile) => `apparmor_parser -r ${profile.path}`,
+);
 
-const CUSTOMIZED_PROFILE = PreviewBrowserHost.APPARMOR_PROFILE.replace(
+const CUSTOMIZED_PROFILE = SHELL_PROFILE.content.replace(
   "  userns,\n",
   "  userns,\n  deny /tmp/t3-admin-private/** rw,\n",
 );
@@ -112,14 +119,14 @@ const CUSTOMIZED_PROFILE = PreviewBrowserHost.APPARMOR_PROFILE.replace(
 it.effect.each([
   {
     label: "reloads a profile that is on disk",
-    profile: PreviewBrowserHost.APPARMOR_PROFILE,
-    written: PreviewBrowserHost.APPARMOR_PROFILE,
+    profile: SHELL_PROFILE.content,
+    written: SHELL_PROFILE.content,
     said: "Reloaded the AppArmor profile",
   },
   {
     label: "writes and loads a missing profile",
     profile: undefined,
-    written: PreviewBrowserHost.APPARMOR_PROFILE,
+    written: SHELL_PROFILE.content,
     said: "Wrote and loaded",
   },
   {
@@ -131,8 +138,9 @@ it.effect.each([
 ])("t3 browser setup as root $label", (input) =>
   Effect.gen(function* () {
     const result = yield* runSetupAsRoot({ profile: input.profile });
-    expect(result.loads).toEqual([LOAD]);
+    expect(result.loads).toEqual(LOADS);
     expect(result.profile).toBe(input.written);
+    expect(result.chromeProfile).toBe(CHROME_PROFILE.content);
     expect(result.output).toContain(input.said);
     expect(result.output).toContain("This host is ready for T3's browser.");
   }),

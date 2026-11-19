@@ -14,19 +14,28 @@ export const sandboxDisabled = (env: Readonly<Record<string, string | undefined>
 
 /** Set on Ubuntu 23.10+: unprivileged user namespaces need an AppArmor profile. */
 const USERNS_RESTRICTION = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns";
-export const APPARMOR_PROFILE_PATH = "/etc/apparmor.d/t3-chrome-headless-shell";
-
 /** Match Ubuntu's Chrome profile; unconfined adds nothing beyond userns. */
-export const APPARMOR_PROFILE = `# Written by \`t3 browser setup\`: lets T3 Code's headless browser use Chrome's sandbox.
+const apparmorProfile = (name: string, executable: string) =>
+  `# Written by \`t3 browser setup\`: lets T3 Code's headless browser use Chrome's sandbox.
 abi <abi/4.0>,
 include <tunables/global>
 
-profile t3-chrome-headless-shell /**/tools/chrome-headless-shell/*/*/chrome-headless-shell flags=(unconfined) {
+profile ${name} /**/tools/${executable}/*/*/${executable} flags=(unconfined) {
   userns,
 
-  include if exists <local/t3-chrome-headless-shell>
+  include if exists <local/${name}>
 }
 `;
+
+/** One file per browser build, since setup never rewrites a profile already on disk. */
+export const APPARMOR_PROFILES: ReadonlyArray<{ readonly path: string; readonly content: string }> =
+  [
+    {
+      path: "/etc/apparmor.d/t3-chrome-headless-shell",
+      content: apparmorProfile("t3-chrome-headless-shell", "chrome-headless-shell"),
+    },
+    { path: "/etc/apparmor.d/t3-chrome", content: apparmorProfile("t3-chrome", "chrome") },
+  ];
 
 /** Ubuntu 24.04 and Debian 13 use some t64 library names; choose names available through apt. */
 export const DEBIAN_PACKAGES: ReadonlyArray<ReadonlyArray<string>> = [
@@ -47,6 +56,9 @@ export const DEBIAN_PACKAGES: ReadonlyArray<ReadonlyArray<string>> = [
   ["libgbm1"],
   ["libasound2t64", "libasound2"],
   ["libexpat1"],
+  ["libcups2t64", "libcups2"],
+  ["libpango-1.0-0"],
+  ["libcairo2"],
 ];
 
 export class PreviewBrowserSandboxError extends Schema.TaggedError<PreviewBrowserSandboxError>()(
@@ -139,5 +151,8 @@ export const usernsRestricted = Effect.gen(function* () {
 export const sandboxBlocked = Effect.gen(function* () {
   if (!(yield* usernsRestricted)) return false;
   const fs = yield* FileSystem.FileSystem;
-  return !(yield* fs.exists(APPARMOR_PROFILE_PATH).pipe(Effect.orElseSucceed(() => false)));
+  const present = yield* Effect.forEach(APPARMOR_PROFILES, (profile) =>
+    fs.exists(profile.path).pipe(Effect.orElseSucceed(() => false)),
+  );
+  return present.includes(false);
 }).pipe(Effect.withSpan("PreviewBrowserHost.sandboxBlocked"));

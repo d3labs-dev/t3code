@@ -888,6 +888,7 @@ const layerMakeRoutes = Layer.mergeAll(
     ),
   ),
   Layer.provide(PreviewBrowser.layer),
+  Layer.provide(PreviewBrowser.tabBrowserLayer),
   // Links to other environments, shared by Settings (WebSocket) and agents (/mcp).
   Layer.provide(
     PeerForwarding.layer.pipe(

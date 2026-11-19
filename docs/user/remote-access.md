@@ -277,12 +277,10 @@ directly. Every other device, and the desktop app for other environments,
 streams them from the host. Agents keep using them while no device is
 connected, and `localhost` addresses reach servers on the host.
 
-Tabs run the host's own Google Chrome or Chromium when the server finds one
-installed in its standard location at startup, so sites such as Google accept
-a sign-in there. Without one, the first tab downloads a headless Chrome, about
-120 MB, into the T3 home. It is the same browser [HTML renders](html-renders.md)
-use, so a host downloads it only once. Some Linux hosts need
-[setup](#browser-host-setup) before it can start.
+The first tab downloads Chrome, about 200 MB, into the T3 home. Tabs run a
+full Chrome so sites such as Google accept a sign-in, while
+[HTML renders](html-renders.md) use a smaller headless browser. Some Linux
+hosts need [setup](#browser-host-setup) before it can start.
 
 Agent tabs have separate storage and share a Chromium process. Take control before
 typing into an agent's tab, then release control when you want the agent to
@@ -325,12 +323,12 @@ sudo t3 browser setup
 
 The server shows the exact line for how you started it, and keeps your `PATH`
 when you started it with `npx` and Node is installed only for your user. Where `t3` is not on your `PATH`, such as with only the
-desktop app installed, it names the full path of the app's own `t3` instead. It allows Chrome's sandbox with an AppArmor profile and installs
+desktop app installed, it names the full path of the app's own `t3` instead. It allows Chrome's sandbox with AppArmor profiles and installs
 any missing libraries and system fonts with apt; pages that load without text
 can mean the host has no fonts. It is safe to run again, and each run reloads
-the AppArmor profile: run it again if the browser reports a blocked sandbox on a
-host restored from an image or snapshot, where the profile can be on disk
-without being loaded. Without `sudo`, it only reports what it would change.
+the AppArmor profiles: run it again if the browser reports a blocked sandbox on a
+host restored from an image or snapshot, where the profiles can be on disk
+without being loaded. A host that ran setup before tabs used full Chrome needs one more run. Without `sudo`, it only reports what it would change.
 
 The browser runs in Chrome's sandbox by default. Chrome cannot start that sandbox
 as root. If your T3 server runs as root, run it as a nonroot user to keep
