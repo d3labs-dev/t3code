@@ -5,7 +5,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeModule from "node:module";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import type { Browser, BrowserContext, CDPSession } from "playwright-core";
+import type { Browser, BrowserContext, CDPSession, LaunchOptions } from "playwright-core";
 
 import { sandboxDisabled } from "./PreviewBrowserHost.ts";
 
@@ -53,6 +53,8 @@ const stubWorkerBadges = (client: Browser | BrowserContext) => {
 
 interface Options {
   readonly profilesDir: string;
+  readonly platform: NodeJS.Platform;
+  /** The shared headless browser's executable, installing it on first use. */
   readonly executable: () => Promise<string>;
   /**
    * A path that starts `executable`, such as one that moves Chrome out of the server's cgroup.
@@ -68,6 +70,14 @@ interface Options {
   readonly onContextClose?: (context: BrowserContext) => void;
 }
 
+const SOFTWARE_RENDERING = ["--disable-gpu"];
+/**
+ * ANGLE on the host's EGL driver. Chrome does not fall back to SwiftShader
+ * from it: with no usable GPU it lands on Mesa's llvmpipe, which it
+ * blocklists, and WebGL turns off. Only a probe launch tells the two apart.
+ */
+const GPU_RENDERING = ["--use-angle=gl-egl"];
+
 const UA_PLATFORMS: Partial<Record<NodeJS.Platform, string>> = {
   darwin: "macOS",
   linux: "Linux",
@@ -76,20 +86,23 @@ const UA_PLATFORMS: Partial<Record<NodeJS.Platform, string>> = {
 
 /** Change user agent and Sec-CH-UA together; sites block mismatches. */
 const chromeIdentity = (
-  headlessUserAgent: string,
+  browserVersion: { readonly userAgent: string; readonly product: string },
   host: { readonly platform: NodeJS.Platform; readonly arch: string; readonly release: string },
 ) => {
-  const version = /HeadlessChrome\/((\d+)[\d.]*)/.exec(headlessUserAgent);
-  const fullVersion = version?.[1];
-  const major = version?.[2];
-  if (!version || !fullVersion || !major) return null;
+  const version = /HeadlessChrome\/(\d+)[\d.]*/.exec(browserVersion.userAgent);
+  const major = version?.[1];
+  // A full browser reduces its user agent to `major.0.0.0`; the product keeps the build.
+  const fullVersion = /\/([\d.]+)$/.exec(browserVersion.product)?.[1];
+  if (!version || !major || !fullVersion?.startsWith(`${major}.`)) return null;
+  // Chrome's GREASE brand and order for this major version, as the shell reports them.
   const brands = (names: (version: string) => string) => [
     { brand: "Chromium", version: names(major) },
     { brand: "Google Chrome", version: names(major) },
     { brand: "Not A(Brand", version: names("99") },
   ];
   return {
-    userAgent: headlessUserAgent.replace(version[0], `Chrome/${major}.0.0.0`),
+    // Chrome reduces its user agent to the major version.
+    userAgent: browserVersion.userAgent.replace(version[0], `Chrome/${major}.0.0.0`),
     userAgentMetadata: {
       brands: brands((value) => value),
       fullVersionList: brands((value) => (value === major ? fullVersion : `${value}.0.0.0`)),
@@ -108,8 +121,10 @@ export const presentAsChrome = async (
   cdp: CDPSession,
   host: { readonly platform: NodeJS.Platform; readonly arch: string },
 ) => {
-  const { userAgent } = await cdp.send("Browser.getVersion");
-  const identity = chromeIdentity(userAgent, { ...host, release: NodeOS.release() });
+  const identity = chromeIdentity(await cdp.send("Browser.getVersion"), {
+    ...host,
+    release: NodeOS.release(),
+  });
   if (identity) await cdp.send("Emulation.setUserAgentOverride", identity);
 };
 
@@ -118,6 +133,7 @@ export class ServerBrowserContexts {
   private readonly contexts = new Map<string, Promise<BrowserContext>>();
   private readonly clearing = new Map<string, Promise<void>>();
   private browser: Promise<Browser> | undefined;
+  private rendering: Promise<ReadonlyArray<string>> | undefined;
   private closing: Promise<void> | undefined;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingSharedContexts = 0;
@@ -129,19 +145,50 @@ export class ServerBrowserContexts {
   private async launchOptions() {
     const executable = await this.options.executable();
     const env = this.options.env ?? process.env;
-    return {
-      executable,
+    const options = {
       env,
-      args: [
-        "--disable-gpu",
-        "--force-device-scale-factor=2",
-        "--disable-blink-features=AutomationControlled",
-      ],
+      // People drive these tabs, so they must not announce automation (navigator.webdriver).
+      args: ["--force-device-scale-factor=2", "--disable-blink-features=AutomationControlled"],
       ignoreDefaultArgs: ["--enable-automation"],
       headless: true,
       // Only an explicit operator opt-out disables sandboxing. Launch errors never do.
       chromiumSandbox: !sandboxDisabled(env),
     };
+    return {
+      executable,
+      ...options,
+      args: [...(await this.renderingArgs(executable, options)), ...options.args],
+    };
+  }
+
+  /** Decided once per server: the GPU when it composites, otherwise software compositing. */
+  private renderingArgs(executable: string, options: LaunchOptions) {
+    if (this.options.platform !== "linux") return Promise.resolve(SOFTWARE_RENDERING);
+    if (!this.rendering) {
+      const probing = this.probeGpu(executable, options);
+      this.rendering = probing;
+      void probing.catch(() => {
+        if (this.rendering === probing) this.rendering = undefined;
+      });
+    }
+    return this.rendering;
+  }
+
+  private async probeGpu(executable: string, options: LaunchOptions) {
+    const { chromium } = loadPlaywright();
+    const launchOptions = { ...options, args: [...GPU_RENDERING, ...(options.args ?? [])] };
+    const browser = await this.launch(executable, (executablePath) =>
+      chromium.launch({ ...launchOptions, executablePath }),
+    );
+    try {
+      const cdp = await browser.newBrowserCDPSession();
+      const { gpu } = await cdp.send("SystemInfo.getInfo");
+      return gpu.featureStatus?.["gpu_compositing"] === "enabled"
+        ? GPU_RENDERING
+        : SOFTWARE_RENDERING;
+    } finally {
+      await browser.close().catch(constVoid);
+    }
   }
 
   private async launch<A>(executable: string, start: (executablePath: string) => Promise<A>) {

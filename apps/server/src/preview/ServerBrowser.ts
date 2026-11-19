@@ -96,6 +96,7 @@ import * as PreviewBrowserHost from "./PreviewBrowserHost.ts";
 import { presentAsChrome, ServerBrowserContexts } from "./ServerBrowserContexts.ts";
 import { BrowserControlInterrupted, SessionControl } from "./SessionControl.ts";
 import { installPdfDocumentNavigation, isPdfAssetUrl } from "./PdfDocumentNavigation.ts";
+import { findSystemBrowser } from "./SystemBrowser.ts";
 
 const SERVER_HOST_CLIENT_ID = SERVER_BROWSER_AUTOMATION_CLIENT_ID;
 // Each client's report is capped, but the saved catalog is their union, so it has no cap.
@@ -599,10 +600,18 @@ const make = Effect.gen(function* () {
   let hostConnectionId: string | null = null;
   let viewerResizeOrder = 0;
 
+  const systemBrowser = yield* findSystemBrowser;
   const contexts = new ServerBrowserContexts({
+    platform: host.platform,
     profilesDir: NodePath.join(config.stateDir, "server-browser", "profiles"),
     idleBrowserMs: 5 * 60_000,
-    executable: () => runPromise(previewBrowser.executable),
+    executable: () =>
+      runPromise(
+        Option.match(systemBrowser, {
+          onSome: Effect.succeed,
+          onNone: () => previewBrowser.executable,
+        }),
+      ),
     // An agent scope keeps Chrome out of the server's memory protection and OOM score.
     launcher: async (executable) => {
       const launch = await runPromise(
@@ -615,16 +624,19 @@ const make = Effect.gen(function* () {
       return { path: launcher, release: () => NodeFSP.rm(launcher, { force: true }) };
     },
     // Playwright's launch error drops Chrome's own output; its sandbox note survives.
+    // The host setup only covers the headless shell; a packaged browser brings its own.
     diagnose: (executable, cause) =>
-      Effect.runPromiseWith(launchServices)(
-        PreviewBrowserHost.diagnoseLaunchFailure({
-          executable,
-          setupCommand,
-          output: /sandboxing failed/i.test(String(cause))
-            ? PreviewBrowserHost.NO_SANDBOX_SIGNATURE
-            : "",
-        }),
-      ),
+      Option.isSome(systemBrowser)
+        ? Promise.resolve(undefined)
+        : Effect.runPromiseWith(launchServices)(
+            PreviewBrowserHost.diagnoseLaunchFailure({
+              executable,
+              setupCommand,
+              output: /sandboxing failed/i.test(String(cause))
+                ? PreviewBrowserHost.NO_SANDBOX_SIGNATURE
+                : "",
+            }),
+          ),
     onContextClose: (context) => {
       for (const tab of tabs.values()) {
         if (tab.page.context() === context) dropTab(tab, true);
