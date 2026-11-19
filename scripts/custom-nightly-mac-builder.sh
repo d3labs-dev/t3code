@@ -17,8 +17,8 @@ readonly signing_identity="${T3CODE_LOCAL_SIGNING_IDENTITY:-T3 Code Local Develo
 readonly android_keystore="$HOME/Library/Application Support/T3 Code Custom Android/release.p12"
 readonly android_keystore_password_item="T3 Code Custom Android signing"
 readonly android_certificate_sha256="c4dec69aca9c6c1da72b2bf83d506222359bf69067ca34dec29c88603ab0df20"
-# Optional: google-services.json turns on agent notifications, and expo.env
-# (EXPO_TOKEN and T3CODE_EXPO_PROJECT_ID) turns on over-the-air updates.
+# Optional: google-services.json and expo.env (T3CODE_EXPO_PROJECT_ID) turn on
+# agent notifications.
 readonly google_services_file="$builder_home/google-services.json"
 readonly expo_env_file="$builder_home/expo.env"
 readonly built_root="$builder_home/built"
@@ -170,19 +170,8 @@ build_android() {
   "$build_tools/apksigner" verify --print-certs "$apk" \
     | grep -F "certificate SHA-256 digest: $android_certificate_sha256"
 
-  local runtime_version=""
-  if [[ -n "${EXPO_TOKEN:-}" && -n "${T3CODE_EXPO_PROJECT_ID:-}" ]]; then
-    npm install --global eas-cli
-    runtime_version="$(scripts/publish-custom-android-update.sh "$version" "$version_code" "$apk" "D3 Code $version")" ||
-      log "Over-the-air publish failed; phones are offered the APK instead."
-  fi
-
   local markers="$builder_home/release-notes-markers"
   printf '<!-- android-version-code: %s -->\n' "$version_code" > "$markers"
-  # Phones on this runtime take the release over the air, so the app skips its APK.
-  if [[ -n "$runtime_version" ]]; then
-    printf '<!-- android-runtime-version: %s -->\n' "$runtime_version" >> "$markers"
-  fi
   stage_build "$tag" android "$apk" "$markers"
 }
 

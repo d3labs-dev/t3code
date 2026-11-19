@@ -59,12 +59,6 @@ Install the `-android-arm64.apk` from a release. It installs as `com.t3tools.t3c
 
 The app checks the fork's releases at launch and after 15 minutes in the background, and offers newer APKs. **Settings > About > Check for updates** checks on demand. Android asks to confirm every install; the first update also asks to allow D3 Code to install unknown apps.
 
-### Over-the-air updates
-
-Once the fork's Expo project is configured (see Agent notifications below), each Android build can also publish its JavaScript to the project's `custom-nightly` channel. A phone whose installed APK has the same native code downloads it at launch and switches to it the next time the app goes to the background, with no install prompt. The release notes then carry an `android-runtime-version` marker, and the app skips offering that release's APK to phones on that runtime. A build that changes native code has a new runtime, so phones are offered its APK as before.
-
-The Expo project's slug must be `t3-code`, the slug in `app.config.ts`, or `eas update` refuses to publish. The runtime fingerprint leaves out the version name and code (`apps/mobile/fingerprint.config.js`), which change on every build. A failed publish does not block the release: it ships without the marker, so phones are offered the APK.
-
 ### Agent notifications
 
 The APK cannot use T3 Connect's relay for notifications, so each T3 Code server the phone connects to pushes them itself through Expo's push service: questions and approvals waiting on you, finished and failed work, and the ongoing activity card. The phone registers with every server it connects to, and a server only notifies about its own threads. After that, pushes arrive while the app is closed, as long as the server is running and can reach `exp.host` on the internet. Removing a server in the app unregisters the phone only while that server is connected.
@@ -128,7 +122,7 @@ git fetch --depth=1 origin custom-nightly && git checkout --detach FETCH_HEAD
 scripts/custom-nightly-mac-builder.sh --install
 ```
 
-It needs Xcode, Java 17, the Android SDK in `~/Library/Android/sdk`, rustup, `gh`, and the signing identity and keystore described above; it downloads the Node.js and Vite+ versions each commit pins. Agent notifications need the Firebase `google-services.json` at `~/.local/share/d3code-builder/google-services.json` and `T3CODE_EXPO_PROJECT_ID` in `~/.local/share/d3code-builder/expo.env`; adding `EXPO_TOKEN` there also publishes over-the-air updates. The log is `~/.local/share/d3code-builder/builder.log`.
+It needs Xcode, Java 17, the Android SDK in `~/Library/Android/sdk`, rustup, `gh`, and the signing identity and keystore described above; it downloads the Node.js and Vite+ versions each commit pins. Agent notifications need the Firebase `google-services.json` at `~/.local/share/d3code-builder/google-services.json` and `T3CODE_EXPO_PROJECT_ID` in `~/.local/share/d3code-builder/expo.env`. The log is `~/.local/share/d3code-builder/builder.log`.
 
 To build right away, run the launch agent instead of the script: `launchctl kickstart -k gui/$(id -u)/com.diegojohnson.d3code.builder`. Running `--build-mac` or `--build-android` directly over SSH fails, because signing needs the login keychain.
 
