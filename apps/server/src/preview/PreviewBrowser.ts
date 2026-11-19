@@ -32,7 +32,7 @@ import { openZipArchive } from "../zipArchive.ts";
 // The headless shell never loads Chrome's CRLSet, so a certificate block reaches it only through
 // Chromium's compiled-in SPKI blocklist. Do not pin below 156.0.8078.70: earlier builds trust the
 // compromised eMudhra intermediates (crrev.com/c/8627687).
-const VERSION = "157.0.8103.78";
+export const VERSION = "157.0.8103.78";
 const ARCHIVES = {
   linux64: {
     bytes: 127_965_683,

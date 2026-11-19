@@ -4,10 +4,11 @@ import { useClientSettings, updateClientSettings } from "~/hooks/useSettings";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { SettingResetButton, SettingsRow, SettingsSection } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { MonitorCog } from "lucide-react";
 
 export function CustomBackgroundSettings() {
+  const setting = useSearchableSetting();
   const active = useActiveBackground();
   const enabled = useClientSettings((settings) => settings.customBackgroundEnabled);
   const libraryCount = useClientSettings((settings) => settings.customBackgrounds.length);
@@ -15,7 +16,7 @@ export function CustomBackgroundSettings() {
   return (
     <SettingsSection id="appearance-background" title="Background">
       <SettingsRow
-        {...searchableSetting("custom-background")}
+        {...setting("custom-background")}
         description="Put your own pictures behind your chats, with filters, rotation, image colors, and reply bubbles. Saved only on this client."
         status={
           active
@@ -27,7 +28,7 @@ export function CustomBackgroundSettings() {
         resetAction={
           active ? (
             <SettingResetButton
-              label="custom background"
+              ariaLabel="Reset custom background to default"
               onClick={() => updateClientSettings({ activeCustomBackgroundId: null })}
             />
           ) : null
