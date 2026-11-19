@@ -21,16 +21,9 @@ import * as NodeCrypto from "node:crypto";
 import * as ServerConfig from "../config.ts";
 import { openZipArchive } from "../zipArchive.ts";
 
-// The one browser T3 installs on a host. HTML render previews run this pinned
-// Chrome for Testing headless shell, and so do server browser tabs on a host
-// without its own Chrome (SystemBrowser.ts), so a host downloads it at most once. To bump the pin, pick a version
-// from https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json,
-// download each platform's chrome-headless-shell zip, and replace the version
-// and every byte count and SHA-256 below. Hosts drop the old build after the
-// new one installs.
-//
-// The headless shell never loads Chrome's CRLSet, so a certificate block reaches it only through
-// Chromium's compiled-in SPKI blocklist. Do not pin below 156.0.8078.70: earlier builds trust the
+// Update the version, sizes and hashes from each chrome-headless-shell zip listed at
+// https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json
+// Never pin below 156.0.8078.70: the shell has no CRLSet and older SPKI blocklists trust
 // compromised eMudhra intermediates (crrev.com/c/8627687).
 const VERSION = "157.0.8103.78";
 const ARCHIVES = {

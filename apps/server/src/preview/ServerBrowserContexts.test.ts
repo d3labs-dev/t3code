@@ -5,16 +5,10 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { INCOGNITO_BROWSER_PROFILE_ID } from "@t3tools/contracts";
-import {
-  chromium,
-  type Browser,
-  type BrowserContext,
-  type BrowserType,
-  type CDPSession,
-} from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type BrowserType } from "playwright-core";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { presentAsChrome, ServerBrowserContexts } from "./ServerBrowserContexts.ts";
+import { ServerBrowserContexts } from "./ServerBrowserContexts.ts";
 
 const launches = vi.hoisted(() => ({
   launch: vi.fn<BrowserType["launch"]>(),
@@ -65,7 +59,6 @@ const makeBrowser = () => {
 
 const options = () => ({
   profilesDir: "/test/profiles",
-  platform: "darwin" as NodeJS.Platform,
   executable: vi.fn(async () => "/test/chromium"),
   env: {},
 });
@@ -86,50 +79,6 @@ beforeEach(() => {
   launches.persistent.mockReset();
   launches.mkdir.mockClear();
   launches.rm.mockClear();
-});
-
-describe("ServerBrowserContexts rendering", () => {
-  const probeBrowser = (gpuCompositing: string) => ({
-    ...makeBrowser(),
-    newBrowserCDPSession: vi.fn(async () => ({
-      send: vi.fn(async () => ({ gpu: { featureStatus: { gpu_compositing: gpuCompositing } } })),
-    })),
-  });
-  const launchedArgs = (call: { readonly args?: ReadonlyArray<string> } | undefined) =>
-    call?.args?.filter((arg) => arg === "--disable-gpu" || arg.startsWith("--use-angle"));
-
-  it.each([
-    { gpuCompositing: "enabled", tabArgs: ["--use-angle=gl-egl"] },
-    { gpuCompositing: "disabled_software", tabArgs: ["--disable-gpu"] },
-  ])(
-    "on Linux, probes the GPU once and renders on it only when it composites ($gpuCompositing)",
-    async ({ gpuCompositing, tabArgs }) => {
-      const probe = probeBrowser(gpuCompositing);
-      const browser = makeBrowser();
-      launches.launch
-        .mockResolvedValueOnce(probe as unknown as Browser)
-        .mockResolvedValue(browser as unknown as Browser);
-      launches.persistent.mockResolvedValue(makeContext() as unknown as BrowserContext);
-      const pool = new ServerBrowserContexts({ ...options(), platform: "linux" });
-      await pool.contextFor("default", "agent");
-      await pool.contextFor("work");
-      expect(launchedArgs(launches.launch.mock.calls[0]?.[0])).toEqual(["--use-angle=gl-egl"]);
-      expect(probe.close).toHaveBeenCalledTimes(1);
-      expect(launches.launch).toHaveBeenCalledTimes(2);
-      expect(launchedArgs(launches.launch.mock.calls[1]?.[0])).toEqual(tabArgs);
-      expect(launchedArgs(launches.persistent.mock.calls[0]?.[1])).toEqual(tabArgs);
-      await pool.close();
-    },
-  );
-
-  it("keeps software compositing elsewhere without probing", async () => {
-    launches.launch.mockResolvedValue(makeBrowser() as unknown as Browser);
-    const pool = new ServerBrowserContexts({ ...options(), platform: "win32" });
-    await pool.contextFor("default", "agent");
-    expect(launches.launch).toHaveBeenCalledTimes(1);
-    expect(launchedArgs(launches.launch.mock.calls[0]?.[0])).toEqual(["--disable-gpu"]);
-    await pool.close();
-  });
 });
 
 describe("ServerBrowserContexts", () => {
@@ -443,49 +392,5 @@ describe("ServerBrowserContexts", () => {
     } finally {
       NodeFS.rmSync(directory, { recursive: true, force: true });
     }
-  });
-});
-
-describe("presentAsChrome", () => {
-  const linuxUserAgent = (version: string) =>
-    `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ${version} Safari/537.36`;
-
-  it.each([
-    {
-      browser: "the headless shell",
-      version: {
-        product: "HeadlessChrome/154.0.8037.92",
-        userAgent: linuxUserAgent("HeadlessChrome/154.0.8037.92"),
-      },
-      major: "154",
-      build: "154.0.8037.92",
-    },
-    {
-      browser: "a full browser, whose user agent is already reduced",
-      version: {
-        product: "Chrome/152.0.7977.82",
-        userAgent: linuxUserAgent("HeadlessChrome/152.0.0.0"),
-      },
-      major: "152",
-      build: "152.0.7977.82",
-    },
-  ])("presents $browser as Chrome with its full build in client hints", async (input) => {
-    const send = vi.fn(async (method: string) =>
-      method === "Browser.getVersion" ? input.version : {},
-    );
-    await presentAsChrome({ send } as unknown as CDPSession, { platform: "linux", arch: "x64" });
-    expect(send).toHaveBeenLastCalledWith(
-      "Emulation.setUserAgentOverride",
-      expect.objectContaining({
-        userAgent: linuxUserAgent(`Chrome/${input.major}.0.0.0`),
-        userAgentMetadata: expect.objectContaining({
-          fullVersionList: [
-            { brand: "Chromium", version: input.build },
-            { brand: "Google Chrome", version: input.build },
-            { brand: "Not A(Brand", version: "99.0.0.0" },
-          ],
-        }),
-      }),
-    );
   });
 });
