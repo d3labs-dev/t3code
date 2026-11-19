@@ -52,7 +52,7 @@ it("keeps a newer environment failure when an older refresh finishes", async () 
   );
   failures([a, b]);
   const first = refreshEnvironmentLimits(registry, a);
-  await refreshEnvironmentLimits(registry, b);
+  await refreshEnvironmentLimits(registry, b, { automatic: true });
   expect(failures([a, b])).toEqual([b]);
   pending.resolve(success);
   await first;
@@ -74,14 +74,27 @@ it("does not let an older refresh clear a newer failure for the same environment
   );
   failures([a, b]);
   const older = Promise.all([
-    refreshEnvironmentLimits(registry, a),
-    refreshEnvironmentLimits(registry, b),
+    refreshEnvironmentLimits(registry, a, { automatic: true }),
+    refreshEnvironmentLimits(registry, b, { automatic: true }),
   ]);
   aFirst.resolve(success);
-  await refreshUsageLimits({ environmentId: a, refresh: () => aFirst.promise });
+  await refreshUsageLimits(a, () => aFirst.promise);
   await refreshEnvironmentLimits(registry, a);
   expect(failures([a])).toEqual([a]);
   bFirst.resolve(success);
   await older;
   expect(failures([a, b])).toEqual([a]);
+});
+
+it("skips an automatic refresh inside the throttle window without touching the outcome", async () => {
+  const a = EnvironmentId.make("mobile-limits-throttle");
+  const { registry, failures } = setup(() => Promise.resolve(failure));
+  failures([a]);
+  await refreshEnvironmentLimits(registry, a);
+  expect(failures([a])).toEqual([a]);
+  state.refresh = () => Promise.resolve(success);
+  await refreshEnvironmentLimits(registry, a, { automatic: true });
+  expect(failures([a])).toEqual([a]);
+  await refreshEnvironmentLimits(registry, a);
+  expect(failures([a])).toEqual([]);
 });

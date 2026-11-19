@@ -77,6 +77,7 @@ import {
 import { useMobileNavigationTheme } from "./lib/useMobileNavigationTheme";
 import { installUiRuntimeMemoryWarningGc } from "./lib/useUiRuntimeMemoryWarningGc";
 import { SubscriptionUsageCoordinator } from "./widgets/SubscriptionUsageCoordinator";
+import { installSubscriptionUsageRefresh } from "./widgets/useSubscriptionUsage";
 import { ConnectDeviceApprovalCoordinator } from "./features/connection/ConnectDeviceApprovalCoordinator";
 import { GlobalVoiceInputControl } from "./features/voice-input/GlobalVoiceInputControl";
 import {
@@ -206,6 +207,7 @@ const appServiceDisposers = [
     pendingThreadIdsAtom: threadEnvironment.pendingThreadIdsAtom,
   }),
   installAppearanceRuntime(),
+  installSubscriptionUsageRefresh(),
   installPermissionUpdateNotice(),
   installThreadOutboxDelivery(),
   installComposerAttachmentUploads(),

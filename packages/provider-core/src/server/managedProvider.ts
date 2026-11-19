@@ -386,7 +386,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
           Effect.orElseSucceed(() => DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL),
         );
 
-  const restartRefreshTimer = yield* Queue.sliding<void>(1);
+  const refreshIntervalChanges = yield* Queue.sliding<void>(1);
   if (input.refreshInterval === undefined) {
     const serverSettingsChanges = yield* host.settings.subscribe;
     yield* serverSettingsChanges.pipe(
@@ -396,7 +396,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
         ),
       ),
       Stream.changes,
-      Stream.runForEach(() => Queue.offer(restartRefreshTimer, undefined).pipe(Effect.asVoid)),
+      Stream.runForEach(() => Queue.offer(refreshIntervalChanges, undefined).pipe(Effect.asVoid)),
       Effect.forkScoped,
     );
   }
@@ -411,14 +411,14 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     Effect.all([getRefreshInterval, Ref.getAndSet(recheckPendingRef, false)]).pipe(
       Effect.flatMap(([configuredInterval, recheckPending]) => {
         const refreshInterval = recheckPending ? FAILED_CHECK_RECHECK_DELAY : configuredInterval;
-        // @effect-diagnostics-next-line raceFirstWithSleepToTimeout:off - races the interval against a restart signal, not a timeout
+        // @effect-diagnostics-next-line raceFirstWithSleepToTimeout:off - races the interval against a settings-change signal, not a timeout
         return Effect.raceFirst(
           Effect.sleep(
             Duration.toMillis(Duration.fromInputUnsafe(refreshInterval)) <= 0
               ? "60 seconds"
               : refreshInterval,
           ).pipe(Effect.as(true)),
-          Queue.take(restartRefreshTimer).pipe(Effect.as(false)),
+          Queue.take(refreshIntervalChanges).pipe(Effect.as(false)),
         ).pipe(
           Effect.flatMap((intervalElapsed) =>
             intervalElapsed && Duration.toMillis(Duration.fromInputUnsafe(refreshInterval)) > 0
@@ -455,13 +455,9 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     resolveMaintenance: input.resolveMaintenance,
     getSnapshot: Ref.get(snapshotStateRef).pipe(Effect.map((state) => state.snapshot)),
     isAwaitingFirstCheck: Ref.get(snapshotStateRef).pipe(Effect.map((state) => !state.checked)),
-    // An on-demand probe counts as the interval's probe, so the timer restarts.
-    refresh: input.resolveMaintenance({ fresh: true }).pipe(
-      Effect.andThen(refreshSnapshot),
-      Effect.tap(() => Queue.offer(restartRefreshTimer, undefined)),
-      Effect.tapError(Effect.logError),
-      Effect.orDie,
-    ),
+    refresh: input
+      .resolveMaintenance({ fresh: true })
+      .pipe(Effect.andThen(refreshSnapshot), Effect.tapError(Effect.logError), Effect.orDie),
     applyUsageLimits,
     refreshUsage: refreshUsage(),
     get streamChanges() {

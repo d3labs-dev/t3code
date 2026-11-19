@@ -141,9 +141,9 @@ and a partly spent session may only regain its unused portion when the week rese
 stale reset times have no refill estimate; refresh Limits for a new reading. Claude's
 model-specific weekly allowances keep their reported values.
 
-Limits update in the background every five minutes while T3 is open; opening Limits shows the
-latest reading without checking again. If a window looks stale, refresh Limits to re-check every
-provider and hub now; the next background check then waits another five minutes.
+Opening Limits checks the selected connected environments automatically. Each client waits at
+least five minutes between automatic checks of an environment, including after a failed check.
+If a window still looks stale, refresh Limits to re-check every provider and hub.
 
 Pick `/usage-limits` from the composer's command menu, or send it as a message, to check the
 current model's limits without leaving the conversation. The result opens above the composer and

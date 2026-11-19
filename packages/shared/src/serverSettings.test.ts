@@ -741,7 +741,7 @@ describe("serverSettings helpers", () => {
     expect(next.backgroundActivityProfile).toBe("battery-saver");
     expect(Duration.toMillis(next.automaticGitFetchInterval)).toBe(0);
     expect(Duration.toMillis(next.providerHealthRefreshInterval)).toBe(
-      Duration.toMillis(Duration.minutes(5)),
+      Duration.toMillis(Duration.minutes(15)),
     );
   });
 

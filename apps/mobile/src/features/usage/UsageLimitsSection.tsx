@@ -1,5 +1,5 @@
 import * as Dialog from "../../components/ui/Dialog";
-import { RegistryContext, useAtomValue } from "@effect/atom-react";
+import { RegistryContext, useAtomMount, useAtomValue } from "@effect/atom-react";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import {
   AuthProvidersManageScope,
@@ -20,6 +20,7 @@ import {
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
 import { type ReactNode, useContext, useRef, useState } from "react";
+import { Atom } from "effect/reactivity";
 import { Linking, Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -31,6 +32,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { useNowMinuteMs } from "../../lib/clock";
 import {
   environmentIdsKey,
+  limitsAutoRefreshSetAtom,
   limitsRefreshFailuresAtom,
   refreshEnvironmentLimits,
 } from "./usageLimitsRefresh";
@@ -307,12 +309,12 @@ export function ResetCredits(props: {
   );
 }
 
-/**
- * Re-probes each connected environment only when asked; nothing probes on open.
- * Results arrive over the config stream. Failed environments are named, since
- * their rows keep showing the previous quota.
- */
-export function useRefreshLimits(selectedEnvironmentIds: ReadonlySet<EnvironmentId> | null = null) {
+const IDLE_ATOM = Atom.make(undefined);
+
+export function useRefreshLimits(
+  selectedEnvironmentIds: ReadonlySet<EnvironmentId> | null = null,
+  active = false,
+) {
   const registry = useContext(RegistryContext);
   const presentations = useAtomValue(environmentPresentations.presentationsAtom);
   const now = useNowMinuteMs();
@@ -325,6 +327,8 @@ export function useRefreshLimits(selectedEnvironmentIds: ReadonlySet<Environment
   const connectedIds = selected
     .filter(([, presentation]) => presentation.connection.phase === "connected")
     .map(([environmentId]) => environmentId);
+  const connectedKey = environmentIdsKey(connectedIds);
+  useAtomMount(active && connectedKey !== "" ? limitsAutoRefreshSetAtom(connectedKey) : IDLE_ATOM);
   const failedIds = new Set(
     useAtomValue(limitsRefreshFailuresAtom(environmentIdsKey(selected.map(([id]) => id)))),
   );

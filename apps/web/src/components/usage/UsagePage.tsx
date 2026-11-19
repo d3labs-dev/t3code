@@ -247,17 +247,18 @@ export function UsagePage() {
     if (nextMetric === "limits") setLimitsNow(Date.now());
     updatePreferences({ metric: nextMetric });
   };
-  const refreshLimits = () =>
+  const refreshLimits = (automatic = false) =>
     // Settled so the timestamp still advances when a refresh throws.
     settlePromise(() =>
       Promise.all(
         Array.from(presentations, ([environmentId, presentation]) => {
           if (selectedEnvironmentIds !== null && !selectedEnvironmentIds.has(environmentId)) return;
           if (presentation.connection.phase === "connected" && presentation.serverConfig !== null) {
-            return refreshUsageLimits({
+            return refreshUsageLimits(
               environmentId,
-              refresh: () => refreshProviders({ environmentId, input: {} }),
-            });
+              () => refreshProviders({ environmentId, input: {} }),
+              automatic,
+            );
           }
         }),
       ),
@@ -320,6 +321,24 @@ export function UsagePage() {
       setIsRefreshing(false);
     });
   };
+  const connectedLimitsEnvironments = [...presentations]
+    .filter(
+      ([environmentId, presentation]) =>
+        presentation.connection.phase === "connected" &&
+        presentation.serverConfig !== null &&
+        (selectedEnvironmentIds === null || selectedEnvironmentIds.has(environmentId)),
+    )
+    .map(([environmentId]) => environmentId)
+    .sort()
+    .join(",");
+  const autoRefreshLimits = useEffectEvent(() => {
+    void refreshLimits(true);
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes provider limits from the server when the connected environment set changes
+  useEffect(() => {
+    if (showingLimits && connectedLimitsEnvironments) autoRefreshLimits();
+  }, [showingLimits, connectedLimitsEnvironments]);
+
   const days = enumerateDays(shownWindow.sinceDay, shownWindow.untilDay);
   const hours =
     shownWindow.sinceTime === undefined || shownWindow.untilTime === undefined
@@ -333,7 +352,6 @@ export function UsagePage() {
         (presentation.serverConfig?.providers ?? []).some(usesChatGptSharing),
     );
 
-  // Names the period on screen, which is the previous one until the new one answers.
   const windowLabel =
     shownHourly && shownWindow.sinceTime !== undefined && shownWindow.untilTime !== undefined
       ? `${formatDateTimeShort(shownWindow.sinceTime, shownWindow.timeZone, hour12)} to ${formatDateTimeShort(shownWindow.untilTime, shownWindow.timeZone, hour12)}`

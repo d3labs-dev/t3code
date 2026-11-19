@@ -17,28 +17,27 @@ export function usageSummaryInput(
   return modelFilter === undefined ? input : { ...input, modelFilter };
 }
 
+const limitsRefreshAfter = new Map<EnvironmentId, number>();
 const limitsRefreshes = new Map<EnvironmentId, Promise<unknown>>();
 
-/**
- * Manually re-probes an environment's providers. Overlapping calls share the
- * running probe. The server re-probes on its own interval, which restarts
- * after this.
- */
-export async function refreshUsageLimits<A>({
-  environmentId,
-  refresh,
-}: {
-  environmentId: EnvironmentId;
-  refresh: () => Promise<A>;
-}): Promise<A> {
+export async function refreshUsageLimits<A>(
+  environmentId: EnvironmentId,
+  refresh: () => Promise<A>,
+  automatic = false,
+): Promise<A | undefined> {
   const pending = limitsRefreshes.get(environmentId);
   if (pending !== undefined) {
-    return (await pending) as A;
+    return automatic ? undefined : ((await pending) as A);
   }
+  const refreshAfter = limitsRefreshAfter.get(environmentId) ?? 0;
+  // @effect-diagnostics-next-line globalDate:off
+  if (automatic && Date.now() < refreshAfter) return;
   const current = Promise.resolve()
     .then(refresh)
     .finally(() => {
       limitsRefreshes.delete(environmentId);
+      // @effect-diagnostics-next-line globalDate:off
+      limitsRefreshAfter.set(environmentId, Date.now() + 5 * 60_000);
     });
   limitsRefreshes.set(environmentId, current);
   return await current;

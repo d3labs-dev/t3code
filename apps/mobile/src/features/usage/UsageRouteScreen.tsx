@@ -2,7 +2,7 @@ import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { ChatGptUsageSummary } from "./ChatGptUsageSummary";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { EnvironmentId, USAGE_CONTRACT_VERSION, type UsageProviderKind } from "@t3tools/contracts";
-import { type RouteProp, useRoute } from "@react-navigation/native";
+import { type RouteProp, useIsFocused, useRoute } from "@react-navigation/native";
 import {
   updatingProvidersLabel,
   usageEnvironmentProgress,
@@ -110,7 +110,11 @@ function UsageScreen(props: {
     selectedEnvironmentIds,
     !headerOnly,
   );
-  const limits = useRefreshLimits(selectedEnvironmentIds);
+  const isFocused = useIsFocused();
+  const limits = useRefreshLimits(
+    selectedEnvironmentIds,
+    isFocused && view === "limits" && !headerOnly,
+  );
   const sourceMessages = usageSourceMessages(
     selectedEnvironments.flatMap((environment) => environment.summary?.sources ?? []),
   );
