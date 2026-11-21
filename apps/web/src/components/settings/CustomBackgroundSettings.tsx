@@ -4,10 +4,11 @@ import { useClientSettings, updateClientSettings } from "~/hooks/useSettings";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { SettingResetButton, SettingsRow, SettingsSection } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { MonitorCog } from "lucide-react";
 
 export function CustomBackgroundSettings() {
+  const searchableSetting = useSearchableSetting();
   const active = useActiveBackground();
   const enabled = useClientSettings((settings) => settings.customBackgroundEnabled);
   const libraryCount = useClientSettings((settings) => settings.customBackgrounds.length);
@@ -27,7 +28,7 @@ export function CustomBackgroundSettings() {
         resetAction={
           active ? (
             <SettingResetButton
-              label="custom background"
+              ariaLabel="Reset custom background to default"
               onClick={() => updateClientSettings({ activeCustomBackgroundId: null })}
             />
           ) : null

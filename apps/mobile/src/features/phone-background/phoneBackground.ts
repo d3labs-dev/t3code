@@ -15,7 +15,8 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { useCallback } from "react";
 
 import type { PhoneBackgroundQuickAdjustPosition } from "../../persistence/mobile-preferences";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { mobilePreferencesAtom, saveMobilePreferences } from "../../state/preferences";
+import { useAtomCommand } from "../../state/use-atom-command";
 import {
   activePhonePlaylist,
   phoneBackgroundWithActivePlaylist,
@@ -68,7 +69,7 @@ export function usePhoneBackgroundQuickAdjustPosition(): PhoneBackgroundQuickAdj
 
 /** Edits the stored background; does nothing while the phone has none. */
 export function useUpdatePhoneBackground() {
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const savePreferences = useAtomCommand(saveMobilePreferences);
   return useCallback(
     (change: (background: PhoneBackground) => PhoneBackground) =>
       savePreferences({
