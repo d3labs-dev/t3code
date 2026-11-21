@@ -1,4 +1,3 @@
-import { useAtomSet } from "@effect/atom-react";
 import {
   CUSTOM_BACKGROUND_ROTATION_MINUTE_OPTIONS,
   type CustomBackgroundImageId,
@@ -20,7 +19,8 @@ import * as Dialog from "../../components/ui/Dialog";
 import { Menu } from "../../components/ui/Menu";
 import { ListRowLayout } from "../../components/ui/ListRowLayout";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
-import { updateMobilePreferencesAtom } from "../../state/preferences";
+import { saveMobilePreferences } from "../../state/preferences";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { ListActionRow as SettingsActionRow } from "../../components/ui/ListActionRow";
 import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SettingsScreen } from "../settings/components/SettingsScreen";
@@ -143,7 +143,7 @@ function pictureCountLabel(count: number): string {
 
 /** Saves a change to the phone's backgrounds, applied to the latest stored value. */
 function useSavePhoneBackground() {
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const savePreferences = useAtomCommand(saveMobilePreferences);
   return (change: (current: PhoneBackground | null) => PhoneBackground | null) =>
     savePreferences({
       transform: (current) => ({ phoneBackground: change(current.phoneBackground ?? null) }),
@@ -187,7 +187,7 @@ function usePickPictures(onPicked: (pictures: ReadonlyArray<AddedPicture>) => vo
 function GeneralSection(props: { readonly background: PhoneBackground }) {
   const enabled = usePhoneBackgroundEnabled();
   const quickAdjust = usePhoneBackgroundQuickAdjust();
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const savePreferences = useAtomCommand(saveMobilePreferences);
   return (
     <SettingsSection title="Background">
       <SettingsSwitchRow
