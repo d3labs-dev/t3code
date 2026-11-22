@@ -75,6 +75,7 @@ const browserArchive = makeZip([
 
 const BUNDLE_BUILD: PreviewBrowser.ChromeBuild = {
   name: "bundle",
+  version: PreviewBrowser.FULL_CHROME.version,
   archives: PreviewBrowser.FULL_CHROME.archives,
   executable: () => "App.app/Contents/MacOS/App",
 };
