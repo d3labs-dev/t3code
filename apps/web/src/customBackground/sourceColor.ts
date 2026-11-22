@@ -38,7 +38,7 @@ async function samplePixels(blob: Blob): Promise<number[] | null> {
     const scale = Math.min(1, SAMPLE_DIMENSION / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
-    const target = createCanvas(width, height);
+    const target = createCanvas(width, height, "srgb");
     if (!target) return null;
     target.context.drawImage(bitmap, 0, 0, width, height);
     const pixels = opaquePixels(target.context.getImageData(0, 0, width, height).data);
