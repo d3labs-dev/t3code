@@ -2,7 +2,7 @@ import { Hct, QuantizerCelebi, Score } from "@material/material-color-utilities"
 
 import { type PictureTone, summarizePictureTone } from "@t3tools/shared/customBackgroundBrightness";
 
-import { createCanvas } from "~/lib/imageCompression";
+import { createCanvas } from "~/lib/imageCanvas";
 
 /**
  * Android quantizes a downscaled wallpaper rather than the real one, and the
