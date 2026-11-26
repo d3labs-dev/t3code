@@ -47,6 +47,7 @@ import {
   getSessionMessages,
   getSubagentMessages,
   type HookCallback,
+  type McpServerConfig as ClaudeMcpServerConfig,
   type McpServerStatus as ClaudeMcpServerStatus,
   query,
   resolveSettings as resolveClaudeSettings,
@@ -64,6 +65,7 @@ import {
   type SDKRateLimitInfo,
   type SDKResultMessage,
   type SDKUserMessage,
+  SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
 } from "@anthropic-ai/claude-agent-sdk";
 import type {
   AskUserQuestionInput,
@@ -83,6 +85,7 @@ import {
 } from "@t3tools/shared/mcpApp";
 import { AgentScope } from "@t3tools/shared/AgentScope";
 import * as ProviderProcesses from "../../process/providerProcesses.ts";
+import * as BotHarnessResolver from "./BotHarnessResolver.ts";
 import * as SpawnWorker from "../../process/SpawnWorker.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { applyClaudePromptEffortPrefix } from "@t3tools/shared/model";
@@ -93,6 +96,8 @@ import {
   formatClaudeResumeCompactionQuestion,
 } from "@t3tools/shared/claudeCompaction";
 import {
+  type BotHarnessProfile,
+  type BotMcpServerConfig,
   type ChatAttachment,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   ClaudeSettings,
@@ -2194,6 +2199,7 @@ export function makeClaudeQueryOptions(input: {
   readonly appendSystemPromptFileText?: string;
   // Flag settings, because a user's settings.json env beats the process env in Claude Code.
   readonly toolSearchOverride?: "true";
+  readonly botProfile?: BotHarnessProfile;
 }): ClaudeAgentSdkQueryOptions {
   const compiledSelection = compileClaudeModelSelection(input.modelSelection, input.modelCatalog);
   const {
@@ -2362,7 +2368,105 @@ export function makeClaudeQueryOptions(input: {
   ];
   const withDirectories =
     additionalDirectories.length === 0 ? options : { ...options, additionalDirectories };
-  return input.cwd === null ? withDirectories : { ...withDirectories, cwd: input.cwd };
+  const withCwd = input.cwd === null ? withDirectories : { ...withDirectories, cwd: input.cwd };
+  return input.botProfile === undefined
+    ? withCwd
+    : claudeBotQueryOptions(input.botProfile, withCwd);
+}
+
+function claudeBotQueryOptions(
+  profile: BotHarnessProfile,
+  options: ClaudeAgentSdkQueryOptions,
+): ClaudeAgentSdkQueryOptions {
+  const policyTools = options.tools;
+  const settings = claudeBotSettings(options.settings, profile.authSettings);
+  return {
+    ...options,
+    systemPrompt: claudeBotSystemPrompt(profile),
+    // A sandbox that narrowed the tool list keeps it narrowed for a bot.
+    tools: Array.isArray(policyTools)
+      ? profile.tools.filter((tool) => policyTools.includes(tool))
+      : [...profile.tools],
+    settingSources: [],
+    strictMcpConfig: true,
+    skills: [...profile.skills],
+    mcpServers: {
+      ...Object.fromEntries(
+        Object.entries(profile.mcpServers).map(
+          ([name, config]) => [name, claudeBotMcpServer(config)] as const,
+        ),
+      ),
+      ...options.mcpServers,
+    },
+    additionalDirectories: Array.from(
+      new Set([...(options.additionalDirectories ?? []), ...profile.additionalDirectories]),
+    ),
+    ...(settings === undefined ? {} : { settings }),
+  };
+}
+
+function claudeBotSystemPrompt(
+  profile: BotHarnessProfile,
+): NonNullable<ClaudeQueryOptions["systemPrompt"]> {
+  switch (profile.systemPromptMode) {
+    case "custom":
+      return {
+        type: "custom",
+        prompt: [
+          profile.staticInstructions,
+          SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
+          profile.dynamicContext,
+        ],
+        snapshot: true,
+      };
+    case "preset":
+      return {
+        type: "preset",
+        preset: "claude_code",
+        excludeDynamicSections: true,
+        append: [profile.staticInstructions, profile.dynamicContext]
+          .filter((text) => text.length > 0)
+          .join("\n\n"),
+        snapshot: true,
+      };
+  }
+}
+
+function claudeBotMcpServer(config: BotMcpServerConfig): ClaudeMcpServerConfig {
+  switch (config.type) {
+    case "stdio":
+      return {
+        type: "stdio",
+        command: config.command,
+        ...(config.args === undefined ? {} : { args: [...config.args] }),
+        ...(config.env === undefined ? {} : { env: { ...config.env } }),
+      };
+    case "http":
+    case "sse":
+      return {
+        type: config.type,
+        url: config.url,
+        ...(config.headers === undefined ? {} : { headers: { ...config.headers } }),
+      };
+  }
+}
+
+// settingSources: [] drops the user's settings, so their auth travels beneath T3's own settings.
+function claudeBotSettings(
+  settings: ClaudeQueryOptions["settings"],
+  auth: BotHarnessProfile["authSettings"],
+): ClaudeQueryOptions["settings"] {
+  if (auth === undefined || typeof settings === "string") return settings;
+  const { apiKeyHelper, anthropicBaseUrl } = auth;
+  if (apiKeyHelper === undefined && anthropicBaseUrl === undefined) return settings;
+  return {
+    ...(apiKeyHelper === undefined ? {} : { apiKeyHelper }),
+    ...settings,
+    env: {
+      ...(anthropicBaseUrl === undefined ? {} : { ANTHROPIC_BASE_URL: anthropicBaseUrl }),
+      ...settings?.env,
+    },
+  };
 }
 
 /**
@@ -3508,6 +3612,7 @@ export function claudeEffectiveQueryPolicyKey(
     readonly allowedTools?: ReadonlyArray<string>;
     readonly mcpServers?: ClaudeQueryOptions["mcpServers"];
   },
+  botProfile?: BotHarnessProfile,
 ): string {
   return JSON.stringify({
     runtimePolicy: claudeRuntimeQueryPolicyKey({
@@ -3517,6 +3622,18 @@ export function claudeEffectiveQueryPolicyKey(
         : { allowedTools: mcpOverrides.allowedTools }),
     }),
     mcpServers: mcpOverrides.mcpServers,
+    // Prompt text is left out: it can change every turn, and a snapshotted prompt ignores it anyway.
+    bot:
+      botProfile === undefined
+        ? undefined
+        : {
+            systemPromptMode: botProfile.systemPromptMode,
+            tools: botProfile.tools,
+            mcpServers: botProfile.mcpServers,
+            skills: botProfile.skills,
+            additionalDirectories: botProfile.additionalDirectories,
+            authSettings: botProfile.authSettings,
+          },
   });
 }
 
@@ -5543,6 +5660,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
   adapterOptions: ClaudeAdapterV2Options,
 ) {
   const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+  const botHarnessResolver = yield* BotHarnessResolver.BotHarnessResolver;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
   const { attachmentsDir, fileSystem, path, random, idAllocator, queryRunner } = adapterOptions;
@@ -12702,7 +12820,14 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               ? {}
               : { allowedTools: queryPolicy.allowedTools }),
           });
-          const queryPolicyKey = claudeEffectiveQueryPolicyKey(queryPolicy, mcpOverrides);
+          const botProfile = Option.getOrUndefined(
+            yield* botHarnessResolver.resolve(turnInput.threadId),
+          );
+          const queryPolicyKey = claudeEffectiveQueryPolicyKey(
+            queryPolicy,
+            mcpOverrides,
+            botProfile,
+          );
           const resumeSessionAt = yield* getNativeConversationHeadId(turnInput.providerThread);
           const existing = yield* Ref.get(queryContext);
           // Continuations drain existing output without prompting; retain the live process regardless of selection.
@@ -12872,6 +12997,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             supportedDialogKinds: ["resume_return"],
             ...(appendSystemPromptFileText === undefined ? {} : { appendSystemPromptFileText }),
             ...(toolSearchOverride === undefined ? {} : { toolSearchOverride }),
+            ...(botProfile === undefined ? {} : { botProfile }),
           });
           const resolvedTurnCwd = yield* fileSystem
             .realPath(turnInput.runtimePolicy.cwd ?? ".")
