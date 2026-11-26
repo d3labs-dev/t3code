@@ -228,14 +228,22 @@ const make = Effect.gen(function* () {
   });
 
   const list: BotService["Service"]["list"] = Effect.fn("BotService.list")(function* (input) {
-    const bots = yield* store
-      .list({ includeArchived: input.includeArchived === true })
-      .pipe(Effect.mapError(failed("Couldn't list Bots.")));
-    const [entries, availableMcpServers] = yield* Effect.all(
-      [Effect.forEach(bots, rosterEntry, { concurrency: 4 }), folders.listAvailableMcpServers],
-      { concurrency: 2 },
+    const includeArchived = input.includeArchived === true;
+    const [entries, availableMcpServers, projectId, codingThreads] = yield* Effect.all(
+      [
+        store.list({ includeArchived }).pipe(
+          Effect.mapError(failed("Couldn't list Bots.")),
+          Effect.flatMap((bots) => Effect.forEach(bots, rosterEntry, { concurrency: 4 })),
+        ),
+        folders.listAvailableMcpServers,
+        backingProjectId,
+        store
+          .listCodingThreadLinks({ includeArchived })
+          .pipe(Effect.mapError(failed("Couldn't list the Bots' coding threads."))),
+      ],
+      { concurrency: "unbounded" },
     );
-    return { bots: entries, availableMcpServers };
+    return { bots: entries, availableMcpServers, backingProjectId: projectId, codingThreads };
   });
 
   const subscribeList: BotService["Service"]["subscribeList"] = (input = {}) =>
@@ -645,6 +653,7 @@ const make = Effect.gen(function* () {
     ]);
     if (!claimed || Option.isNone(sender) || Option.isNone(target)) return;
     yield* store.updateHopCount({ botId: sender.value.id, hopCount: hop });
+    yield* notifyChanged;
     yield* sendToBotThread({
       bot: sender.value,
       commandId: CommandId.make(`bot-wake:${exchange.id}`),
@@ -668,8 +677,10 @@ const make = Effect.gen(function* () {
       summary: outcome.finalMessage,
       resolvedAt: yield* nowIso,
     });
+    if (!claimed) return;
+    yield* notifyChanged;
     const bot = yield* store.get(exchange.fromBotId);
-    if (!claimed || Option.isNone(bot)) return;
+    if (Option.isNone(bot)) return;
     yield* sendToBotThread({
       bot: bot.value,
       commandId: CommandId.make(`bot-wake:${exchange.id}`),
@@ -698,7 +709,7 @@ const make = Effect.gen(function* () {
     // delegate_task wakes its parent when the child ends, so a watch here would wake the bot twice.
     const shell = yield* threads.getThreadShell(message.threadId);
     if (shell?.lineage.relationshipToParent === "subagent") return;
-    yield* store.insertExchange({
+    const inserted = yield* store.insertExchange({
       id: BotExchangeId.make(yield* randomUuidV4),
       kind: "coding_thread",
       fromBotId: sender.value.id,
@@ -712,6 +723,7 @@ const make = Effect.gen(function* () {
       createdAt: yield* nowIso,
       resolvedAt: null,
     });
+    if (inserted) yield* notifyChanged;
   });
 
   const notifyIfBotThread = Effect.fnUntraced(function* (threadId: ThreadId) {

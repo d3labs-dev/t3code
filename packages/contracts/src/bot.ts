@@ -5,6 +5,7 @@ import {
   ForwardCompatibleArray,
   IsoDateTime,
   NonNegativeInt,
+  ProjectId,
   RunId,
   ThreadId,
   TrimmedNonEmptyString,
@@ -194,9 +195,22 @@ export const BotListInput = Schema.Struct({
 });
 export type BotListInput = typeof BotListInput.Type;
 
+/** The latest exchange through which a Bot watches a coding thread it messaged. */
+export const BotCodingThreadLink = Schema.Struct({
+  botId: BotId,
+  threadId: ThreadId,
+  status: BotExchangeStatus,
+  createdAt: IsoDateTime,
+  resolvedAt: Schema.NullOr(IsoDateTime),
+});
+export type BotCodingThreadLink = typeof BotCodingThreadLink.Type;
+
 export const BotListResult = Schema.Struct({
   bots: ForwardCompatibleArray(BotRosterEntry),
   availableMcpServers: Schema.Array(BotAvailableMcpServer),
+  /** The internal project that owns every Bot thread; null until the first Bot exists. */
+  backingProjectId: Schema.NullOr(ProjectId),
+  codingThreads: ForwardCompatibleArray(BotCodingThreadLink),
 });
 export type BotListResult = typeof BotListResult.Type;
 

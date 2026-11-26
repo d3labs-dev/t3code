@@ -1,12 +1,24 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
-import { BotError, BotMcpServerConfig, BotRecord, BotSlug, slugifyBotName } from "./bot.ts";
+import {
+  BotCodingThreadLink,
+  BotError,
+  BotListResult,
+  BotMcpServerConfig,
+  BotRecord,
+  BotSlug,
+  slugifyBotName,
+} from "./bot.ts";
 
 const decodeSlug = Schema.decodeUnknownSync(BotSlug);
 const decodeMcpServer = Schema.decodeUnknownSync(BotMcpServerConfig);
 const decodeRecord = Schema.decodeUnknownSync(BotRecord);
 const encodeRecord = Schema.encodeSync(BotRecord);
+const decodeLink = Schema.decodeUnknownSync(BotCodingThreadLink);
+const encodeLink = Schema.encodeSync(BotCodingThreadLink);
+const decodeListResult = Schema.decodeUnknownSync(BotListResult);
+const encodeListResult = Schema.encodeSync(BotListResult);
 const decodeError = Schema.decodeSync(BotError);
 const decodeUnknownError = Schema.decodeUnknownSync(BotError);
 
@@ -70,34 +82,82 @@ describe("BotMcpServerConfig", () => {
   });
 });
 
+const encodedRecord = {
+  id: "bot-1",
+  slug: "matcha",
+  name: "Matcha",
+  role: "",
+  groupName: null,
+  icon: "bot",
+  color: "#6366f1",
+  isPrimary: true,
+  muted: false,
+  threadId: "thread-1",
+  folderPath: "/home/me/.t3/bots/matcha",
+  modelSelection: { instanceId: "claudeAgent", model: "claude-opus-5-5" },
+  runtimeMode: "full-access",
+  tools: ["Read", "Bash"],
+  mcpServerNames: ["figma"],
+  customMcpServers: { d3labs: { type: "http", url: "https://mcp.d3labs.test" } },
+  skills: [],
+  systemPromptMode: "custom",
+  hopCount: 2,
+  archivedAt: null,
+  createdAt: "2026-11-26T00:00:00.000Z",
+  updatedAt: "2026-11-26T00:00:00.000Z",
+};
+
 describe("BotRecord", () => {
   it("survives a persistence round trip", () => {
-    const encoded = {
-      id: "bot-1",
-      slug: "matcha",
-      name: "Matcha",
-      role: "",
-      groupName: null,
-      icon: "bot",
-      color: "#6366f1",
-      isPrimary: true,
-      muted: false,
-      threadId: "thread-1",
-      folderPath: "/home/me/.t3/bots/matcha",
-      modelSelection: { instanceId: "claudeAgent", model: "claude-opus-5-5" },
-      runtimeMode: "full-access",
-      tools: ["Read", "Bash"],
-      mcpServerNames: ["figma"],
-      customMcpServers: { d3labs: { type: "http", url: "https://mcp.d3labs.test" } },
-      skills: [],
-      systemPromptMode: "custom",
-      hopCount: 2,
-      archivedAt: null,
+    expect(encodeRecord(decodeRecord(encodedRecord))).toEqual(encodedRecord);
+  });
+});
+
+describe("BotCodingThreadLink", () => {
+  it("survives a wire round trip in each state", () => {
+    const pending = {
+      botId: "bot-1",
+      threadId: "thread-2",
+      status: "pending",
       createdAt: "2026-11-26T00:00:00.000Z",
-      updatedAt: "2026-11-26T00:00:00.000Z",
+      resolvedAt: null,
     };
-    const record = decodeRecord(encoded);
-    expect(encodeRecord(record)).toEqual(encoded);
+    const woken = { ...pending, status: "woken", resolvedAt: "2026-11-26T00:05:00.000Z" };
+    expect(encodeLink(decodeLink(pending))).toEqual(pending);
+    expect(encodeLink(decodeLink(woken))).toEqual(woken);
+    expect(() => decodeLink({ ...pending, threadId: " " })).toThrow();
+  });
+});
+
+describe("BotListResult", () => {
+  const link = {
+    botId: "bot-1",
+    threadId: "thread-2",
+    status: "pending",
+    createdAt: "2026-11-26T00:00:00.000Z",
+    resolvedAt: null,
+  };
+
+  it("carries the backing project and coding-thread links over the wire", () => {
+    const encoded = {
+      bots: [{ bot: encodedRecord, status: "working" }],
+      availableMcpServers: [{ name: "figma", transport: "http" }],
+      backingProjectId: "project-bots",
+      codingThreads: [link],
+    };
+    expect(encodeListResult(decodeListResult(encoded))).toEqual(encoded);
+    const empty = { bots: [], availableMcpServers: [], backingProjectId: null, codingThreads: [] };
+    expect(encodeListResult(decodeListResult(empty))).toEqual(empty);
+  });
+
+  it("drops coding-thread links a newer server sends with an unknown status", () => {
+    const decoded = decodeListResult({
+      bots: [],
+      availableMcpServers: [],
+      backingProjectId: null,
+      codingThreads: [link, { ...link, threadId: "thread-3", status: "paused" }],
+    });
+    expect(decoded.codingThreads.map(({ threadId }) => threadId)).toEqual(["thread-2"]);
   });
 });
 

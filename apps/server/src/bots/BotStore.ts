@@ -1,4 +1,5 @@
 import {
+  BotCodingThreadLink,
   BotExchange,
   BotExchangeId,
   type BotExchangeStatus,
@@ -94,6 +95,7 @@ const EXCHANGE_COLUMNS = `
 `;
 
 const RECENT_EXCHANGE_LIMIT = 50;
+const CODING_THREAD_LINK_LIMIT = 200;
 
 export class BotStore extends Context.Service<
   BotStore,
@@ -135,6 +137,10 @@ export class BotStore extends Context.Service<
     readonly findPendingExchangesByWatchedThread: (
       threadId: ThreadId,
     ) => Effect.Effect<ReadonlyArray<BotExchange>, BotStoreError>;
+    /** The latest coding-thread exchange per bot and watched thread, newest first. */
+    readonly listCodingThreadLinks: (options: {
+      readonly includeArchived: boolean;
+    }) => Effect.Effect<ReadonlyArray<BotCodingThreadLink>, BotStoreError>;
   }
 >()("t3/bots/BotStore") {}
 
@@ -255,6 +261,37 @@ const make = Effect.gen(function* () {
       ])}
       ORDER BY created_at DESC, rowid DESC
       ${request.botId === undefined ? sql.literal("") : sql`LIMIT ${RECENT_EXCHANGE_LIMIT}`}
+    `,
+  });
+
+  const selectCodingThreadLinks = SqlSchema.findAll({
+    Request: Schema.Struct({ includeArchived: Schema.Boolean }),
+    Result: BotCodingThreadLink,
+    execute: (request) => sql`
+      SELECT
+        latest.from_bot_id AS "botId",
+        latest.watched_thread_id AS "threadId",
+        latest.status,
+        latest.created_at AS "createdAt",
+        latest.resolved_at AS "resolvedAt"
+      FROM (
+        SELECT
+          exchange.*,
+          exchange.rowid AS insertion_order,
+          ROW_NUMBER() OVER (
+            PARTITION BY exchange.from_bot_id, exchange.watched_thread_id
+            ORDER BY exchange.created_at DESC, exchange.rowid DESC
+          ) AS recency
+        FROM bot_exchanges AS exchange
+        JOIN bots ON bots.bot_id = exchange.from_bot_id
+        WHERE ${sql.and([
+          sql`exchange.kind = 'coding_thread'`,
+          ...(request.includeArchived ? [] : [sql`bots.archived_at IS NULL`]),
+        ])}
+      ) AS latest
+      WHERE latest.recency = 1
+      ORDER BY latest.created_at DESC, latest.insertion_order DESC
+      LIMIT ${CODING_THREAD_LINK_LIMIT}
     `,
   });
 
@@ -418,6 +455,12 @@ const make = Effect.gen(function* () {
       );
     }, mapError("findPendingExchangesByWatchedThread"));
 
+  const listCodingThreadLinks: BotStore["Service"]["listCodingThreadLinks"] = Effect.fn(
+    "BotStore.listCodingThreadLinks",
+  )(function* (options) {
+    return yield* selectCodingThreadLinks(options).pipe(NodeSqliteClient.readOnly);
+  }, mapError("listCodingThreadLinks"));
+
   return BotStore.of({
     insert,
     update,
@@ -432,6 +475,7 @@ const make = Effect.gen(function* () {
     retargetExchange,
     listExchangesForBot,
     findPendingExchangesByWatchedThread,
+    listCodingThreadLinks,
   });
 });
 

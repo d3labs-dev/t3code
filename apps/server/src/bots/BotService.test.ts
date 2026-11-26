@@ -1,6 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
+  type BotExchangeStatus,
+  type BotId,
+  type BotListResult,
   type BotRecord,
   BotSlug,
   EventId,
@@ -313,7 +316,12 @@ it.effect("creates bots with unique slugs, one primary, an idle thread and seede
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const updates = yield* bots.subscribeList({}).pipe(Stream.toQueue({ capacity: "unbounded" }));
-      assert.lengthOf((yield* Queue.take(updates)).bots, 0);
+      assert.deepStrictEqual(yield* Queue.take(updates), {
+        bots: [],
+        availableMcpServers: [],
+        backingProjectId: null,
+        codingThreads: [],
+      });
 
       const engineer = (yield* bots.create({
         name: "Engineer",
@@ -335,7 +343,10 @@ it.effect("creates bots with unique slugs, one primary, an idle thread and seede
       assert.strictEqual(engineer.runtimeMode, "full-access");
       assert.strictEqual(engineer.systemPromptMode, "custom");
       assert.strictEqual(engineer.folderPath, path.join(harness.baseDir, "bots", "engineer"));
-      assert.lengthOf((yield* Queue.take(updates)).bots, 1);
+      const afterCreate = yield* Queue.take(updates);
+      assert.lengthOf(afterCreate.bots, 1);
+      assert.isNotNull(afterCreate.backingProjectId);
+      assert.strictEqual(afterCreate.backingProjectId, yield* bots.backingProjectId);
 
       assert.deepStrictEqual(
         harness.bootstraps.map(({ title, workspaceRoot }) => ({ title, workspaceRoot })),
@@ -700,74 +711,116 @@ it.effect("skips the wake when the peer already replied with bot_message", () =>
   ),
 );
 
-it.effect("wakes the bot that launched a coding thread when that thread finishes or fails", () =>
-  withBots((harness, bots, store) =>
-    Effect.gen(function* () {
-      yield* bots.startReactor();
-      const engineer = (yield* bots.create({ name: "Engineer", modelSelection })).bot;
-      const launchCodingThread = (title: string) =>
-        Effect.gen(function* () {
-          const threadId = harness.addThread(title);
-          const runId = RunId.make(harness.nextId("run"));
-          const launched = messageUpdated(
-            message({
-              id: harness.nextId("message"),
-              threadId,
-              runId,
-              role: "user",
-              text: "Fix the login redirect.",
-              createdBy: "agent",
-              senderThreadId: engineer.threadId,
-            }),
+it.effect(
+  "wakes the bot that launched a coding thread when that thread finishes or fails, and streams its latest status",
+  () =>
+    withBots((harness, bots, store) =>
+      Effect.gen(function* () {
+        yield* bots.startReactor();
+        const engineer = (yield* bots.create({ name: "Engineer", modelSelection })).bot;
+        const updates = yield* bots
+          .subscribeList({})
+          .pipe(Stream.toQueue({ capacity: "unbounded" }));
+        const nextLinks = (
+          until: (links: BotListResult["codingThreads"]) => boolean,
+        ): Effect.Effect<ReadonlyArray<readonly [BotId, ThreadId, BotExchangeStatus]>> =>
+          Queue.take(updates).pipe(
+            Effect.orDie,
+            Effect.map(({ codingThreads }) => codingThreads),
+            Effect.repeat({ until }),
+            Effect.map((links) =>
+              links.map(({ botId, threadId, status }) => [botId, threadId, status] as const),
+            ),
           );
-          // message.updated repeats for one message; the watch must not.
-          yield* Queue.offer(harness.events, launched);
-          yield* Queue.offer(harness.events, launched);
-          return { threadId, runId };
-        });
+        const messageCodingThread = (threadId: ThreadId) =>
+          Effect.gen(function* () {
+            const runId = RunId.make(harness.nextId("run"));
+            const launched = messageUpdated(
+              message({
+                id: harness.nextId("message"),
+                threadId,
+                runId,
+                role: "user",
+                text: "Fix the login redirect.",
+                createdBy: "agent",
+                senderThreadId: engineer.threadId,
+              }),
+            );
+            // message.updated repeats for one message; the watch must not.
+            yield* Queue.offer(harness.events, launched);
+            yield* Queue.offer(harness.events, launched);
+            return { threadId, runId };
+          });
+        const launchCodingThread = (title: string) => messageCodingThread(harness.addThread(title));
 
-      const fix = yield* launchCodingThread("Fix login");
-      const fixThread = harness.threads.get(fix.threadId)!;
-      fixThread.pullRequestUrl = "https://github.com/acme/app/pull/7";
-      fixThread.messages.push(
-        message({
-          id: harness.nextId("message"),
-          threadId: fix.threadId,
-          runId: fix.runId,
-          role: "assistant",
-          text: "Fixed the redirect and opened a PR.",
-          createdBy: "agent",
-        }),
-      );
-      yield* Queue.offer(harness.events, runUpdated(fix.threadId, fix.runId, "completed"));
-      const completed = yield* Queue.take(harness.sent);
-      assert.strictEqual(completed.threadId, engineer.threadId);
-      assert.strictEqual(completed.mode, "queue");
-      assert.strictEqual(
-        completed.text,
-        `[Coding thread update: Fix login (${fix.threadId}), status: completed]\n\nFixed the redirect and opened a PR.\n\nPull request: https://github.com/acme/app/pull/7`,
-      );
+        const fix = yield* launchCodingThread("Fix login");
+        assert.deepStrictEqual(yield* nextLinks((links) => links.length > 0), [
+          [engineer.id, fix.threadId, "pending"],
+        ]);
+        const fixThread = harness.threads.get(fix.threadId)!;
+        fixThread.pullRequestUrl = "https://github.com/acme/app/pull/7";
+        fixThread.messages.push(
+          message({
+            id: harness.nextId("message"),
+            threadId: fix.threadId,
+            runId: fix.runId,
+            role: "assistant",
+            text: "Fixed the redirect and opened a PR.",
+            createdBy: "agent",
+          }),
+        );
+        yield* Queue.offer(harness.events, runUpdated(fix.threadId, fix.runId, "completed"));
+        const completed = yield* Queue.take(harness.sent);
+        assert.strictEqual(completed.threadId, engineer.threadId);
+        assert.strictEqual(completed.mode, "queue");
+        assert.strictEqual(
+          completed.text,
+          `[Coding thread update: Fix login (${fix.threadId}), status: completed]\n\nFixed the redirect and opened a PR.\n\nPull request: https://github.com/acme/app/pull/7`,
+        );
+        assert.deepStrictEqual(yield* nextLinks((links) => links[0]?.status === "woken"), [
+          [engineer.id, fix.threadId, "woken"],
+        ]);
 
-      const flaky = yield* launchCodingThread("Flaky test");
-      yield* Queue.offer(harness.events, runUpdated(flaky.threadId, flaky.runId, "failed"));
-      const failure = yield* Queue.take(harness.sent);
-      assert.strictEqual(failure.threadId, engineer.threadId);
-      assert.isTrue(
-        failure.text.startsWith(
-          `[Coding thread update: Flaky test (${flaky.threadId}), status: failed]`,
-        ),
-      );
+        const flaky = yield* launchCodingThread("Flaky test");
+        yield* Queue.offer(harness.events, runUpdated(flaky.threadId, flaky.runId, "failed"));
+        const failure = yield* Queue.take(harness.sent);
+        assert.strictEqual(failure.threadId, engineer.threadId);
+        assert.isTrue(
+          failure.text.startsWith(
+            `[Coding thread update: Flaky test (${flaky.threadId}), status: failed]`,
+          ),
+        );
 
-      const exchanges = yield* store.listExchangesForBot(engineer.id);
-      assert.deepStrictEqual(
-        exchanges.map(({ kind, watchedThreadId, status }) => [kind, watchedThreadId, status]),
-        [
-          ["coding_thread", flaky.threadId, "woken"],
-          ["coding_thread", fix.threadId, "woken"],
-        ],
-      );
-    }),
-  ),
+        const rerun = yield* messageCodingThread(fix.threadId);
+        assert.deepStrictEqual(yield* nextLinks((links) => links[0]?.threadId === fix.threadId), [
+          [engineer.id, fix.threadId, "pending"],
+          [engineer.id, flaky.threadId, "woken"],
+        ]);
+        yield* Queue.offer(harness.events, runUpdated(fix.threadId, rerun.runId, "completed"));
+        yield* Queue.take(harness.sent);
+
+        const exchanges = yield* store.listExchangesForBot(engineer.id);
+        assert.deepStrictEqual(
+          exchanges.map(({ kind, watchedThreadId, status }) => [kind, watchedThreadId, status]),
+          [
+            ["coding_thread", fix.threadId, "woken"],
+            ["coding_thread", flaky.threadId, "woken"],
+            ["coding_thread", fix.threadId, "woken"],
+          ],
+        );
+        assert.deepStrictEqual(
+          (yield* bots.list({})).codingThreads.map(({ threadId, status }) => [threadId, status]),
+          [
+            [fix.threadId, "woken"],
+            [flaky.threadId, "woken"],
+          ],
+        );
+
+        yield* bots.update({ botId: engineer.id, archived: true });
+        assert.lengthOf((yield* bots.list({})).codingThreads, 0);
+        assert.lengthOf((yield* bots.list({ includeArchived: true })).codingThreads, 2);
+      }),
+    ),
 );
 
 it.effect("leaves a delegate_task child to wake its parent itself", () =>
