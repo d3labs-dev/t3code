@@ -1,5 +1,7 @@
 import { useAtomMount } from "@effect/atom-react";
 import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
+import type { ScopedCodingThreadSupervisor } from "@t3tools/client-runtime/state/bots";
+import { BotAvatar } from "../bots/BotAvatar";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
@@ -551,6 +553,7 @@ function TopStatusIcon(props: { icon: keyof typeof TOP_STATUS_ICONS; className: 
 
 type SidebarThreadRowProps = {
   thread: SidebarThreadSummary;
+  supervisorBot?: ScopedCodingThreadSupervisor | null | undefined;
   // "folder" is a one-line row inside a boring sidebar project folder;
   // "folder-multiline" adds the card's branch and PR line under it.
   variant: "card" | "slim" | "folder" | "folder-multiline";
@@ -1173,7 +1176,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     ) : null;
   const diff = latestRunDiff(thread);
   // Only the trailing icons would remain, so the row moves them to the title line instead.
+  const supervisorBot = props.supervisorBot?.botEntry.bot ?? null;
+  const supervisorPill = supervisorBot ? (
+    <span className="inline-flex max-w-28 shrink-0 items-center gap-1 rounded-full bg-sidebar-control-surface/60 py-px ps-0.5 pe-1.5 text-2xs text-sidebar-muted-foreground">
+      <BotAvatar icon={supervisorBot.icon} color={supervisorBot.color} size="xs" />
+      <span className="min-w-0 truncate">via {supervisorBot.name}</span>
+    </span>
+  ) : null;
   const metaLineEmpty =
+    supervisorPill === null &&
     !checkoutThread.branch &&
     !showsScratchMachine &&
     prBadge === null &&
@@ -1200,6 +1211,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       ) : (
         <span className="flex-1" />
       )}
+      {supervisorPill}
       {terminalStatusIcon}
       {prBadge}
       {diff ? (

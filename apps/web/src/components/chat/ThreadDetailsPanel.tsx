@@ -44,6 +44,8 @@ import {
   THREAD_DETAILS_PANEL_LABEL_CLASS,
 } from "./threadDetailsPanelStyles";
 import { Menu, MenuPopup } from "../ui/menu";
+import { useBotForThread } from "../../state/bots";
+import { BotDetailsPanel } from "../bots/BotDetailsPanel";
 
 const GitActionsControl = memo(BaseGitActionsControl);
 
@@ -103,6 +105,9 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   const activeThreadRef = { environmentId: props.environmentId, threadId: props.threadId };
   const project = useProject(scopeProjectRef(props.environmentId, props.projectId));
   const serverConfig = useServerConfigs().get(props.environmentId);
+  const activeBot = useBotForThread(
+    !props.draftId && props.isServerThread ? activeThreadRef : null,
+  );
   // A No project thread's folder sits inside the shared scratch root, so it must never get git.
   // Until the config and project load, a No project thread looks like any other folder.
   const offersGit =
@@ -135,6 +140,19 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
       ? { onCheckoutPullRequestRequest: props.onCheckoutPullRequestRequest }
       : {}),
   };
+
+  if (activeBot !== null) {
+    return (
+      <ThreadDetailsCard
+        threadRef={activeThreadRef}
+        anchor={props.anchor}
+        handle={props.handle}
+        contentKey={`bot:${activeBot.environmentId}:${activeBot.bot.id}`}
+      >
+        {() => <BotDetailsPanel entry={activeBot} />}
+      </ThreadDetailsCard>
+    );
+  }
 
   return (
     <ThreadDetailsCard

@@ -58,6 +58,7 @@ import {
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
+  BotIcon,
   BugIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
@@ -266,6 +267,7 @@ import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import { openUseInAnotherApp } from "./mcp/UseInAnotherAppDialog";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { toggleBackgroundStudio } from "~/customBackground/backgroundStudioStore";
+import { useBotsUiStore } from "./bots/botsUiStore";
 import { settingsForThisPlatform, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { resolveShortcutCommand, threadJumpIndexFromCommand } from "../keybindings";
@@ -458,6 +460,7 @@ function OpenCommandPaletteDialog(props: {
     setHighlightedItemValue(null);
   }
   const clientSettings = useClientSettings(selectCommandPaletteClientSettings);
+  const sidebarMode = useBotsUiStore((state) => state.sidebarMode);
   const createProject = useAtomCommand(projectEnvironment.create, {
     reportFailure: false,
   });
@@ -1739,6 +1742,28 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:sidebar-mode",
+    searchTerms: ["bots", "threads", "sidebar", "mode", "switch", "agents"],
+    title: sidebarMode === "bots" ? "Switch to Threads" : "Switch to Bots",
+    icon: <BotIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      useBotsUiStore.getState().toggleSidebarMode();
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:new-bot",
+    searchTerms: ["new bot", "create bot", "add bot", "agent"],
+    title: "New Bot",
+    icon: <BotIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      useBotsUiStore.getState().openNewBotDialog();
+    },
+  });
 
   for (const direction of [1, -1] as const) {
     const title = direction === 1 ? "Focus Next Workspace Area" : "Focus Previous Workspace Area";

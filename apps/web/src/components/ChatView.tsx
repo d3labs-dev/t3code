@@ -56,6 +56,7 @@ import { useUsageLimitsPanel } from "./chat/useUsageLimitsPanel";
 import { useWorktreeSetup } from "./chat/useWorktreeSetup";
 import { useChatShortcuts } from "./chat/useChatShortcuts";
 import { ChatBannerLane } from "./chat/ChatBannerLane";
+import { BotSupervisedBanner } from "./bots/BotSupervisedBanner";
 import * as Schema from "effect/Schema";
 import {
   AuthOrchestrationOperateScope,
@@ -282,6 +283,7 @@ import {
   useThreadCheckpointSummaries,
 } from "../state/entities";
 import { useEnvironmentShellHasSnapshot } from "../state/shell";
+import { useBotForThread, useSupervisorForThread } from "../state/bots";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
@@ -1023,6 +1025,8 @@ export default function ChatView(props: ChatViewProps) {
   })();
   const activeThreadRef = useActiveThreadRef(activeThread);
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  const activeBot = useBotForThread(isServerThread ? activeThreadRef : null);
+  const supervisorBot = useSupervisorForThread(isServerThread ? activeThreadRef : null);
   const activeEnvironmentServerBrowser = useEnvironmentSupportsServerBrowser(
     activeThreadRef?.environmentId ?? null,
   );
@@ -3381,6 +3385,7 @@ export default function ChatView(props: ChatViewProps) {
               activeThreadTitle={activeThread.title}
               activeThreadLinkOrigin={activeThreadShell?.linkOrigin?.label ?? null}
               activeProject={activeProject ?? null}
+              activeBot={activeBot}
               parentThreadLink={headerParentThreadLink}
               onOpenThread={onOpenRelatedThreadStable}
               rightPanelOpen={inlineRightPanelOwnsTitleBar}
@@ -3430,7 +3435,9 @@ export default function ChatView(props: ChatViewProps) {
               threadErrorBannerKey={threadErrorBannerKey}
               setThreadError={setThreadError}
               setThreadErrorBannerDismissTick={setThreadErrorBannerDismissTick}
-            />
+            >
+              {supervisorBot ? <BotSupervisedBanner supervisor={supervisorBot} /> : null}
+            </ChatBannerLane>
             <div {...conversationArea} className="relative flex min-h-0 flex-1 flex-col">
               <WorkspaceMutationIdContext value={workspaceMutationId}>
                 <ThreadTimeline

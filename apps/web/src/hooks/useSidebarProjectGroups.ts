@@ -3,14 +3,23 @@ import {
   getProjectOrderKey,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
+import { projectKey } from "@t3tools/client-runtime/state/bots";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
+import { useBotsIndex } from "../state/bots";
 import { useEnvironmentIdentities, usePrimaryEnvironmentId } from "../state/environments";
 import { useDelegatedUnderParent, useProjects, useQuietThreadShells } from "../state/entities";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
 
 export function useSidebarProjectGroups() {
-  const projects = useProjects();
+  const allProjects = useProjects();
+  const { backingProjectKeys } = useBotsIndex();
+  const projects =
+    backingProjectKeys.size === 0
+      ? allProjects
+      : allProjects.filter(
+          (project) => !backingProjectKeys.has(projectKey(project.environmentId, project.id)),
+        );
   // Activity order lags a running thread's streaming ticks until its next
   // real change; reading every tick re-rendered the whole sidebar with it.
   const threads = useQuietThreadShells();

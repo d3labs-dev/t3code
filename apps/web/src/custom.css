@@ -271,7 +271,8 @@ html[data-theme-id]:not([data-theme-id=""]) {
       [data-html-render-bubble],
       [data-subagent-group],
       [data-v2-item-type="subagent"],
-      [data-chat-composer-stack]
+      [data-chat-composer-stack],
+      [data-bot-supervised-banner]
     ) {
     text-shadow: none;
   }
@@ -379,7 +380,8 @@ html[data-theme-id="t3-chat"] {
   --wallpaper-bubble-padding: 10px;
 
   & [data-app-sidebar] [data-slot="sidebar-inner"],
-  & [data-thread-details-card] {
+  & [data-thread-details-card],
+  & [data-bot-supervised-banner] {
     background: var(--wallpaper-glass);
     -webkit-backdrop-filter: blur(4px) saturate(var(--glass-saturation));
     backdrop-filter: blur(4px) saturate(var(--glass-saturation));

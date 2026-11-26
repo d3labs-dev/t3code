@@ -35,6 +35,7 @@ import {
   isThreadWorking,
 } from "@t3tools/client-runtime/state/thread-inbox";
 import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
+import { withoutBotsModeThreads } from "@t3tools/client-runtime/state/bots";
 import {
   nextShownOrder,
   threadSearchMatchKey,
@@ -130,6 +131,8 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useOrderWhileOpen } from "../hooks/useOrderWhileOpen";
 import { useProjectPin } from "../hooks/useProjectGroupUpdate";
 import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
+import { useBotsIndex } from "../state/bots";
+import { BotModeSwitcher } from "./bots/BotModeSwitcher";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
@@ -1098,7 +1101,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
-  const threads = useQuietThreadShells();
+  const botsIndex = useBotsIndex();
+  const threads = withoutBotsModeThreads(useQuietThreadShells(), botsIndex);
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
   const listedThreads =
     promotingDraftThreadKeys.length === 0
@@ -2969,6 +2973,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         className="min-h-full"
         fixedHeader={
           <SidebarGroup className="z-[1]">
+            <div className="mb-2">
+              <BotModeSwitcher />
+            </div>
             <SidebarThreadHeader
               hasProjects={projectGroups.length > 0}
               projectScope={
@@ -3385,6 +3392,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               optimisticDrop !== null
                             }
                             thread={thread}
+                            supervisorBot={
+                              botsIndex.supervisorByCodingThreadKey.get(threadKey) ?? null
+                            }
                             variant={rowVariant}
                             navigationParent={
                               folderRow ??

@@ -40,6 +40,9 @@ import {
   usePanelNavigationSuppression,
 } from "../panelAnimations";
 import { BackgroundThreadAnnouncer } from "./BackgroundThreadAnnouncer";
+import { BotsSidebar } from "./bots/BotsSidebar";
+import { useBotsUiStore } from "./bots/botsUiStore";
+import { NewBotDialog } from "./bots/NewBotDialog";
 import { HistorySwipeNavigation } from "./HistorySwipeNavigation";
 import ThreadSidebar from "./Sidebar";
 import { useSidebarPanelStore } from "./sidebar/sidebarPanelStore";
@@ -430,7 +433,9 @@ export function AppSidebarLayout({
   children: ReactNode;
   showSidebar?: boolean;
 }) {
-  const sidebarArea = workspaceAreaProps("sidebar", 0, "Threads");
+  const sidebarMode = useBotsUiStore((state) => state.sidebarMode);
+  const sidebarLabel = sidebarMode === "bots" ? "Bots" : "Threads";
+  const sidebarArea = workspaceAreaProps("sidebar", 0, sidebarLabel);
   const [sidebarRouteReveal] = useState<SidebarRouteReveal>(() => ({
     observedKey: null,
     pendingKey: null,
@@ -493,7 +498,7 @@ export function AppSidebarLayout({
               data-app-sidebar=""
               {...sidebarArea}
               role="navigation"
-              aria-label="Threads"
+              aria-label={sidebarLabel}
               resizable={{
                 maxWidth: sidebarMaximumWidth,
                 minWidth: sidebarMinimumWidth,
@@ -512,6 +517,11 @@ export function AppSidebarLayout({
                     <BackgroundStudioSidebar />
                   </Suspense>
                 </>
+              ) : sidebarMode === "bots" ? (
+                <>
+                  <SidebarChromeHeader isElectron={isElectron} />
+                  <BotsSidebar />
+                </>
               ) : (
                 <ThreadSidebar routeReveal={sidebarRouteReveal} />
               )}
@@ -522,6 +532,7 @@ export function AppSidebarLayout({
         ) : null}
         {children}
         <BackgroundThreadAnnouncer />
+        <NewBotDialog />
         <SidebarControl showSidebar={showSidebar} />
         {isElectron ? <HistorySwipeNavigation /> : null}
       </SidebarProvider>

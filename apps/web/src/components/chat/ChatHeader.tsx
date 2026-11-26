@@ -6,6 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+import type { ScopedBotEntry } from "@t3tools/client-runtime/state/bots";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -43,6 +44,8 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
+import { BotAvatar } from "../bots/BotAvatar";
+import { useBotsUiStore } from "../bots/botsUiStore";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -51,6 +54,7 @@ interface ChatHeaderProps {
   activeThreadLinkOrigin?: string | null | undefined;
   isServerThread: boolean;
   activeProject: EnvironmentProject | null;
+  activeBot?: ScopedBotEntry | null | undefined;
   parentThreadLink: { threadId: ThreadId; title: string } | null;
   onOpenThread: (threadId: ThreadId) => void;
   rightPanelOpen: boolean;
@@ -76,6 +80,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadLinkOrigin,
   isServerThread,
   activeProject,
+  activeBot = null,
   parentThreadLink,
   onOpenThread,
   rightPanelOpen,
@@ -86,6 +91,8 @@ export const ChatHeader = memo(function ChatHeader({
   const activeProjectName = activeProject?.isScratch ? "No project" : activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const interfaceFont = useClientSettings((settings) => settings.fontFamilySans);
+  const setSidebarMode = useBotsUiStore((state) => state.setSidebarMode);
+  const shownTitle = activeBot?.bot.name ?? activeThreadTitle;
   const breadcrumbContainerRef = useRef<HTMLDivElement>(null);
   const [collapseParentTitle, setCollapseParentTitle] = useState(false);
   const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
@@ -259,7 +266,22 @@ export const ChatHeader = memo(function ChatHeader({
         ariaLabel="Thread breadcrumb"
         className="flex-1 overflow-clip [overflow-clip-margin:2px]"
       >
-        {activeProject ? (
+        {activeBot ? (
+          <>
+            <WorkspaceBreadcrumbItem className="shrink-0">
+              <button
+                type="button"
+                onClick={() => setSidebarMode("bots")}
+                className="inline-flex cursor-pointer items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                <WorkspaceBreadcrumbText>Bots</WorkspaceBreadcrumbText>
+              </button>
+            </WorkspaceBreadcrumbItem>
+            <WorkspaceBreadcrumbSeparator>
+              <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
+            </WorkspaceBreadcrumbSeparator>
+          </>
+        ) : activeProject ? (
           <>
             <WorkspaceBreadcrumbItem className="shrink">
               <Tooltip>
@@ -351,16 +373,27 @@ export const ChatHeader = memo(function ChatHeader({
                 render={
                   <button
                     type="button"
-                    aria-label={`Thread actions for ${activeThreadTitle}`}
+                    aria-label={`Thread actions for ${shownTitle}`}
                     aria-haspopup="menu"
                     onClick={openMenuFromTitle}
-                    onDoubleClick={canOperateThread ? handleTitleDoubleClick : undefined}
+                    onDoubleClick={
+                      canOperateThread && activeBot === null ? handleTitleDoubleClick : undefined
+                    }
                     className="group/thread-title inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   />
                 }
               >
-                <h2 className="min-w-0" dir={textDirection(activeThreadTitle)}>
-                  <WorkspaceBreadcrumbText>{activeThreadTitle}</WorkspaceBreadcrumbText>
+                {activeBot ? (
+                  <BotAvatar
+                    icon={activeBot.bot.icon}
+                    color={activeBot.bot.color}
+                    size="sm"
+                    status={activeBot.status}
+                    muted={activeBot.bot.muted}
+                  />
+                ) : null}
+                <h2 className="min-w-0" dir={textDirection(shownTitle)}>
+                  <WorkspaceBreadcrumbText>{shownTitle}</WorkspaceBreadcrumbText>
                 </h2>
                 <ChevronDownIcon
                   aria-hidden
@@ -368,7 +401,7 @@ export const ChatHeader = memo(function ChatHeader({
                   className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/thread-title:opacity-100 group-focus-visible/thread-title:opacity-100"
                 />
               </TooltipTrigger>
-              <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
+              <TooltipPopup side="top">{activeBot?.bot.role || shownTitle}</TooltipPopup>
             </Tooltip>
           ) : (
             <Tooltip>
@@ -386,6 +419,11 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
+          {renamingTitle === null && activeBot !== null && activeBot.bot.archivedAt !== null ? (
+            <Badge variant="outline" size="sm">
+              Archived
+            </Badge>
+          ) : null}
           {renamingTitle === null && activeThreadLinkOrigin ? (
             <Tooltip>
               <TooltipTrigger render={<Badge variant="info" size="sm" />}>
