@@ -1,10 +1,19 @@
+import type { BotId, EnvironmentId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "../../lib/storage";
-import type { BotVisualStyle } from "./botAvatars";
+import { type BotVisualStyle, parseBotVisualStyle } from "./botAvatars";
 
 export type BotsSidebarMode = "threads" | "bots";
+
+export type BotSettingsTab = "profile" | "soul" | "capabilities";
+
+export interface BotSettingsTarget {
+  readonly environmentId: EnvironmentId;
+  readonly botId: BotId;
+  readonly tab: BotSettingsTab;
+}
 
 interface BotsUiState {
   sidebarMode: BotsSidebarMode;
@@ -12,6 +21,9 @@ interface BotsUiState {
   collapsedGroups: Record<string, boolean>;
   expandedBotThreads: Record<string, boolean>;
   newBotDialogOpen: boolean;
+  /** Kept through the close animation; botSettingsOpen drives the dialog. */
+  botSettings: BotSettingsTarget | null;
+  botSettingsOpen: boolean;
   setSidebarMode: (mode: BotsSidebarMode) => void;
   toggleSidebarMode: () => void;
   setVisualStyle: (style: BotVisualStyle) => void;
@@ -19,6 +31,11 @@ interface BotsUiState {
   toggleBotThreadsExpanded: (botKey: string) => void;
   openNewBotDialog: () => void;
   closeNewBotDialog: () => void;
+  openBotSettings: (
+    target: Omit<BotSettingsTarget, "tab"> & { readonly tab?: BotSettingsTab },
+  ) => void;
+  closeBotSettings: () => void;
+  clearBotSettings: () => void;
 }
 
 function toggleKey(record: Record<string, boolean>, key: string): Record<string, boolean> {
@@ -33,10 +50,12 @@ export const useBotsUiStore = create<BotsUiState>()(
   persist(
     (set) => ({
       sidebarMode: "threads",
-      visualStyle: "playful",
+      visualStyle: parseBotVisualStyle(undefined),
       collapsedGroups: {},
       expandedBotThreads: {},
       newBotDialogOpen: false,
+      botSettings: null,
+      botSettingsOpen: false,
       setSidebarMode: (sidebarMode) => set({ sidebarMode }),
       toggleSidebarMode: () =>
         set((state) => ({ sidebarMode: state.sidebarMode === "bots" ? "threads" : "bots" })),
@@ -47,6 +66,10 @@ export const useBotsUiStore = create<BotsUiState>()(
         set((state) => ({ expandedBotThreads: toggleKey(state.expandedBotThreads, botKey) })),
       openNewBotDialog: () => set({ newBotDialogOpen: true }),
       closeNewBotDialog: () => set({ newBotDialogOpen: false }),
+      openBotSettings: ({ environmentId, botId, tab = "profile" }) =>
+        set({ botSettings: { environmentId, botId, tab }, botSettingsOpen: true }),
+      closeBotSettings: () => set({ botSettingsOpen: false }),
+      clearBotSettings: () => set((state) => (state.botSettingsOpen ? {} : { botSettings: null })),
     }),
     {
       name: "t3code:bots-ui:v1",
@@ -60,6 +83,10 @@ export const useBotsUiStore = create<BotsUiState>()(
         collapsedGroups: state.collapsedGroups,
         expandedBotThreads: state.expandedBotThreads,
       }),
+      merge: (persisted, current) => {
+        const stored = (persisted ?? {}) as Partial<BotsUiState>;
+        return { ...current, ...stored, visualStyle: parseBotVisualStyle(stored.visualStyle) };
+      },
     },
   ),
 );

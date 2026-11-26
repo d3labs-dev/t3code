@@ -1,51 +1,49 @@
 import {
   AuthOrchestrationOperateScope,
-  BOT_DEFAULT_ICON,
   type BotCreateInput,
   type EnvironmentId,
   type ModelSelection,
   slugifyBotName,
 } from "@t3tools/contracts";
-import { ChevronRightIcon, FolderIcon } from "lucide-react";
+import { ChevronRightIcon, ShuffleIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { cn } from "../../lib/utils";
 import { botsEnvironment, useBotsIndex } from "../../state/bots";
 import { useConnectedEnvironmentIds, useEnvironments } from "../../state/environments";
 import { readEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
-import {
-  Dialog,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "../ui/dialog";
+import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { WizardFooter, WizardHeader, WizardPanel, WizardPopup } from "../ui/wizard";
 import { BotAvatar } from "./BotAvatar";
+import {
+  BOT_AVATAR_COLORS,
+  BOT_AVATAR_SHAPES,
+  BOT_THEME_COLOR,
+  DEFAULT_BOT_AVATAR_SHAPE,
+} from "./botAvatars";
 import {
   reportBotFailure,
   useCanCreateBot,
   useDefaultBotEnvironmentId,
   useOpenThreadInMode,
 } from "./botActions";
-import { BotIdentityPicker } from "./BotIdentityPicker";
 import {
   BotField,
   BotMcpServerChecklist,
   BotModelPicker,
   useBotModelChoice,
 } from "./botFormControls";
+import { BotIdentityPicker } from "./BotIdentityPicker";
 import { useBotsUiStore } from "./botsUiStore";
 
 const SUGGESTED_GROUPS = ["Engineering", "Operations", "Creative"] as const;
-const DEFAULT_NEW_BOT_COLOR = "theme";
+const RANDOM_COLORS = BOT_AVATAR_COLORS.filter((option) => option.value !== BOT_THEME_COLOR);
 
 interface NewBotDraft {
   readonly name: string;
@@ -62,12 +60,17 @@ const EMPTY_DRAFT: NewBotDraft = {
   name: "",
   role: "",
   groupName: "",
-  icon: BOT_DEFAULT_ICON,
-  color: DEFAULT_NEW_BOT_COLOR,
+  icon: DEFAULT_BOT_AVATAR_SHAPE.id,
+  color: BOT_THEME_COLOR,
   model: null,
   mcpServerNames: [],
   soul: "",
 };
+
+function pickOther(options: ReadonlyArray<string>, current: string): string {
+  const others = options.filter((option) => option !== current);
+  return others[Math.floor(Math.random() * others.length)] ?? current;
+}
 
 export function NewBotDialog() {
   const open = useBotsUiStore((state) => state.newBotDialogOpen);
@@ -75,22 +78,20 @@ export function NewBotDialog() {
   const defaultEnvironmentId = useDefaultBotEnvironmentId();
   return (
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
-      <DialogPopup className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>New Bot</DialogTitle>
-          <DialogDescription>
-            A Bot is a long-lived agent with its own folder, memory and thread. It can delegate
-            coding work to new threads and watch them.
-          </DialogDescription>
-        </DialogHeader>
+      <WizardPopup>
         {defaultEnvironmentId === null ? (
-          <DialogPanel>
-            <p className="text-sm text-muted-foreground">Connect an environment to create a Bot.</p>
-          </DialogPanel>
+          <>
+            <WizardHeader title="New Bot" description="Connect an environment to create a Bot." />
+            <WizardFooter>
+              <Button variant="outline" onClick={close}>
+                Close
+              </Button>
+            </WizardFooter>
+          </>
         ) : (
           <NewBotForm defaultEnvironmentId={defaultEnvironmentId} onClose={close} />
         )}
-      </DialogPopup>
+      </WizardPopup>
     </Dialog>
   );
 }
@@ -100,8 +101,6 @@ function NewBotForm(props: {
   readonly onClose: () => void;
 }) {
   const openThread = useOpenThreadInMode();
-  const visualStyle = useBotsUiStore((state) => state.visualStyle);
-  const setVisualStyle = useBotsUiStore((state) => state.setVisualStyle);
   const connectedIds = useConnectedEnvironmentIds();
   const { environments } = useEnvironments();
   const index = useBotsIndex();
@@ -133,6 +132,25 @@ function NewBotForm(props: {
   const name = draft.name.trim();
   const slug = slugifyBotName(name || "bot");
   const update = (patch: Partial<NewBotDraft>) => setDraft((current) => ({ ...current, ...patch }));
+  const mcpCount = draft.mcpServerNames.length;
+  const optionsSummary = [
+    model.label,
+    mcpCount === 0 ? null : `${mcpCount} ${mcpCount === 1 ? "MCP" : "MCPs"}`,
+  ]
+    .filter((part) => part !== null)
+    .join(" · ");
+
+  const randomize = () =>
+    update({
+      icon: pickOther(
+        BOT_AVATAR_SHAPES.map((shape) => shape.id),
+        draft.icon,
+      ),
+      color: pickOther(
+        RANDOM_COLORS.map((option) => option.value),
+        draft.color,
+      ),
+    });
 
   const submit = async () => {
     if (
@@ -175,132 +193,160 @@ function NewBotForm(props: {
         void submit();
       }}
     >
-      <DialogPanel>
-        <div className="flex items-center gap-3">
-          <BotAvatar icon={draft.icon} color={draft.color} size="xl" />
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <Input
+      <WizardHeader
+        title="New Bot"
+        description="A long-lived agent with its own folder, memory and thread."
+      />
+      <WizardPanel>
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative flex w-full justify-center rounded-2xl bg-muted/30 py-7">
+              <BotAvatar icon={draft.icon} color={draft.color} size="xl" />
+              <div className="absolute end-2 bottom-2">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost-muted"
+                        aria-label="Randomize look"
+                        onClick={randomize}
+                      />
+                    }
+                  >
+                    <ShuffleIcon aria-hidden />
+                  </TooltipTrigger>
+                  <TooltipPopup>Randomize</TooltipPopup>
+                </Tooltip>
+              </div>
+            </div>
+            <input
               autoFocus
-              size="lg"
               aria-label="Bot name"
               placeholder="Name your Bot"
               value={draft.name}
               onChange={(event) => update({ name: event.currentTarget.value })}
+              className="h-10 w-full max-w-xs rounded-lg bg-transparent px-3 text-center text-lg font-semibold text-foreground outline-none transition-colors placeholder:font-medium placeholder:text-muted-foreground/60 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none"
             />
-            <span className="inline-flex min-w-0 items-center gap-1 self-start rounded-full bg-muted/60 px-2 py-0.5 font-mono text-2xs text-muted-foreground">
-              <FolderIcon className="size-3 shrink-0" aria-hidden />
-              <span className="truncate">~/.t3/bots/{slug}/</span>
+            <span className="max-w-full truncate font-mono text-2xs text-muted-foreground">
+              ~/.t3/bots/{slug}
             </span>
           </div>
-        </div>
-        <BotField label="Role" htmlFor="new-bot-role">
-          <Input
-            id="new-bot-role"
-            placeholder="Triages work and delegates coding tasks"
-            value={draft.role}
-            onChange={(event) => update({ role: event.currentTarget.value })}
-          />
-        </BotField>
-        <BotField label="Group" htmlFor="new-bot-group">
-          <Input
-            id="new-bot-group"
-            placeholder="Ungrouped"
-            value={draft.groupName}
-            onChange={(event) => update({ groupName: event.currentTarget.value })}
-          />
-          <div className="flex flex-wrap gap-1">
-            {groupSuggestions.map((group) => (
-              <Button
-                key={group}
-                type="button"
-                size="micro"
-                variant={draft.groupName.trim() === group ? "secondary" : "ghost-muted"}
-                onClick={() => update({ groupName: draft.groupName.trim() === group ? "" : group })}
-              >
-                {group}
-              </Button>
-            ))}
-          </div>
-        </BotField>
-        <BotIdentityPicker
-          icon={draft.icon}
-          color={draft.color}
-          onIconChange={(icon) => update({ icon })}
-          onColorChange={(color) => update({ color })}
-          visualStyle={visualStyle}
-          onVisualStyleChange={setVisualStyle}
-        />
-        <div className={cn("grid gap-4", connectedIds.length > 1 && "sm:grid-cols-2")}>
-          {connectedIds.length > 1 ? (
-            <BotField label="Environment">
-              <Select
-                value={environmentId}
-                onValueChange={(value) => {
-                  const next = connectedIds.find((id) => id === value);
-                  if (next) setChosenEnvironmentId(next);
-                }}
-              >
-                <SelectTrigger size="sm" aria-label="Environment">
-                  <SelectValue>
-                    {environments.find((entry) => entry.environmentId === environmentId)?.label ??
-                      environmentId}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup>
-                  {connectedIds.map((id) => (
-                    <SelectItem key={id} value={id}>
-                      {environments.find((entry) => entry.environmentId === id)?.label ?? id}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </BotField>
-          ) : null}
-          <BotField label="Model">
-            <div>
-              <BotModelPicker
-                environmentId={environmentId}
-                selection={model.selection}
-                instanceEntries={model.instanceEntries}
-                modelOptionsByInstance={model.modelOptionsByInstance}
-                disabled={saving}
-                onChange={(selection) => update({ model: selection })}
-              />
-            </div>
-          </BotField>
-        </div>
-        <BotField label="MCP servers">
-          <BotMcpServerChecklist
-            available={availableMcpServers}
-            selected={draft.mcpServerNames}
+          <BotIdentityPicker
+            icon={draft.icon}
+            color={draft.color}
             disabled={saving}
-            onChange={(mcpServerNames) => update({ mcpServerNames })}
+            onIconChange={(icon) => update({ icon })}
+            onColorChange={(color) => update({ color })}
           />
-        </BotField>
-        <Collapsible>
-          <CollapsibleTrigger className="group/soul flex w-full items-center gap-1.5 rounded-md py-1 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-            <ChevronRightIcon
-              className="size-3.5 transition-transform duration-150 group-data-panel-open/soul:rotate-90 motion-reduce:transition-none"
-              aria-hidden
-            />
-            Starter SOUL.md
-            <span className="font-normal">(optional)</span>
-          </CollapsibleTrigger>
-          <CollapsiblePanel>
-            <div className="pt-2">
-              <Textarea
-                aria-label="Starter SOUL.md"
-                placeholder="Who is this Bot? How should it think, talk and decide?"
-                rows={6}
-                value={draft.soul}
-                onChange={(event) => update({ soul: event.currentTarget.value })}
+          <Collapsible>
+            <CollapsibleTrigger className="group/more flex w-full items-center gap-2 rounded-xl border border-border/60 px-3 py-2.5 text-left outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none">
+              <span className="shrink-0 text-sm font-medium text-foreground">
+                Role, model & tools
+              </span>
+              <span className="ms-auto min-w-0 truncate text-xs text-muted-foreground">
+                {optionsSummary}
+              </span>
+              <ChevronRightIcon
+                className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 group-data-panel-open/more:rotate-90 motion-reduce:transition-none"
+                aria-hidden
               />
-            </div>
-          </CollapsiblePanel>
-        </Collapsible>
-      </DialogPanel>
-      <DialogFooter>
-        <Button type="button" variant="ghost" onClick={props.onClose}>
+            </CollapsibleTrigger>
+            <CollapsiblePanel>
+              <div className="flex flex-col gap-4 px-0.5 pt-4">
+                <BotField label="Role" htmlFor="new-bot-role">
+                  <Input
+                    id="new-bot-role"
+                    placeholder="Triages work and delegates coding tasks"
+                    value={draft.role}
+                    onChange={(event) => update({ role: event.currentTarget.value })}
+                  />
+                </BotField>
+                <BotField label="Group" htmlFor="new-bot-group">
+                  <Input
+                    id="new-bot-group"
+                    placeholder="Ungrouped"
+                    value={draft.groupName}
+                    onChange={(event) => update({ groupName: event.currentTarget.value })}
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {groupSuggestions.map((group) => (
+                      <Button
+                        key={group}
+                        type="button"
+                        size="micro"
+                        variant={draft.groupName.trim() === group ? "secondary" : "ghost-muted"}
+                        onClick={() =>
+                          update({ groupName: draft.groupName.trim() === group ? "" : group })
+                        }
+                      >
+                        {group}
+                      </Button>
+                    ))}
+                  </div>
+                </BotField>
+                {connectedIds.length > 1 ? (
+                  <BotField label="Environment">
+                    <Select
+                      value={environmentId}
+                      onValueChange={(value) => {
+                        const next = connectedIds.find((id) => id === value);
+                        if (next) setChosenEnvironmentId(next);
+                      }}
+                    >
+                      <SelectTrigger aria-label="Environment">
+                        <SelectValue>
+                          {environments.find((entry) => entry.environmentId === environmentId)
+                            ?.label ?? environmentId}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectPopup>
+                        {connectedIds.map((id) => (
+                          <SelectItem key={id} value={id}>
+                            {environments.find((entry) => entry.environmentId === id)?.label ?? id}
+                          </SelectItem>
+                        ))}
+                      </SelectPopup>
+                    </Select>
+                  </BotField>
+                ) : null}
+                <BotField label="Model">
+                  <div>
+                    <BotModelPicker
+                      environmentId={environmentId}
+                      selection={model.selection}
+                      instanceEntries={model.instanceEntries}
+                      modelOptionsByInstance={model.modelOptionsByInstance}
+                      disabled={saving}
+                      onChange={(selection) => update({ model: selection })}
+                    />
+                  </div>
+                </BotField>
+                <BotField label="MCP servers">
+                  <BotMcpServerChecklist
+                    available={availableMcpServers}
+                    selected={draft.mcpServerNames}
+                    disabled={saving}
+                    onChange={(mcpServerNames) => update({ mcpServerNames })}
+                  />
+                </BotField>
+                <BotField label="Starter SOUL.md" htmlFor="new-bot-soul" hint="Optional.">
+                  <Textarea
+                    id="new-bot-soul"
+                    placeholder="Who is this Bot? How should it think, talk and decide?"
+                    rows={5}
+                    value={draft.soul}
+                    onChange={(event) => update({ soul: event.currentTarget.value })}
+                  />
+                </BotField>
+              </div>
+            </CollapsiblePanel>
+          </Collapsible>
+        </div>
+      </WizardPanel>
+      <WizardFooter>
+        <Button type="button" variant="outline" onClick={props.onClose}>
           Cancel
         </Button>
         <Button
@@ -309,7 +355,7 @@ function NewBotForm(props: {
         >
           {saving ? "Creating…" : "Create Bot"}
         </Button>
-      </DialogFooter>
+      </WizardFooter>
     </form>
   );
 }

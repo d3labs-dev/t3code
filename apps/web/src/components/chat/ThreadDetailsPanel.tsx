@@ -149,7 +149,15 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
         handle={props.handle}
         contentKey={`bot:${activeBot.environmentId}:${activeBot.bot.id}`}
       >
-        {() => <BotDetailsPanel entry={activeBot} />}
+        {() => (
+          <BotDetailsPanel
+            entry={activeBot}
+            keybindings={props.keybindings}
+            availableEditors={props.availableEditors}
+            showOpenInPicker={props.showOpenInPicker}
+            openInShortcutEnabled={props.openInShortcutEnabled}
+          />
+        )}
       </ThreadDetailsCard>
     );
   }

@@ -10,6 +10,8 @@ import {
   type BotExchange,
   type BotExchangeStatus,
   type BotStatus,
+  type EditorId,
+  type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
 import {
   BellIcon,
@@ -18,39 +20,41 @@ import {
   CornerDownRightIcon,
   MessagesSquareIcon,
   RefreshCwIcon,
+  Settings2Icon,
+  SettingsIcon,
   StarIcon,
 } from "lucide-react";
-import { useState } from "react";
 
 import { cn } from "../../lib/utils";
 import { botsEnvironment, useBotExchanges, useBotsIndex } from "../../state/bots";
 import { useQuietThreadShell } from "../../state/entities";
+import { OpenInPicker } from "../chat/OpenInPicker";
 import { ThreadAutomationsPanel } from "../chat/ThreadAutomationsPanel";
 import { ThreadDetailsControl } from "../chat/ThreadDetailsControl";
 import { ThreadDetailsSection } from "../chat/ThreadDetailsSection";
-import { THREAD_DETAILS_PANEL_ICON_CLASS } from "../chat/threadDetailsPanelStyles";
+import {
+  THREAD_DETAILS_PANEL_ICON_CLASS,
+  THREAD_DETAILS_PANEL_LABEL_CLASS,
+} from "../chat/threadDetailsPanelStyles";
 import { RelativeTime } from "../RelativeTime";
 import { Badge } from "../ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BOT_STATUS_LABEL, BotAvatar } from "./BotAvatar";
 import { useOpenThreadInMode, useToggleBotMuted } from "./botActions";
-import { BotConfigTab } from "./BotConfigTab";
-import { BotSoulTab } from "./BotSoulTab";
-
-const TABS = [
-  { id: "activity", label: "Activity" },
-  { id: "soul", label: "Soul" },
-  { id: "config", label: "Config" },
-] as const;
-type BotDetailsTab = (typeof TABS)[number]["id"];
+import { useBotsUiStore } from "./botsUiStore";
 
 const MAX_LISTED_EXCHANGES = 12;
 
-const STATUS_BADGE_VARIANT: Record<BotStatus, "secondary" | "info" | "warning" | "error"> = {
-  idle: "secondary",
-  working: "info",
-  waiting: "warning",
-  error: "error",
+const STATUS_TEXT_CLASS: Record<Exclude<BotStatus, "idle">, string> = {
+  working: "text-info-foreground",
+  waiting: "text-warning-foreground",
+  error: "text-destructive",
+};
+
+const STATUS_DOT_CLASS: Record<Exclude<BotStatus, "idle">, string> = {
+  working: "bg-info",
+  waiting: "bg-warning",
+  error: "bg-destructive",
 };
 
 const LINK_STATUS_LABEL: Record<BotExchangeStatus, string> = {
@@ -74,74 +78,112 @@ const EXCHANGE_STATUS_VARIANT: Record<BotExchangeStatus, "info" | "success" | "s
   cancelled: "secondary",
 };
 
-export function BotDetailsPanel({ entry }: { readonly entry: ScopedBotEntry }) {
-  const [tab, setTab] = useState<BotDetailsTab>("activity");
+export function BotDetailsPanel({
+  entry,
+  keybindings,
+  availableEditors,
+  showOpenInPicker,
+  openInShortcutEnabled,
+}: {
+  readonly entry: ScopedBotEntry;
+  readonly keybindings: ResolvedKeybindingsConfig;
+  readonly availableEditors: ReadonlyArray<EditorId>;
+  readonly showOpenInPicker: boolean;
+  readonly openInShortcutEnabled: boolean;
+}) {
+  const index = useBotsIndex();
+  const openBotSettings = useBotsUiStore((state) => state.openBotSettings);
+  const links = index.codingThreadsByBotKey.get(botKey(entry.environmentId, entry.bot.id)) ?? [];
+  const openSettings = () =>
+    openBotSettings({ environmentId: entry.environmentId, botId: entry.bot.id });
   return (
     <div className="flex min-w-0 flex-col" data-bot-details-panel>
-      <BotDetailsHeader entry={entry} />
-      <div
-        role="tablist"
-        aria-label="Bot details"
-        className="mx-4 mb-1 flex h-7 items-center gap-0.5 rounded-lg border border-border/60 bg-muted/40 p-0.5"
+      <BotDetailsHeader entry={entry} onOpenSettings={openSettings} />
+      <ThreadDetailsSection
+        headingId="bot-details-workspace-heading"
+        title="Workspace"
+        separated={false}
+        showHeading={false}
       >
-        {TABS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === option.id}
-            onClick={() => setTab(option.id)}
-            className={cn(
-              "flex h-full flex-1 cursor-pointer items-center justify-center rounded-md text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none",
-              tab === option.id
-                ? "bg-background/70 text-foreground shadow-xs ring-1 ring-inset ring-border/70"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-      <div role="tabpanel" aria-label={TABS.find((option) => option.id === tab)?.label}>
-        {tab === "activity" ? (
-          <BotActivityTab entry={entry} />
-        ) : tab === "soul" ? (
-          <BotSoulTab key={`${entry.environmentId}:${entry.bot.id}`} entry={entry} />
-        ) : (
-          <BotConfigTab key={`${entry.environmentId}:${entry.bot.id}`} entry={entry} />
-        )}
-      </div>
+        <div className="flex flex-col">
+          {showOpenInPicker ? (
+            <OpenInPicker
+              keybindings={keybindings}
+              environmentId={entry.environmentId}
+              availableEditors={availableEditors}
+              openInCwd={entry.bot.folderPath}
+              enableShortcut={openInShortcutEnabled}
+              displayMode="panel"
+            />
+          ) : null}
+          <ThreadDetailsControl variant="ghost" onClick={openSettings}>
+            <Settings2Icon className={THREAD_DETAILS_PANEL_ICON_CLASS} aria-hidden />
+            <span className={cn("min-w-0 flex-1 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
+              Bot settings
+            </span>
+          </ThreadDetailsControl>
+        </div>
+      </ThreadDetailsSection>
+      {links.length > 0 ? (
+        <ThreadDetailsSection headingId="bot-details-coding-threads-heading" title="Coding threads">
+          <ul className="m-0 max-h-56 list-none overflow-y-auto p-0">
+            {links.map((scoped) => (
+              <li key={`${scoped.environmentId}:${scoped.link.threadId}`}>
+                <CodingThreadLinkRow scoped={scoped} />
+              </li>
+            ))}
+          </ul>
+        </ThreadDetailsSection>
+      ) : null}
+      <BotExchangesSection entry={entry} />
+      <ThreadAutomationsPanel environmentId={entry.environmentId} threadId={entry.bot.threadId} />
     </div>
   );
 }
 
-function BotDetailsHeader({ entry }: { readonly entry: ScopedBotEntry }) {
+function BotDetailsHeader(props: {
+  readonly entry: ScopedBotEntry;
+  readonly onOpenSettings: () => void;
+}) {
+  const { entry } = props;
   const { bot, status, environmentId } = entry;
   const canUpdate = useAtomValue(botsEnvironment.updateBot.permissionAtom(environmentId));
   const toggleMuted = useToggleBotMuted();
   return (
-    <div className="flex min-w-0 items-center gap-2.5 px-4 pt-3 pb-2.5">
+    <div className="flex min-w-0 items-center gap-2.5 px-4 pt-3 pb-2">
       <BotAvatar icon={bot.icon} color={bot.color} size="md" status={status} muted={bot.muted} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-1">
           <span className="truncate text-sm font-semibold text-foreground">{bot.name}</span>
           {bot.isPrimary ? (
             <StarIcon
-              className="size-3 shrink-0 fill-current text-warning"
+              className="size-3 shrink-0 fill-current text-muted-foreground/70"
               aria-label="Primary Bot"
             />
           ) : null}
         </span>
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate font-mono text-2xs text-muted-foreground">@{bot.slug}</span>
-          <Badge size="sm" variant={STATUS_BADGE_VARIANT[status]}>
-            {BOT_STATUS_LABEL[status]}
-          </Badge>
+        <span className="flex min-w-0 items-center gap-1.5 text-2xs">
+          <span className="truncate font-mono text-muted-foreground">@{bot.slug}</span>
+          <span className="text-muted-foreground/50" aria-hidden>
+            ·
+          </span>
           {bot.archivedAt !== null ? (
-            <Badge size="sm" variant="outline">
-              Archived
-            </Badge>
-          ) : null}
+            <span className="shrink-0 text-muted-foreground">Archived</span>
+          ) : status === "idle" ? (
+            <span className="shrink-0 text-muted-foreground">
+              {bot.muted ? "Muted" : BOT_STATUS_LABEL.idle}
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "flex shrink-0 items-center gap-1 font-medium",
+                STATUS_TEXT_CLASS[status],
+              )}
+            >
+              <span className={cn("size-1.5 rounded-full", STATUS_DOT_CLASS[status])} aria-hidden />
+              {BOT_STATUS_LABEL[status]}
+            </span>
+          )}
         </span>
       </div>
       <Tooltip>
@@ -165,37 +207,23 @@ function BotDetailsHeader({ entry }: { readonly entry: ScopedBotEntry }) {
         />
         <TooltipPopup>{bot.muted ? "Unmute" : "Mute"}</TooltipPopup>
       </Tooltip>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <ThreadDetailsControl
+              size="icon-xs"
+              variant="ghost"
+              part="icon"
+              aria-label="Bot settings"
+              onClick={props.onOpenSettings}
+            >
+              <SettingsIcon className="size-3.5" aria-hidden />
+            </ThreadDetailsControl>
+          }
+        />
+        <TooltipPopup>Bot settings</TooltipPopup>
+      </Tooltip>
     </div>
-  );
-}
-
-function BotActivityTab({ entry }: { readonly entry: ScopedBotEntry }) {
-  const index = useBotsIndex();
-  const links = index.codingThreadsByBotKey.get(botKey(entry.environmentId, entry.bot.id)) ?? [];
-  return (
-    <>
-      <ThreadDetailsSection
-        headingId="bot-details-coding-threads-heading"
-        title="Coding threads"
-        separated={false}
-      >
-        {links.length === 0 ? (
-          <p className="px-2.5 text-2xs text-muted-foreground">
-            Threads this Bot starts or messages show up here while it watches them.
-          </p>
-        ) : (
-          <ul className="m-0 max-h-56 list-none overflow-y-auto p-0">
-            {links.map((scoped) => (
-              <li key={`${scoped.environmentId}:${scoped.link.threadId}`}>
-                <CodingThreadLinkRow scoped={scoped} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </ThreadDetailsSection>
-      <BotExchangesSection entry={entry} />
-      <ThreadAutomationsPanel environmentId={entry.environmentId} threadId={entry.bot.threadId} />
-    </>
   );
 }
 
@@ -228,6 +256,7 @@ function BotExchangesSection({ entry }: { readonly entry: ScopedBotEntry }) {
             candidate.environmentId === entry.environmentId && candidate.bot.id === botId,
         )?.bot.name ?? null);
   const listed = exchanges.data?.exchanges.slice(0, MAX_LISTED_EXCHANGES) ?? [];
+  if (exchanges.error === null && listed.length === 0) return null;
   return (
     <ThreadDetailsSection
       headingId="bot-details-exchanges-heading"
@@ -255,10 +284,6 @@ function BotExchangesSection({ entry }: { readonly entry: ScopedBotEntry }) {
       {exchanges.error !== null ? (
         <p className="px-2.5 text-2xs text-destructive">
           Could not load exchanges: {exchanges.error}
-        </p>
-      ) : listed.length === 0 ? (
-        <p className="px-2.5 text-2xs text-muted-foreground">
-          {exchanges.data === null ? "Loading exchanges…" : "No messages or coding threads yet."}
         </p>
       ) : (
         <ul className="m-0 flex max-h-64 list-none flex-col gap-1 overflow-y-auto p-0">

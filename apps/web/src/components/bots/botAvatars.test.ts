@@ -4,11 +4,16 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   BOT_AVATAR_COLORS,
   BOT_AVATAR_SHAPES,
+  botAvatarPaint,
   findBotAvatarShape,
   isCustomBotEmoji,
+  parseBotVisualStyle,
   resolveBotAccentColor,
   resolveBotAvatarGlyph,
 } from "./botAvatars";
+
+const PNG_ICON =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
 describe("resolveBotAccentColor", () => {
   it("follows the wallpaper theme for the theme color", () => {
@@ -36,10 +41,36 @@ describe("resolveBotAccentColor", () => {
   });
 });
 
+describe("botAvatarPaint", () => {
+  it("gives flat bodies the eye ink that contrasts with them", () => {
+    expect(botAvatarPaint("#242429", "flat").eyes).toBe("#fafafa");
+    expect(botAvatarPaint("#ece8df", "flat").eyes).toBe("#18181b");
+    expect(botAvatarPaint("#45b282", "flat").eyes).toBe("#18181b");
+    expect(botAvatarPaint("theme", "flat").eyes).toBe("var(--primary-foreground)");
+  });
+});
+
+describe("parseBotVisualStyle", () => {
+  it("reads earlier playful finishes as flat and unknown values as the default", () => {
+    expect(parseBotVisualStyle("playful")).toBe("flat");
+    expect(parseBotVisualStyle("glass")).toBe("glass");
+    expect(parseBotVisualStyle("minimal")).toBe("minimal");
+    expect(parseBotVisualStyle(undefined)).toBe("flat");
+    expect(parseBotVisualStyle(42)).toBe("flat");
+  });
+});
+
 describe("findBotAvatarShape", () => {
   it("finds shapes by id regardless of case and padding", () => {
-    expect(findBotAvatarShape("fox")?.id).toBe("fox");
-    expect(findBotAvatarShape(" Ghost ")?.id).toBe("ghost");
+    expect(findBotAvatarShape("cat")?.id).toBe("cat");
+    expect(findBotAvatarShape(" Cloud ")?.id).toBe("cloud");
+  });
+
+  it("maps icons saved before the sculpted set to their closest shape", () => {
+    expect(findBotAvatarShape("bot")?.id).toBe("squircle");
+    expect(findBotAvatarShape("fox")?.id).toBe("cat");
+    expect(findBotAvatarShape(" Ghost ")?.id).toBe("arch");
+    expect(findBotAvatarShape("terminal")?.id).toBe("squircle");
   });
 
   it("returns null for unknown icons", () => {
@@ -75,8 +106,24 @@ describe("resolveBotAvatarGlyph", () => {
     expect(resolveBotAvatarGlyph(" 🦊 ")).toEqual({ kind: "emoji", emoji: "🦊" });
   });
 
+  it("renders uploaded raster data URLs as images", () => {
+    expect(resolveBotAvatarGlyph(` ${PNG_ICON} `)).toEqual({ kind: "image", src: PNG_ICON });
+    expect(resolveBotAvatarGlyph("data:image/webp;base64,UklGRg==").kind).toBe("image");
+  });
+
+  it("never renders SVG, script or other URLs as images", () => {
+    for (const icon of [
+      "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+      "javascript:alert(1)",
+      "https://example.com/avatar.png",
+      'data:image/png;base64,abc"onerror=alert(1)',
+    ]) {
+      expect(resolveBotAvatarGlyph(icon).kind).toBe("shape");
+    }
+  });
+
   it("falls back to the default shape for icons it can't draw", () => {
     const glyph = resolveBotAvatarGlyph("rocket-launch");
-    expect(glyph.kind === "shape" && glyph.shape.id).toBe(BOT_DEFAULT_ICON);
+    expect(glyph.kind === "shape" && glyph.shape.id).toBe(findBotAvatarShape(BOT_DEFAULT_ICON)?.id);
   });
 });

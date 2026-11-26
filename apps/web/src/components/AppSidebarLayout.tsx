@@ -40,6 +40,7 @@ import {
   usePanelNavigationSuppression,
 } from "../panelAnimations";
 import { BackgroundThreadAnnouncer } from "./BackgroundThreadAnnouncer";
+import { BotSettingsDialog } from "./bots/BotSettingsDialog";
 import { BotsSidebar } from "./bots/BotsSidebar";
 import { useBotsUiStore } from "./bots/botsUiStore";
 import { NewBotDialog } from "./bots/NewBotDialog";
@@ -533,6 +534,7 @@ export function AppSidebarLayout({
         {children}
         <BackgroundThreadAnnouncer />
         <NewBotDialog />
+        <BotSettingsDialog />
         <SidebarControl showSidebar={showSidebar} />
         {isElectron ? <HistorySwipeNavigation /> : null}
       </SidebarProvider>

@@ -11,7 +11,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, Settings2Icon } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -22,6 +22,7 @@ import {
 } from "react";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
@@ -92,6 +93,7 @@ export const ChatHeader = memo(function ChatHeader({
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const interfaceFont = useClientSettings((settings) => settings.fontFamilySans);
   const setSidebarMode = useBotsUiStore((state) => state.setSidebarMode);
+  const openBotSettings = useBotsUiStore((state) => state.openBotSettings);
   const shownTitle = activeBot?.bot.name ?? activeThreadTitle;
   const breadcrumbContainerRef = useRef<HTMLDivElement>(null);
   const [collapseParentTitle, setCollapseParentTitle] = useState(false);
@@ -419,6 +421,28 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
+          {renamingTitle === null && activeBot !== null ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    size="icon-xs"
+                    variant="ghost-muted"
+                    aria-label="Bot settings"
+                    onClick={() =>
+                      openBotSettings({
+                        environmentId: activeBot.environmentId,
+                        botId: activeBot.bot.id,
+                      })
+                    }
+                  />
+                }
+              >
+                <Settings2Icon aria-hidden />
+              </TooltipTrigger>
+              <TooltipPopup side="top">Bot settings</TooltipPopup>
+            </Tooltip>
+          ) : null}
           {renamingTitle === null && activeBot !== null && activeBot.bot.archivedAt !== null ? (
             <Badge variant="outline" size="sm">
               Archived

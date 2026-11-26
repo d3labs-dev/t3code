@@ -62,6 +62,7 @@ export function useBotModelChoice(
   chosen: ModelSelection | null,
 ): {
   readonly selection: ModelSelection | null;
+  readonly label: string | null;
   readonly instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
   readonly modelOptionsByInstance: ReturnType<typeof getCustomModelOptionsByInstance>;
 } {
@@ -80,7 +81,13 @@ export function useBotModelChoice(
     selection?.instanceId ?? null,
     selection?.model ?? null,
   );
-  return { selection, instanceEntries, modelOptionsByInstance };
+  const label =
+    selection === null
+      ? null
+      : (instanceEntries
+          .find((entry) => entry.instanceId === selection.instanceId)
+          ?.models.find((model) => model.slug === selection.model)?.name ?? selection.model);
+  return { selection, label, instanceEntries, modelOptionsByInstance };
 }
 
 export function BotModelPicker(props: {

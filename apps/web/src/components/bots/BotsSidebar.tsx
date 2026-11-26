@@ -16,6 +16,7 @@ import {
   PaletteIcon,
   PlusIcon,
   SearchIcon,
+  Settings2Icon,
   StarIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -45,7 +46,7 @@ import {
   useToggleBotMuted,
   useUpdateBot,
 } from "./botActions";
-import { BOT_VISUAL_STYLES, botAccentTintStyle, resolveBotAccentColor } from "./botAvatars";
+import { BOT_VISUAL_STYLES, DEFAULT_BOT_AVATAR_SHAPE } from "./botAvatars";
 import { BotModeSwitcher } from "./BotModeSwitcher";
 import { useBotsUiStore } from "./botsUiStore";
 
@@ -132,7 +133,12 @@ function BotsSidebarHeader(props: {
                   {BOT_VISUAL_STYLES.map((style) => (
                     <MenuRadioItem key={style.id} value={style.id}>
                       <span className="flex items-center gap-2">
-                        <BotAvatar icon="bot" color="theme" size="sm" visualStyle={style.id} />
+                        <BotAvatar
+                          icon={DEFAULT_BOT_AVATAR_SHAPE.id}
+                          color="theme"
+                          size="sm"
+                          visualStyle={style.id}
+                        />
                         {style.label}
                       </span>
                     </MenuRadioItem>
@@ -300,9 +306,9 @@ function BotsEmptyState(props: { readonly canCreate: boolean; readonly onCreate:
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border border-sidebar-border/60 bg-sidebar-control-surface/35 px-4 py-6 text-center">
       <div className="flex items-end gap-1.5" aria-hidden>
-        <BotAvatar icon="mochi" color="#f472b6" size="md" />
-        <BotAvatar icon="bot" color="theme" size="xl" />
-        <BotAvatar icon="fox" color="#fb923c" size="md" />
+        <BotAvatar icon="droplet" color="#d6629f" size="md" />
+        <BotAvatar icon="squircle" color="theme" size="lg" />
+        <BotAvatar icon="cat" color="#e68940" size="md" />
       </div>
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-sidebar-foreground">Meet your Bots</p>
@@ -373,7 +379,7 @@ function BotEntry(props: {
   const pendingCount = links.filter(({ link }) => link.status === "pending").length;
   const expanded = useBotsUiStore((state) => state.expandedBotThreads[key] === true);
   const toggleExpanded = useBotsUiStore((state) => state.toggleBotThreadsExpanded);
-  const visualStyle = useBotsUiStore((state) => state.visualStyle);
+  const openBotSettings = useBotsUiStore((state) => state.openBotSettings);
   const canUpdate = useAtomValue(botsEnvironment.updateBot.permissionAtom(environmentId));
   const toggleMuted = useToggleBotMuted();
   const openThread = useOpenThreadInMode();
@@ -395,13 +401,10 @@ function BotEntry(props: {
           className={cn(
             ROW_CLASS,
             featured
-              ? "gap-3 rounded-xl border border-sidebar-border/60 bg-sidebar-control-surface/35 p-2.5"
+              ? "gap-3 rounded-xl border border-sidebar-border/60 bg-sidebar-control-surface/40 p-2.5"
               : "gap-2.5 rounded-lg px-2 py-1.5",
-            links.length > 0 ? "pe-20" : "pe-9",
+            links.length > 0 ? "pe-24" : "pe-14",
           )}
-          style={
-            featured ? botAccentTintStyle(resolveBotAccentColor(bot.color), visualStyle) : undefined
-          }
         >
           <BotAvatar
             icon={bot.icon}
@@ -433,7 +436,22 @@ function BotEntry(props: {
           </span>
         </button>
         <div className="absolute inset-y-0 end-1.5 flex items-center gap-0.5">
-          <span className="opacity-0 transition-opacity group-focus-within/bot-row:opacity-100 group-hover/bot-row:opacity-100 motion-reduce:transition-none">
+          <span className="flex items-center opacity-0 transition-opacity group-focus-within/bot-row:opacity-100 group-hover/bot-row:opacity-100 motion-reduce:transition-none">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    size="icon-micro"
+                    variant="ghost-muted"
+                    aria-label={`${bot.name} settings`}
+                    onClick={() => openBotSettings({ environmentId, botId: bot.id })}
+                  />
+                }
+              >
+                <Settings2Icon aria-hidden />
+              </TooltipTrigger>
+              <TooltipPopup>Bot settings</TooltipPopup>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger
                 render={
