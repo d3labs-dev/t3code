@@ -48,6 +48,25 @@ describe("RPC authorization scopes", () => {
     }
   });
 
+  it("lets readers see Bots but keeps changing or messaging them behind operate scope", () => {
+    for (const method of [
+      WS_METHODS.botsList,
+      WS_METHODS.botsSubscribe,
+      WS_METHODS.botsGet,
+      WS_METHODS.botsListExchanges,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
+    }
+    for (const method of [
+      WS_METHODS.botsCreate,
+      WS_METHODS.botsUpdate,
+      WS_METHODS.botsDelete,
+      WS_METHODS.botsMessage,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
+    }
+  });
+
   it("keeps triage, which seeds an agent that reads logs and the database, behind operate scope", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.serverPrepareTriage)).toBe(
       AuthOrchestrationOperateScope,

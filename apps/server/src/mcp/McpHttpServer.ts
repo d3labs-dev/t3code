@@ -89,6 +89,8 @@ import {
 } from "./toolkits/device/tools.ts";
 import * as HtmlHandlers from "./toolkits/html/handlers.ts";
 import { MessageToolkit } from "./toolkits/message/tools.ts";
+import { BotsToolkit } from "./toolkits/bots/tools.ts";
+import * as BotsHandlers from "./toolkits/bots/handlers.ts";
 import * as MessageHandlers from "./toolkits/message/handlers.ts";
 import { HtmlPreviewTool, HtmlPreviewToolkit, HtmlRenderToolkit } from "./toolkits/html/tools.ts";
 import { MCP_HTTP_PATH } from "../httpCors.ts";
@@ -942,6 +944,7 @@ const HANDOFF_TOOLS: ReadonlySet<string> = new Set([
   "t3_thread_send_attachments",
   "schedule_task",
   "run_scheduled_task_now",
+  "bot_message",
 ]);
 
 /** Tool actions that hand work over with only a `{ sequence }` result; the input names the thread. */
@@ -1297,6 +1300,8 @@ export const layerPullRequestsToolkit = toolkitRegistration(
 
 const layerIssuesToolkit = toolkitRegistration(IssuesToolkit, IssuesHandlers.layer);
 
+const layerBotsToolkit = toolkitRegistration(BotsToolkit, BotsHandlers.layer);
+
 const layerDeviceStandardToolkitRegistration = toolkitRegistration(
   DeviceStandardToolkit,
   DeviceHandlers.layerStandard,
@@ -1358,6 +1363,7 @@ export const layerTools = Layer.mergeAll(
   layerDeviceToolkit,
   layerHtmlToolkit,
   layerMessageToolkit,
+  layerBotsToolkit,
 );
 
 const layerToolExposure = Layer.effect(

@@ -409,6 +409,21 @@ import {
   ScheduledTaskUpsertInput,
   ScheduledTaskMutationResult,
 } from "./scheduledTask.ts";
+import {
+  BotCreateInput,
+  BotDeleteInput,
+  BotDeleteResult,
+  BotDetailResult,
+  BotError,
+  BotGetInput,
+  BotListExchangesInput,
+  BotListExchangesResult,
+  BotListInput,
+  BotListResult,
+  BotMessageInput,
+  BotMessageResult,
+  BotUpdateInput,
+} from "./bot.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import {
   ProjectCloneActionInput,
@@ -591,6 +606,15 @@ export const WS_METHODS = {
   guestShareCreate: "guestShare.create",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
+
+  botsList: "bots.list",
+  botsSubscribe: "bots.subscribe",
+  botsGet: "bots.get",
+  botsCreate: "bots.create",
+  botsUpdate: "bots.update",
+  botsDelete: "bots.delete",
+  botsMessage: "bots.message",
+  botsListExchanges: "bots.listExchanges",
 
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -2232,6 +2256,57 @@ const WsScheduledTasksGetWebhookDeliveryRpc = Rpc.make(
   },
 );
 
+const BotRpcError = Schema.Union([BotError, EnvironmentAuthorizationError]);
+
+const WsBotsListRpc = Rpc.make(WS_METHODS.botsList, {
+  payload: BotListInput,
+  success: BotListResult,
+  error: BotRpcError,
+});
+
+const WsBotsSubscribeRpc = Rpc.make(WS_METHODS.botsSubscribe, {
+  payload: BotListInput,
+  success: BotListResult,
+  error: BotRpcError,
+  stream: true,
+});
+
+const WsBotsGetRpc = Rpc.make(WS_METHODS.botsGet, {
+  payload: BotGetInput,
+  success: BotDetailResult,
+  error: BotRpcError,
+});
+
+const WsBotsCreateRpc = Rpc.make(WS_METHODS.botsCreate, {
+  payload: BotCreateInput,
+  success: BotDetailResult,
+  error: BotRpcError,
+});
+
+const WsBotsUpdateRpc = Rpc.make(WS_METHODS.botsUpdate, {
+  payload: BotUpdateInput,
+  success: BotDetailResult,
+  error: BotRpcError,
+});
+
+const WsBotsDeleteRpc = Rpc.make(WS_METHODS.botsDelete, {
+  payload: BotDeleteInput,
+  success: BotDeleteResult,
+  error: BotRpcError,
+});
+
+const WsBotsMessageRpc = Rpc.make(WS_METHODS.botsMessage, {
+  payload: BotMessageInput,
+  success: BotMessageResult,
+  error: BotRpcError,
+});
+
+const WsBotsListExchangesRpc = Rpc.make(WS_METHODS.botsListExchanges, {
+  payload: BotListExchangesInput,
+  success: BotListExchangesResult,
+  error: BotRpcError,
+});
+
 const WsSubscribeAuthAccessRpc = Rpc.make(WS_METHODS.subscribeAuthAccess, {
   payload: Schema.Struct({}),
   success: AuthAccessStreamEvent,
@@ -2335,6 +2410,14 @@ export const WsRpcGroup = RpcGroup.make(
   WsSecretsAnswerRequestRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
+  WsBotsListRpc,
+  WsBotsSubscribeRpc,
+  WsBotsGetRpc,
+  WsBotsCreateRpc,
+  WsBotsUpdateRpc,
+  WsBotsDeleteRpc,
+  WsBotsMessageRpc,
+  WsBotsListExchangesRpc,
   WsServerReportClientActivityRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,

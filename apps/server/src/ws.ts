@@ -125,6 +125,7 @@ import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts"
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
+import * as BotService from "./bots/BotService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
 import {
@@ -1481,6 +1482,7 @@ export const layerWsRpc = (
       const commandOutputHub = yield* CommandOutputHub.CommandOutputHub;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
+      const bots = yield* BotService.BotService;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const guestShares = yield* GuestShareService.GuestShareService;
       const pullRequests = yield* PullRequestService.PullRequestService;
@@ -2360,6 +2362,29 @@ export const layerWsRpc = (
         [WS_METHODS.scheduledTasksGetWebhookDelivery]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.getWebhookDelivery(input)),
+          ),
+        [WS_METHODS.botsList]: (input) => bots.list(input),
+        [WS_METHODS.botsSubscribe]: (input) => bots.subscribeList(input),
+        [WS_METHODS.botsGet]: (input) =>
+          Effect.annotateCurrentSpan({ "bot.id": input.botId }).pipe(
+            Effect.andThen(bots.get(input)),
+          ),
+        [WS_METHODS.botsCreate]: (input) => bots.create(input),
+        [WS_METHODS.botsUpdate]: (input) =>
+          Effect.annotateCurrentSpan({ "bot.id": input.botId }).pipe(
+            Effect.andThen(bots.update(input)),
+          ),
+        [WS_METHODS.botsDelete]: (input) =>
+          Effect.annotateCurrentSpan({ "bot.id": input.botId }).pipe(
+            Effect.andThen(bots.delete(input)),
+          ),
+        [WS_METHODS.botsMessage]: (input) =>
+          Effect.annotateCurrentSpan({ "bot.id": input.fromBotId }).pipe(
+            Effect.andThen(bots.sendMessage(input)),
+          ),
+        [WS_METHODS.botsListExchanges]: (input) =>
+          Effect.annotateCurrentSpan({ "bot.id": input.botId }).pipe(
+            Effect.andThen(bots.listExchanges(input)),
           ),
         [WS_METHODS.serverProbe]: (_input) => Effect.succeed({}),
         [WS_METHODS.serverGetConfig]: (_input) =>
