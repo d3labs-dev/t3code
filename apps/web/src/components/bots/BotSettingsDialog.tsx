@@ -4,11 +4,15 @@ import {
   BOT_DEFAULT_TOOLS,
   type BotDocuments,
   type BotRecord,
+  BotSlug,
   type BotSystemPromptMode,
   type BotUpdateInput,
+  slugifyBotName,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Equal from "effect/Equal";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
@@ -96,6 +100,8 @@ const SYSTEM_PROMPT_MODES: Record<BotSystemPromptMode, string> = {
   preset: "Claude Code preset",
 };
 
+const decodeBotSlug = Schema.decodeUnknownOption(BotSlug);
+
 function changedFields(bot: BotRecord, patch: BotRecordPatch): BotRecordPatch {
   const changes: Record<string, unknown> = {};
   for (const [field, value] of Object.entries(patch)) {
@@ -139,6 +145,7 @@ function BotSettingsDialogBody(props: {
   const update = useUpdateBot();
   const [tab, setTab] = useState<BotSettingsTab>(props.initialTab);
   const [patch, setPatch] = useState<BotRecordPatch>({});
+  const [slugDraft, setSlugDraft] = useState<string | null>(null);
   const [documentDrafts, setDocumentDrafts] = useState<DocumentDrafts>({});
   const [busy, setBusy] = useState(false);
 
@@ -161,12 +168,18 @@ function BotSettingsDialogBody(props: {
     ({ id }) => documentDrafts[id] !== undefined && documentDrafts[id] !== savedDocuments?.[id],
   );
   const changes = changedFields(bot, patch);
-  const changeCount = Object.keys(changes).length + dirtyDocuments.length;
   const shown = { ...bot, ...patch };
   const nameMissing = shown.name.trim() === "";
+  const rawSlug = slugDraft ?? (changes.name !== undefined ? slugifyBotName(shown.name) : bot.slug);
+  const parsedSlug = decodeBotSlug(rawSlug.trim().toLowerCase());
+  const slugInvalid = slugDraft !== null && Option.isNone(parsedSlug);
+  const slugChanged =
+    slugDraft !== null && Option.isSome(parsedSlug) && parsedSlug.value !== bot.slug;
+  const displaySlug = Option.isSome(parsedSlug) ? parsedSlug.value : bot.slug;
+  const changeCount = Object.keys(changes).length + dirtyDocuments.length + (slugChanged ? 1 : 0);
 
   const requestClose = async () => {
-    if (changeCount > 0) {
+    if (changeCount > 0 || slugInvalid) {
       const discard =
         (await requestConfirmDialog(`Discard unsaved changes to ${bot.name}?`, {
           variant: "destructive",
@@ -178,11 +191,12 @@ function BotSettingsDialogBody(props: {
 
   const discard = () => {
     setPatch({});
+    setSlugDraft(null);
     setDocumentDrafts({});
   };
 
   const save = async () => {
-    if (changeCount === 0 || nameMissing || busy) return;
+    if (changeCount === 0 || nameMissing || slugInvalid || busy) return;
     const groupName =
       changes.groupName === undefined ? undefined : changes.groupName?.trim() || null;
     const documents: DocumentDrafts = {};
@@ -191,13 +205,17 @@ function BotSettingsDialogBody(props: {
       botId: bot.id,
       ...changes,
       ...(changes.name === undefined ? {} : { name: changes.name.trim() }),
+      ...(slugChanged && Option.isSome(parsedSlug) ? { slug: parsedSlug.value } : {}),
       ...(groupName === undefined ? {} : { groupName }),
       ...(dirtyDocuments.length === 0 ? {} : { documents }),
     };
     setBusy(true);
     const saved = await update(environmentId, input, "Could not save Bot settings");
     setBusy(false);
-    if (saved) setPatch({});
+    if (saved) {
+      setPatch({});
+      setSlugDraft(null);
+    }
   };
 
   const editable = canUpdate && !busy;
@@ -230,7 +248,7 @@ function BotSettingsDialogBody(props: {
                   {shown.name.trim() || bot.name}
                 </span>
                 <span className="truncate font-mono text-xs text-muted-foreground">
-                  @{bot.slug}
+                  @{displaySlug}
                 </span>
               </div>
               {bot.archivedAt !== null ? (
@@ -262,7 +280,16 @@ function BotSettingsDialogBody(props: {
         </WizardHeader>
         <WizardPanel>
           {tab === "profile" ? (
-            <ProfileSection entry={props.entry} shown={shown} editable={editable} set={set} />
+            <ProfileSection
+              entry={props.entry}
+              shown={shown}
+              slugValue={rawSlug}
+              displaySlug={displaySlug}
+              slugInvalid={slugInvalid}
+              editable={editable}
+              set={set}
+              onSlugChange={(value) => setSlugDraft(value === bot.slug ? null : value)}
+            />
           ) : tab === "soul" ? (
             <SoulSection
               folderPath={bot.folderPath}
@@ -284,13 +311,15 @@ function BotSettingsDialogBody(props: {
             <span className="self-center text-xs text-muted-foreground">
               {nameMissing
                 ? "A Bot needs a name."
-                : changeCount === 0
-                  ? "All changes saved"
-                  : `${changeCount} unsaved ${changeCount === 1 ? "change" : "changes"}`}
+                : slugInvalid
+                  ? "Slug must use lowercase letters, numbers and hyphens."
+                  : changeCount === 0
+                    ? "All changes saved"
+                    : `${changeCount} unsaved ${changeCount === 1 ? "change" : "changes"}`}
             </span>
           }
         >
-          {changeCount > 0 ? (
+          {changeCount > 0 || slugDraft !== null ? (
             <Button variant="ghost" disabled={busy} onClick={discard}>
               Discard
             </Button>
@@ -299,7 +328,7 @@ function BotSettingsDialogBody(props: {
             Close
           </Button>
           <Button
-            disabled={!canUpdate || changeCount === 0 || nameMissing || busy}
+            disabled={!canUpdate || changeCount === 0 || nameMissing || slugInvalid || busy}
             onClick={() => void save()}
           >
             {busy ? "Saving…" : "Save"}
@@ -313,8 +342,12 @@ function BotSettingsDialogBody(props: {
 function ProfileSection(props: {
   readonly entry: ScopedBotEntry;
   readonly shown: BotRecord;
+  readonly slugValue: string;
+  readonly displaySlug: BotSlug;
+  readonly slugInvalid: boolean;
   readonly editable: boolean;
   readonly set: (patch: BotRecordPatch) => void;
+  readonly onSlugChange: (slug: string) => void;
 }) {
   const { shown, editable, set } = props;
   const visualStyle = useBotsUiStore((state) => state.visualStyle);
@@ -333,6 +366,25 @@ function ProfileSection(props: {
               aria-invalid={shown.name.trim() === "" || undefined}
               value={shown.name}
               onChange={(event) => set({ name: event.currentTarget.value })}
+            />
+          </BotField>
+          <BotField
+            label="Slug"
+            htmlFor="bot-settings-slug"
+            hint={
+              props.slugInvalid
+                ? "Lowercase letters, numbers and inner hyphens."
+                : `Folder: ~/.t3/bots/${props.displaySlug}`
+            }
+          >
+            <Input
+              id="bot-settings-slug"
+              font="mono"
+              spellCheck={false}
+              disabled={!editable}
+              aria-invalid={props.slugInvalid || undefined}
+              value={props.slugValue}
+              onChange={(event) => props.onSlugChange(event.currentTarget.value)}
             />
           </BotField>
           <BotField label="Role" htmlFor="bot-settings-role">

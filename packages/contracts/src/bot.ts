@@ -236,6 +236,10 @@ export type BotCreateInput = typeof BotCreateInput.Type;
 
 export const BotUpdateInput = Schema.Struct({
   botId: BotId,
+  slug: Schema.optionalKey(BotSlug).annotate({
+    description:
+      "Optional new slug. Renaming a Bot without passing slug derives one from the new name.",
+  }),
   ...Struct.map(BotEditableFields, Schema.optionalKey),
   muted: Schema.optionalKey(Schema.Boolean),
   archived: Schema.optionalKey(Schema.Boolean),

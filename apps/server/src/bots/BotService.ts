@@ -162,10 +162,31 @@ const make = Effect.gen(function* () {
   // Sliding: a slow subscriber only needs to know the roster changed since its last read.
   const changes = yield* PubSub.sliding<void>(1);
   const notifyChanged = PubSub.publish(changes, undefined).pipe(Effect.asVoid);
-  // Serializes slug choice and the first-bot-is-primary rule.
-  const createLock = yield* Semaphore.make(1);
+  // Serializes slug/folder allocation and the first-bot-is-primary rule.
+  const rosterLock = yield* Semaphore.make(1);
 
   const nowIso = DateTime.now.pipe(Effect.map(DateTime.formatIso));
+
+  const nextFreeFolderSlug = Effect.fn("BotService.nextFreeFolderSlug")(function* (
+    base: BotSlug,
+    taken: ReadonlySet<string>,
+    currentSlug: BotSlug,
+  ) {
+    const isAvailable = (candidate: BotSlug) =>
+      candidate === currentSlug
+        ? Effect.succeed(true)
+        : taken.has(candidate)
+          ? Effect.succeed(false)
+          : folders.exists(candidate).pipe(Effect.map((exists) => !exists));
+    if (yield* isAvailable(base)) return base;
+    for (let attempt = 2; ; attempt++) {
+      const suffix = `-${attempt}`;
+      const candidate = BotSlug.make(
+        `${base.slice(0, 40 - suffix.length).replace(/-+$/, "")}${suffix}`,
+      );
+      if (yield* isAvailable(candidate)) return candidate;
+    }
+  });
 
   const requireBot = (botId: BotId) =>
     store.get(botId).pipe(
@@ -340,70 +361,148 @@ const make = Effect.gen(function* () {
     yield* store.insert(bot).pipe(Effect.mapError(failed("Couldn't save the Bot.")));
     yield* notifyChanged;
     return yield* detail(bot);
-  }, createLock.withPermits(1));
+  }, rosterLock.withPermits(1));
 
   const update: BotService["Service"]["update"] = Effect.fn("BotService.update")(function* (input) {
-    const { botId, muted, archived, documents, ...editable } = input;
+    const { botId, slug: requestedSlug, muted, archived, documents, ...editable } = input;
     const bot = yield* requireBot(botId);
     const now = yield* nowIso;
+
+    let nextSlug = bot.slug;
+    if (
+      requestedSlug !== undefined ||
+      (editable.name !== undefined && editable.name !== bot.name)
+    ) {
+      const existing = yield* store
+        .list({ includeArchived: true })
+        .pipe(Effect.mapError(failed("Couldn't list Bots.")));
+      const taken = new Set<string>(
+        existing.filter((other) => other.id !== bot.id).map((other) => other.slug),
+      );
+      if (requestedSlug !== undefined) {
+        if (taken.has(requestedSlug)) {
+          return yield* new BotError({
+            code: "slug_conflict",
+            message: `A Bot with the slug "${requestedSlug}" already exists.`,
+          });
+        }
+        if (requestedSlug !== bot.slug && (yield* folders.exists(requestedSlug))) {
+          return yield* new BotError({
+            code: "slug_conflict",
+            message: `A folder for slug "${requestedSlug}" already exists on disk.`,
+          });
+        }
+        nextSlug = requestedSlug;
+      } else if (editable.name !== undefined && editable.name !== bot.name) {
+        nextSlug = yield* nextFreeFolderSlug(slugifyBotName(editable.name), taken, bot.slug);
+      }
+    }
+
+    const slugChanged = nextSlug !== bot.slug;
+    if (slugChanged) {
+      const shell = yield* threads
+        .getThreadShell(bot.threadId)
+        .pipe(Effect.mapError(failed("Couldn't read the Bot's thread.")));
+      const status = statusOf(shell);
+      if (status === "working" || status === "waiting") {
+        return yield* new BotError({
+          code: "invalid_request",
+          message: "Wait for this Bot to finish its current turn before changing its slug.",
+        });
+      }
+    }
+
+    const nextFolderPath = slugChanged
+      ? yield* folders
+          .rename(bot.slug, nextSlug)
+          .pipe(Effect.mapError(failed("Couldn't rename the Bot's folder.")))
+      : bot.folderPath;
+
     const next: BotRecord = {
       ...bot,
       ...editable,
+      slug: nextSlug,
+      folderPath: nextFolderPath,
       ...(muted === undefined ? {} : { muted }),
       archivedAt:
         archived === undefined ? bot.archivedAt : archived ? (bot.archivedAt ?? now) : null,
       updatedAt: now,
     };
-    yield* Effect.all([
-      documents === undefined
-        ? Effect.void
-        : folders.writeDocuments(bot.slug, documents, "replace"),
-      folders.writeAgentsFile(next),
-    ]).pipe(Effect.mapError(failed("Couldn't write the Bot's documents.")));
 
-    const commandPrefix = `bot-update:${yield* randomUuidV4}`;
-    const threadCommands = [
-      ...(next.name === bot.name
-        ? []
-        : [
-            {
-              type: "thread.metadata.update" as const,
-              commandId: CommandId.make(`${commandPrefix}:title`),
-              threadId: bot.threadId,
-              title: next.name,
-            },
-          ]),
-      ...(editable.modelSelection === undefined
-        ? []
-        : [
-            {
-              type: "thread.model-selection.set" as const,
-              commandId: CommandId.make(`${commandPrefix}:model`),
-              threadId: bot.threadId,
-              modelSelection: editable.modelSelection,
-            },
-          ]),
-      ...(next.runtimeMode === bot.runtimeMode
-        ? []
-        : [
-            {
-              type: "thread.runtime-mode.set" as const,
-              commandId: CommandId.make(`${commandPrefix}:runtime-mode`),
-              threadId: bot.threadId,
-              runtimeMode: next.runtimeMode,
-            },
-          ]),
-    ];
-    for (const command of threadCommands) {
-      yield* threads
-        .dispatch(command)
-        .pipe(Effect.mapError(failed("Couldn't update the Bot's thread.")));
-    }
+    const rollbackFolder = slugChanged
+      ? folders.rename(nextSlug, bot.slug).pipe(Effect.ignore)
+      : Effect.void;
 
-    yield* store.update(next).pipe(Effect.mapError(failed("Couldn't save the Bot.")));
+    yield* Effect.gen(function* () {
+      yield* Effect.all([
+        documents === undefined
+          ? Effect.void
+          : folders.writeDocuments(nextSlug, documents, "replace"),
+        folders.writeAgentsFile(next),
+      ]).pipe(Effect.mapError(failed("Couldn't write the Bot's documents.")));
+
+      const commandPrefix = `bot-update:${yield* randomUuidV4}`;
+      const metadataChanged = next.name !== bot.name || next.folderPath !== bot.folderPath;
+      const threadCommands = [
+        ...(metadataChanged
+          ? [
+              {
+                type: "thread.metadata.update" as const,
+                commandId: CommandId.make(`${commandPrefix}:metadata`),
+                threadId: bot.threadId,
+                ...(next.name === bot.name ? {} : { title: next.name }),
+                ...(next.folderPath === bot.folderPath ? {} : { worktreePath: next.folderPath }),
+              },
+            ]
+          : []),
+        ...(editable.modelSelection === undefined
+          ? []
+          : [
+              {
+                type: "thread.model-selection.set" as const,
+                commandId: CommandId.make(`${commandPrefix}:model`),
+                threadId: bot.threadId,
+                modelSelection: editable.modelSelection,
+              },
+            ]),
+        ...(next.runtimeMode === bot.runtimeMode
+          ? []
+          : [
+              {
+                type: "thread.runtime-mode.set" as const,
+                commandId: CommandId.make(`${commandPrefix}:runtime-mode`),
+                threadId: bot.threadId,
+                runtimeMode: next.runtimeMode,
+              },
+            ]),
+      ];
+      for (const command of threadCommands) {
+        yield* threads
+          .dispatch(command)
+          .pipe(Effect.mapError(failed("Couldn't update the Bot's thread.")));
+      }
+
+      yield* store.update(next).pipe(
+        Effect.tapError(() =>
+          slugChanged
+            ? threads
+                .dispatch({
+                  type: "thread.metadata.update",
+                  commandId: CommandId.make(`${commandPrefix}:rollback-metadata`),
+                  threadId: bot.threadId,
+                  ...(next.name === bot.name ? {} : { title: bot.name }),
+                  worktreePath: bot.folderPath,
+                })
+                .pipe(Effect.ignore)
+            : Effect.void,
+        ),
+        Effect.mapError(failed("Couldn't save the Bot.")),
+      );
+    }).pipe(Effect.tapError(() => rollbackFolder));
+
     yield* notifyChanged;
     return yield* detail(next);
-  });
+  }, rosterLock.withPermits(1));
 
   const deleteBot: BotService["Service"]["delete"] = Effect.fn("BotService.delete")(
     function* (input) {

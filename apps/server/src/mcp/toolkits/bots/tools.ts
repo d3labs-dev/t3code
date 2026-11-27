@@ -30,7 +30,12 @@ const shared = {
 };
 
 // Custom MCP servers stay out: their configs carry credentials an agent should not write.
-const botSettings = Struct.omit(BotUpdateInput.fields, ["botId", "customMcpServers", "documents"]);
+const botSettings = Struct.omit(BotUpdateInput.fields, [
+  "botId",
+  "slug",
+  "customMcpServers",
+  "documents",
+]);
 const botDocuments = Struct.map(BotDocuments.fields, Schema.optionalKey);
 
 const BotSaved = Schema.Struct({

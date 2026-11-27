@@ -426,11 +426,17 @@ it.effect(
           muted: true,
         });
         assert.strictEqual(updated.bot.name, "Researcher");
-        assert.strictEqual(updated.bot.slug, "scout");
+        assert.strictEqual(updated.bot.slug, "researcher");
+        assert.strictEqual(
+          updated.bot.folderPath,
+          path.join(harness.baseDir, "bots", "researcher"),
+        );
+        assert.isFalse(yield* fileSystem.exists(scout.folderPath));
+        assert.isTrue(yield* fileSystem.exists(updated.bot.folderPath));
         assert.isTrue(updated.bot.muted);
         assert.include(updated.documents.memory, "Prefers primary sources.");
         assert.include(
-          yield* fileSystem.readFileString(path.join(scout.folderPath, "AGENTS.md")),
+          yield* fileSystem.readFileString(path.join(updated.bot.folderPath, "AGENTS.md")),
           "Researcher",
         );
         assert.deepStrictEqual(
@@ -443,12 +449,17 @@ it.effect(
             ["thread.runtime-mode.set", scout.threadId],
           ],
         );
+        assert.deepInclude(harness.dispatched[0], {
+          type: "thread.metadata.update",
+          title: "Researcher",
+          worktreePath: updated.bot.folderPath,
+        });
 
         yield* bots.update({ botId: planner.id, isPrimary: true });
         assert.deepStrictEqual(
           (yield* bots.list({})).bots.map(({ bot }) => [bot.slug, bot.isPrimary]),
           [
-            ["scout", false],
+            ["researcher", false],
             ["planner", true],
           ],
         );
@@ -472,7 +483,62 @@ it.effect(
           (yield* bots.get({ botId: scout.id }).pipe(Effect.flip)).code,
           "bot_not_found",
         );
-        assert.isTrue(yield* fileSystem.exists(path.join(scout.folderPath, "MEMORY.md")));
+        assert.isTrue(yield* fileSystem.exists(path.join(updated.bot.folderPath, "MEMORY.md")));
+      }),
+    ),
+);
+
+it.effect(
+  "renames a bot slug explicitly, avoids disk and roster collisions, and refuses while active",
+  () =>
+    withBots((harness, bots) =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const chief = (yield* bots.create({ name: "Chief of Staff", modelSelection })).bot;
+        const designer = (yield* bots.create({ name: "Design", modelSelection })).bot;
+        const deleted = (yield* bots.create({ name: "Legacy", modelSelection })).bot;
+        yield* bots.delete({ botId: deleted.id });
+
+        // Explicit slug update moves the folder and updates the thread worktreePath.
+        const renamed = (yield* bots.update({ botId: chief.id, slug: BotSlug.make("kelsier") }))
+          .bot;
+        assert.strictEqual(renamed.slug, "kelsier");
+        assert.strictEqual(renamed.folderPath, path.join(harness.baseDir, "bots", "kelsier"));
+        assert.isFalse(yield* fileSystem.exists(chief.folderPath));
+        assert.isTrue(yield* fileSystem.exists(renamed.folderPath));
+        assert.deepInclude(harness.dispatched.at(-1), {
+          type: "thread.metadata.update",
+          threadId: chief.threadId,
+          worktreePath: renamed.folderPath,
+        });
+
+        // Explicit slug conflicts with another bot or an orphaned folder on disk.
+        const dbConflict = yield* bots
+          .update({ botId: designer.id, slug: BotSlug.make("kelsier") })
+          .pipe(Effect.flip);
+        assert.strictEqual(dbConflict.code, "slug_conflict");
+        const diskConflict = yield* bots
+          .update({ botId: designer.id, slug: BotSlug.make("legacy") })
+          .pipe(Effect.flip);
+        assert.strictEqual(diskConflict.code, "slug_conflict");
+        assert.isTrue(yield* fileSystem.exists(designer.folderPath));
+
+        // Auto-derived slug on rename skips an existing folder left on disk.
+        const skippedDisk = (yield* bots.update({ botId: designer.id, name: "Legacy" })).bot;
+        assert.strictEqual(skippedDisk.slug, "legacy-2");
+        assert.isTrue(yield* fileSystem.exists(deleted.folderPath));
+        assert.isTrue(yield* fileSystem.exists(skippedDisk.folderPath));
+
+        // Active turns block slug changes, while metadata-only updates still succeed.
+        harness.threads.get(renamed.threadId)!.status = "running";
+        const busyError = yield* bots
+          .update({ botId: renamed.id, name: "Survivor" })
+          .pipe(Effect.flip);
+        assert.strictEqual(busyError.code, "invalid_request");
+        const roleUpdated = (yield* bots.update({ botId: renamed.id, role: "Chief of Staff" })).bot;
+        assert.strictEqual(roleUpdated.role, "Chief of Staff");
+        assert.strictEqual(roleUpdated.slug, "kelsier");
       }),
     ),
 );
