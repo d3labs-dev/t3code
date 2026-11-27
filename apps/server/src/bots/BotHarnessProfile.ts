@@ -1,4 +1,5 @@
 import {
+  BOT_HEARTBEAT_SOFT_CAP_BYTES,
   BOT_MAX_HOPS,
   BOT_MEMORY_SOFT_CAP_BYTES,
   BOT_NOW_SOFT_CAP_BYTES,
@@ -10,6 +11,7 @@ import {
   type ThreadId,
   TrimmedNonEmptyString,
 } from "@t3tools/contracts";
+import { BOT_NO_REPLY_TOKEN } from "@t3tools/shared/botProactive";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -43,6 +45,23 @@ const STATIC_INSTRUCTIONS = `You are a persistent Bot in T3 Code: a long-lived a
 - You don't need to wait for that thread. When it finishes, fails or asks a question, a \`[Coding thread update: ...]\` message wakes you here with its result.
 - For helper or subagent work, use \`delegate_task\` or your native subagents so they stay nested under this thread. Never use \`create_threads\` for subagent work, and keep \`t3_thread_launch\` for repository coding threads.`;
 
+const SCOUT_STATIC_INSTRUCTIONS = `You are the quiet background scout for a persistent T3 Code Bot. You check whether anything needs the user's attention right now; you never act on it.
+
+- \`SOUL.md\` says who the Bot is and what the user cares about.
+- \`NOW.md\` holds the Bot's active work, open commitments and next actions.
+- \`HEARTBEAT.md\` is the user's checklist of what to keep an eye on.
+- Use only read-only tools. Never write or edit files, run shell commands, message other Bots, or launch or continue coding threads.
+- If nothing needs the user's attention right now, reply with exactly ${BOT_NO_REPLY_TOKEN}.
+- Otherwise reply with a short bullet brief of the concrete items that need attention and why. The Bot decides whether to message the user.`;
+
+const BOT_SCOUT_TOOLS: ReadonlySet<string> = new Set([
+  "Read",
+  "Glob",
+  "Grep",
+  "WebSearch",
+  "WebFetch",
+]);
+
 const tableCell = (value: string) => value.replaceAll("|", "\\|").replace(/\s+/g, " ").trim();
 
 const documentSection = (title: string, contents: string) =>
@@ -52,12 +71,22 @@ const SOFT_CAPPED_DOCUMENTS = [
   { name: "now", file: "NOW.md", capBytes: BOT_NOW_SOFT_CAP_BYTES },
   { name: "memory", file: "MEMORY.md", capBytes: BOT_MEMORY_SOFT_CAP_BYTES },
 ] as const;
+const HEARTBEAT_DOCUMENT = {
+  name: "heartbeat",
+  file: "HEARTBEAT.md",
+  capBytes: BOT_HEARTBEAT_SOFT_CAP_BYTES,
+} as const;
 
-const housekeepingSection = (documents: BotDocuments) => {
-  const overCap = SOFT_CAPPED_DOCUMENTS.map((document) => ({
-    ...document,
-    bytes: Buffer.byteLength(documents[document.name], "utf8"),
-  })).filter(({ bytes, capBytes }) => bytes > capBytes);
+const housekeepingSection = (bot: BotRecord, documents: BotDocuments) => {
+  const cappedDocuments = bot.isPrimary
+    ? [...SOFT_CAPPED_DOCUMENTS, HEARTBEAT_DOCUMENT]
+    : SOFT_CAPPED_DOCUMENTS;
+  const overCap = cappedDocuments
+    .map((document) => ({
+      ...document,
+      bytes: Buffer.byteLength(documents[document.name], "utf8"),
+    }))
+    .filter(({ bytes, capBytes }) => bytes > capBytes);
   if (overCap.length === 0) return [];
   return [
     [
@@ -71,6 +100,17 @@ const housekeepingSection = (documents: BotDocuments) => {
   ];
 };
 
+const identitySection = (bot: BotRecord, extraLines: ReadonlyArray<string>) =>
+  [
+    "## Identity",
+    "",
+    `- Name: ${bot.name}`,
+    `- Slug: ${bot.slug}`,
+    `- Role: ${bot.role.trim() === "" ? "(none)" : tableCell(bot.role)}`,
+    `- Folder: ${bot.folderPath}`,
+    ...extraLines,
+  ].join("\n");
+
 const buildBotHarnessProfile = (input: {
   readonly bot: BotRecord;
   readonly documents: BotDocuments;
@@ -80,15 +120,7 @@ const buildBotHarnessProfile = (input: {
   readonly authSettings: BotHarnessProfile["authSettings"] | undefined;
 }): BotHarnessProfile => {
   const { bot } = input;
-  const identity = [
-    "## Identity",
-    "",
-    `- Name: ${bot.name}`,
-    `- Slug: ${bot.slug}`,
-    `- Role: ${bot.role.trim() === "" ? "(none)" : tableCell(bot.role)}`,
-    `- Folder: ${bot.folderPath}`,
-    `- Shared folder: ${input.sharedDir}`,
-  ].join("\n");
+  const identity = identitySection(bot, [`- Shared folder: ${input.sharedDir}`]);
   const roster = [
     "## Bot roster",
     "",
@@ -114,13 +146,44 @@ const buildBotHarnessProfile = (input: {
       documentSection("SOUL.md", input.documents.soul),
       documentSection("NOW.md", input.documents.now),
       documentSection("MEMORY.md", input.documents.memory),
-      ...housekeepingSection(input.documents),
+      ...(bot.isPrimary && input.documents.heartbeat.trim() !== ""
+        ? [documentSection("HEARTBEAT.md", input.documents.heartbeat)]
+        : []),
+      ...housekeepingSection(bot, input.documents),
       roster,
     ].join("\n\n"),
     tools: bot.tools,
     mcpServers: input.mcpServers,
     skills: bot.skills,
     additionalDirectories: [TrimmedNonEmptyString.make(input.sharedDir)],
+    ...(input.authSettings === undefined ? {} : { authSettings: input.authSettings }),
+  };
+};
+
+/** A Bot's hidden check-in thread: read-only tools and no memory or roster, so it stays cheap. */
+const buildBotScoutHarnessProfile = (input: {
+  readonly bot: BotRecord;
+  readonly documents: BotDocuments;
+  readonly mcpServers: Readonly<Record<string, BotMcpServerConfig>>;
+  readonly authSettings: BotHarnessProfile["authSettings"] | undefined;
+}): BotHarnessProfile => {
+  const { bot } = input;
+  return {
+    botId: bot.id,
+    slug: bot.slug,
+    name: bot.name,
+    systemPromptMode: "custom",
+    staticInstructions: SCOUT_STATIC_INSTRUCTIONS,
+    dynamicContext: [
+      identitySection(bot, []),
+      documentSection("SOUL.md", input.documents.soul),
+      documentSection("NOW.md", input.documents.now),
+      documentSection("HEARTBEAT.md", input.documents.heartbeat),
+    ].join("\n\n"),
+    tools: bot.tools.filter((tool) => BOT_SCOUT_TOOLS.has(tool)),
+    mcpServers: input.mcpServers,
+    skills: [],
+    additionalDirectories: [],
     ...(input.authSettings === undefined ? {} : { authSettings: input.authSettings }),
   };
 };
@@ -137,7 +200,24 @@ export const resolveBotHarnessProfile = Effect.fn("BotHarnessProfile.resolve")(f
   const found = yield* store
     .findByThreadId(threadId)
     .pipe(Effect.mapError(failed("Couldn't read the Bot.")));
-  if (Option.isNone(found)) return Option.none<BotHarnessProfile>();
+  if (Option.isNone(found)) {
+    const scouting = yield* store
+      .findByHeartbeatThreadId(threadId)
+      .pipe(Effect.mapError(failed("Couldn't read the Bot.")));
+    if (Option.isNone(scouting)) return Option.none<BotHarnessProfile>();
+    const bot = scouting.value;
+    const [documents, mcpServers, authSettings] = yield* Effect.all(
+      [
+        folders
+          .readDocuments(bot.folderPath)
+          .pipe(Effect.mapError(failed("Couldn't read the Bot's documents."))),
+        folders.resolveMcpServers(bot.mcpServerNames, bot.customMcpServers),
+        folders.readAuthSettings,
+      ],
+      { concurrency: "unbounded" },
+    );
+    return Option.some(buildBotScoutHarnessProfile({ bot, documents, mcpServers, authSettings }));
+  }
   const bot = found.value;
   const [documents, roster, mcpServers, authSettings] = yield* Effect.all(
     [

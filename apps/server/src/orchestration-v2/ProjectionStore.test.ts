@@ -44,6 +44,7 @@ import * as Tracer from "effect/Tracer";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as Statement from "effect/sql/Statement";
 import { BOT_DREAMING_PROMPT } from "@t3tools/shared/botDreaming";
+import { buildBotCheckInHandoffPrompt } from "@t3tools/shared/botProactive";
 import { projectThreadAwarenessV2 } from "@t3tools/shared/agentAwareness";
 import { MCP_APP_OUTPUT_KEY } from "@t3tools/shared/mcpApp";
 
@@ -80,6 +81,7 @@ const modelSelection = {
   model: "gpt-5.4",
 } satisfies ModelSelection;
 const driver = ProviderDriverKind.make("codex");
+const CHECK_IN_PROMPT = buildBotCheckInHandoffPrompt("- PR #286 is ready to merge");
 const providerInstanceId = modelSelection.instanceId;
 const encodeUnknownJsonString = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
@@ -7682,6 +7684,8 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
       ` \u00a0${BOT_DREAMING_PROMPT}`,
     ],
     ["a typed consolidation prefix", "user", "web", undefined, false, BOT_DREAMING_PROMPT],
+    ["a Bot check-in", "agent", "server", undefined, true, CHECK_IN_PROMPT],
+    ["a typed check-in prefix", "user", "web", undefined, false, CHECK_IN_PROMPT],
   ] as const)(
     "keeps the shell on the user's last turn only during %s",
     ([name, createdBy, creationSource, idleCompaction, silent, text]) =>
@@ -7872,6 +7876,134 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
           [visible, visible].map((shell) =>
             silent ? { ...shell, latestUserMessageAt: false } : shell,
           ),
+        );
+      }),
+  );
+
+  it.effect.each([
+    ["NO_REPLY", true],
+    ["  **NO_REPLY.**  ", true],
+    ["```text\nNO_REPLY\n```", true],
+    ["", true],
+    ["PR #286 is ready to merge", false],
+  ] as const)(
+    "keeps a completed Bot check-in out of the shell unless it replies %j",
+    ([reply, silent]) =>
+      Effect.gen(function* () {
+        const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+        const now = yield* DateTime.now;
+        const key = `${reply.replaceAll(/\W+/g, "-")}-${silent}`;
+        const threadId = ThreadId.make(`thread:projection-shell-checkin:${key}`);
+        const runId = RunId.make(`run:projection-shell-checkin:${key}`);
+        const promptId = MessageId.make(`message:projection-shell-checkin:${key}:prompt`);
+        const message = {
+          threadId,
+          runId,
+          nodeId: null,
+          attachments: [],
+          streaming: false,
+          createdAt: now,
+          updatedAt: now,
+        };
+        yield* projectionStore.apply({
+          id: EventId.make(`event:projection-shell-checkin:${key}:thread`),
+          type: "thread.created",
+          threadId,
+          occurredAt: now,
+          payload: {
+            createdBy: "user",
+            creationSource: "web",
+            id: threadId,
+            projectId: ProjectId.make("project:projection-shell-checkin"),
+            title: "Kelsier",
+            providerInstanceId,
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            activeProviderThreadId: null,
+            lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+            forkedFrom: null,
+            createdAt: now,
+            updatedAt: now,
+            archivedAt: null,
+            settledOverride: null,
+            settledAt: null,
+            lastVisitedAt: null,
+            deletedAt: null,
+          },
+        });
+        yield* projectionStore.apply({
+          id: EventId.make(`event:projection-shell-checkin:${key}:prompt`),
+          type: "message.updated",
+          threadId,
+          occurredAt: now,
+          payload: {
+            ...message,
+            id: promptId,
+            createdBy: "agent",
+            creationSource: "server",
+            role: "user",
+            text: CHECK_IN_PROMPT,
+          },
+        });
+        yield* projectionStore.apply({
+          id: EventId.make(`event:projection-shell-checkin:${key}:run`),
+          type: "run.created",
+          threadId,
+          runId,
+          nodeId: NodeId.make(`node:projection-shell-checkin:${key}`),
+          driver,
+          occurredAt: now,
+          payload: {
+            id: runId,
+            threadId,
+            ordinal: 1,
+            providerInstanceId,
+            modelSelection,
+            providerThreadId: null,
+            userMessageId: promptId,
+            rootNodeId: null,
+            activeAttemptId: null,
+            status: "completed",
+            requestedAt: now,
+            startedAt: now,
+            completedAt: now,
+            checkpointId: null,
+            contextHandoffId: null,
+          },
+        });
+        yield* projectionStore.apply({
+          id: EventId.make(`event:projection-shell-checkin:${key}:reply`),
+          type: "message.updated",
+          threadId,
+          occurredAt: now,
+          payload: {
+            ...message,
+            id: MessageId.make(`message:projection-shell-checkin:${key}:reply`),
+            createdBy: "agent",
+            creationSource: "provider",
+            role: "assistant",
+            text: reply,
+          },
+        });
+
+        const sqlShell = (yield* projectionStore.getShellSnapshot()).threads.find(
+          (thread) => thread.id === threadId,
+        );
+        const memoryShell = ProjectionStore.threadShellFromProjection(
+          yield* projectionStore.getThreadProjection(threadId),
+        );
+        assert.deepStrictEqual(
+          [sqlShell, memoryShell].map((shell) => ({
+            latestRunId: shell?.latestRunId ?? null,
+            latestUserMessageAt: shell?.latestUserMessageAt ?? null,
+          })),
+          Array.from({ length: 2 }, () => ({
+            latestRunId: silent ? null : runId,
+            latestUserMessageAt: null,
+          })),
         );
       }),
   );

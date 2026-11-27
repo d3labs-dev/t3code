@@ -107,10 +107,32 @@ const BotEditableFields = {
   systemPromptMode: BotSystemPromptMode,
 };
 
+const BOT_CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export const BotProactiveConfig = Schema.Struct({
+  enabled: Schema.Boolean,
+  intervalMinutes: Schema.Int.check(Schema.isBetween({ minimum: 5, maximum: 1440 })),
+  activeHoursStart: Schema.String.check(Schema.isPattern(BOT_CLOCK_TIME)),
+  activeHoursEnd: Schema.String.check(Schema.isPattern(BOT_CLOCK_TIME)),
+  timezone: TrimmedNonEmptyString,
+});
+export type BotProactiveConfig = typeof BotProactiveConfig.Type;
+
+export const DEFAULT_BOT_PROACTIVE_CONFIG: BotProactiveConfig = {
+  enabled: false,
+  intervalMinutes: 30,
+  activeHoursStart: "08:00",
+  activeHoursEnd: "22:00",
+  timezone: "UTC",
+};
+
 export const BotRecord = Schema.Struct({
   id: BotId,
   slug: BotSlug,
   ...BotEditableFields,
+  proactive: BotProactiveConfig.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_BOT_PROACTIVE_CONFIG)),
+  ),
   muted: Schema.Boolean,
   threadId: ThreadId,
   folderPath: TrimmedNonEmptyString,
@@ -159,11 +181,13 @@ export type BotHarnessProfile = typeof BotHarnessProfile.Type;
 
 export const BOT_NOW_SOFT_CAP_BYTES = 2_048;
 export const BOT_MEMORY_SOFT_CAP_BYTES = 4_096;
+export const BOT_HEARTBEAT_SOFT_CAP_BYTES = 2_048;
 
 export const BotDocuments = Schema.Struct({
   soul: Schema.String,
   now: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(""))),
   memory: Schema.String,
+  heartbeat: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(""))),
 });
 export type BotDocuments = typeof BotDocuments.Type;
 
@@ -230,11 +254,13 @@ export const BotDocumentsPatch = Schema.Struct({
   soul: Schema.optionalKey(Schema.String),
   now: Schema.optionalKey(Schema.String),
   memory: Schema.optionalKey(Schema.String),
+  heartbeat: Schema.optionalKey(Schema.String),
 });
 
 export const BotCreateInput = Schema.Struct({
   ...Struct.mapOmit(BotEditableFields, ["name", "modelSelection"], Schema.optionalKey),
   slug: Schema.optionalKey(BotSlug).annotate({ description: "Default: derived from the name." }),
+  proactive: Schema.optionalKey(BotProactiveConfig),
   documents: Schema.optionalKey(BotDocumentsPatch),
 });
 export type BotCreateInput = typeof BotCreateInput.Type;
@@ -248,6 +274,7 @@ export const BotUpdateInput = Schema.Struct({
   ...Struct.map(BotEditableFields, Schema.optionalKey),
   muted: Schema.optionalKey(Schema.Boolean),
   archived: Schema.optionalKey(Schema.Boolean),
+  proactive: Schema.optionalKey(BotProactiveConfig),
   documents: Schema.optionalKey(BotDocumentsPatch),
 });
 export type BotUpdateInput = typeof BotUpdateInput.Type;

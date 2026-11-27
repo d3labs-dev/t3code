@@ -2,10 +2,12 @@ import { useAtomValue } from "@effect/atom-react";
 import { type ScopedBotEntry, botKey } from "@t3tools/client-runtime/state/bots";
 import {
   BOT_DEFAULT_TOOLS,
+  BOT_HEARTBEAT_SOFT_CAP_BYTES,
   BOT_MEMORY_SOFT_CAP_BYTES,
   BOT_NOW_SOFT_CAP_BYTES,
   type BotDocuments,
   type BotMcpServerConfig,
+  type BotProactiveConfig,
   type BotRecord,
   type BotSystemPromptMode,
   type BotUpdateInput,
@@ -78,7 +80,8 @@ type EditableBotField =
   | "tools"
   | "mcpServerNames"
   | "customMcpServers"
-  | "skills";
+  | "skills"
+  | "proactive";
 
 type BotRecordPatch = Partial<Pick<BotRecord, EditableBotField>>;
 
@@ -91,25 +94,45 @@ const DOCUMENTS = [
     file: "SOUL.md",
     placeholder: "Who is this Bot? How should it think, talk and decide?",
     softCapBytes: null,
+    primaryOnly: false,
   },
   {
     id: "now",
     file: "NOW.md",
     placeholder: "Active threads, open commitments, and next actions (kept concise).",
     softCapBytes: BOT_NOW_SOFT_CAP_BYTES,
+    primaryOnly: false,
   },
   {
     id: "memory",
     file: "MEMORY.md",
     placeholder: "What should this Bot remember between conversations?",
     softCapBytes: BOT_MEMORY_SOFT_CAP_BYTES,
+    primaryOnly: false,
+  },
+  {
+    id: "heartbeat",
+    file: "HEARTBEAT.md",
+    placeholder: "What should this Bot keep an eye on during proactive check-ins?",
+    softCapBytes: BOT_HEARTBEAT_SOFT_CAP_BYTES,
+    primaryOnly: true,
   },
 ] as const satisfies ReadonlyArray<{
   id: BotDocumentName;
   file: string;
   placeholder: string;
   softCapBytes: number | null;
+  primaryOnly: boolean;
 }>;
+
+const PROACTIVE_INTERVALS = [
+  { minutes: 15, label: "Every 15m" },
+  { minutes: 30, label: "Every 30m" },
+  { minutes: 60, label: "Every 1h" },
+  { minutes: 120, label: "Every 2h" },
+] as const;
+
+const localTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 const formatKilobytes = (bytes: number) => String(Math.ceil((bytes * 10) / 1024) / 10);
 
@@ -290,6 +313,7 @@ function BotSettingsDialogBody(props: {
           ) : tab === "soul" ? (
             <SoulSection
               folderPath={bot.folderPath}
+              isPrimary={shown.isPrimary}
               saved={savedDocuments}
               loadError={savedDocuments === null ? detail.error : null}
               drafts={documentDrafts}
@@ -405,6 +429,13 @@ function ProfileSection(props: {
             />
           }
         />
+        {shown.isPrimary ? (
+          <ProactiveCheckInRows
+            proactive={shown.proactive}
+            editable={editable}
+            onChange={(proactive) => set({ proactive })}
+          />
+        ) : null}
         <SettingsRow
           title="Muted"
           description="Shown asleep and dimmed in the sidebar."
@@ -527,8 +558,102 @@ function BotDangerZone({ entry }: { readonly entry: ScopedBotEntry }) {
   );
 }
 
+function ProactiveCheckInRows(props: {
+  readonly proactive: BotProactiveConfig;
+  readonly editable: boolean;
+  readonly onChange: (proactive: BotProactiveConfig) => void;
+}) {
+  const { proactive, editable, onChange } = props;
+  const interval = PROACTIVE_INTERVALS.find(({ minutes }) => minutes === proactive.intervalMinutes);
+  const setActiveHour = (field: "activeHoursStart" | "activeHoursEnd", value: string) => {
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) onChange({ ...proactive, [field]: value });
+  };
+  return (
+    <>
+      <SettingsRow
+        title="Proactive check-ins"
+        description="Periodically check NOW.md and HEARTBEAT.md in the background and message you only when something needs attention."
+        control={
+          <Switch
+            aria-label="Proactive check-ins"
+            checked={proactive.enabled}
+            disabled={!editable}
+            onCheckedChange={(enabled) =>
+              onChange({
+                ...proactive,
+                enabled,
+                timezone:
+                  enabled && proactive.timezone === "UTC" ? localTimeZone() : proactive.timezone,
+              })
+            }
+          />
+        }
+      />
+      {proactive.enabled ? (
+        <>
+          <SettingsRow
+            title="Cadence"
+            description="How often the Bot checks in."
+            control={
+              <Select
+                value={String(proactive.intervalMinutes)}
+                disabled={!editable}
+                onValueChange={(value) => {
+                  const next = PROACTIVE_INTERVALS.find(({ minutes }) => String(minutes) === value);
+                  if (next) onChange({ ...proactive, intervalMinutes: next.minutes });
+                }}
+              >
+                <SelectTrigger aria-label="Check-in cadence">
+                  <SelectValue>
+                    {interval?.label ?? `Every ${proactive.intervalMinutes}m`}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {PROACTIVE_INTERVALS.map((option) => (
+                    <SelectItem key={option.minutes} value={String(option.minutes)}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
+          <SettingsRow
+            title="Active hours"
+            description={`Check-ins run only between these times (${proactive.timezone}).`}
+            control={
+              <div className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  nativeInput
+                  aria-label="Active hours start"
+                  className="w-28"
+                  disabled={!editable}
+                  value={proactive.activeHoursStart}
+                  onChange={(event) => setActiveHour("activeHoursStart", event.currentTarget.value)}
+                />
+                <span className="text-xs text-muted-foreground">to</span>
+                <Input
+                  type="time"
+                  nativeInput
+                  aria-label="Active hours end"
+                  className="w-28"
+                  disabled={!editable}
+                  value={proactive.activeHoursEnd}
+                  onChange={(event) => setActiveHour("activeHoursEnd", event.currentTarget.value)}
+                />
+              </div>
+            }
+          />
+        </>
+      ) : null}
+    </>
+  );
+}
+
 function SoulSection(props: {
   readonly folderPath: string;
+  readonly isPrimary: boolean;
   readonly saved: BotDocuments | null;
   readonly loadError: string | null;
   readonly drafts: DocumentDrafts;
@@ -539,7 +664,7 @@ function SoulSection(props: {
   return (
     <div className="flex flex-col gap-5">
       <BotFolderPath path={props.folderPath} />
-      {DOCUMENTS.map((document) => {
+      {DOCUMENTS.filter((document) => props.isPrimary || !document.primaryOnly).map((document) => {
         const value = props.drafts[document.id] ?? props.saved?.[document.id] ?? "";
         const bytes = new TextEncoder().encode(value).length;
         return (

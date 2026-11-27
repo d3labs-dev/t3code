@@ -11,6 +11,7 @@ import * as DelegatedTaskQuestionReactor from "./orchestration-v2/DelegatedTaskQ
 import * as BotFolders from "./bots/BotFolders.ts";
 import { layerBotHarnessResolver } from "./bots/BotHarnessProfile.ts";
 import * as BotDreamingService from "./bots/BotDreamingService.ts";
+import * as BotHeartbeatService from "./bots/BotHeartbeatService.ts";
 import * as BotService from "./bots/BotService.ts";
 import * as BotStore from "./bots/BotStore.ts";
 // Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
@@ -648,7 +649,12 @@ const layerBotDreamingWorker = Layer.effectDiscard(
   BotDreamingService.make.pipe(Effect.flatMap((service) => service.start())),
 ).pipe(Layer.provide(ProjectionStoreV2.layer), Layer.provide(layerBotStorage));
 
-const layerBotService = BotService.layer.pipe(Layer.provide(layerBotStorage));
+// Also exposes the store, so MCP tool access can recognize Bot check-in scout threads.
+const layerBotService = BotService.layer.pipe(Layer.provideMerge(layerBotStorage));
+
+const layerBotHeartbeatWorker = Layer.effectDiscard(
+  BotHeartbeatService.make.pipe(Effect.flatMap((service) => service.start())),
+).pipe(Layer.provide(ProjectionStoreV2.layer), Layer.provide(layerBotService));
 
 const layerThreadPullRequestWorker = Layer.effectDiscard(
   ThreadPullRequestService.make.pipe(Effect.flatMap((service) => service.start())),
@@ -702,12 +708,13 @@ const layerServerRestart = Layer.effect(
 
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   AgentAwarenessRelay.layer,
-  ServerPush.layer,
+  ServerPush.layer.pipe(Layer.provide(layerBotService)),
   // Asks T3 Connect to deliver webhooks it held while this environment was offline.
   HeldHooksWaker.layer,
   layerThreadSettlementWorker,
   layerIdleCompactionWorker,
   layerBotDreamingWorker,
+  layerBotHeartbeatWorker,
   StorageCleanup.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
   DatabaseStorage.layer.pipe(
     Layer.provide(ProjectionMaintenance.layer),

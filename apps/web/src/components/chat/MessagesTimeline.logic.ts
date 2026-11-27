@@ -66,6 +66,7 @@ import {
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/shell";
 import type { ToolCallVisibility } from "@t3tools/contracts/settings";
 import { isBotDreamingMessage } from "@t3tools/shared/botDreaming";
+import { isBotNoReplyMessage, isServerBotCheckInMessage } from "@t3tools/shared/botProactive";
 import { resolveT3McpToolDefinition } from "@t3tools/shared/t3McpToolPresentation";
 import { compactDynamicToolOutput } from "@t3tools/shared/toolOutput";
 import { htmlRenderReferencesEqual, type HtmlRenderReference } from "@t3tools/shared/htmlRender";
@@ -1452,8 +1453,15 @@ function deriveInFlightSteerAnswerIds(entries: ReadonlyArray<TimelineEntry>): Re
   return ids;
 }
 
+type TimelineMessage = Extract<TimelineEntry, { kind: "message" }>["message"];
+
+const isQuietBotPrompt = (message: TimelineMessage) =>
+  isBotDreamingMessage(message.text) || isServerBotCheckInMessage(message);
+
 export function liveAnswerPreview(entries: ReadonlyArray<TimelineEntry>): string | null {
   const boundary = lastResponseBoundaryIndex(entries);
+  const prompt = entries[boundary];
+  if (prompt?.kind === "message" && isQuietBotPrompt(prompt.message)) return null;
   for (let index = entries.length - 1; index > boundary; index -= 1) {
     const entry = entries[index]!;
     const text =
@@ -1481,23 +1489,51 @@ function runningSubagentsAtRunTail(entries: ReadonlyArray<TimelineEntry>, runId:
   return running;
 }
 
-/** Bot memory consolidation runs in the background: only its errors and pending approvals show. */
-function withoutBotDreamingRuns(
+/**
+ * Bot memory consolidations and check-ins run in the background: only their errors and pending
+ * approvals show. A finished check-in whose last reply is a real message keeps only that reply,
+ * so the Bot reads as texting first.
+ */
+function withoutBotBackgroundRuns(
   entries: ReadonlyArray<TimelineEntry>,
   pendingApprovalRequestIds: ReadonlySet<RuntimeRequestId> | undefined,
+  activeRunId: RunId | null,
 ): ReadonlyArray<TimelineEntry> {
-  const dreamingRunIds = new Set<RunId>();
+  const backgroundRunIds = new Set<RunId>();
+  const checkInRunIds = new Set<RunId>();
   const conversationRunIds = new Set<RunId>();
+  const lastReplyByRun = new Map<RunId, TimelineMessage>();
   for (const entry of entries) {
-    if (entry.kind !== "message" || entry.message.role !== "user" || entry.message.runId === null)
-      continue;
-    (isBotDreamingMessage(entry.message.text) ? dreamingRunIds : conversationRunIds).add(
-      entry.message.runId,
-    );
+    if (entry.kind !== "message") continue;
+    const { message } = entry;
+    const runId = message.runId;
+    if (runId === null) continue;
+    if (message.role === "assistant") lastReplyByRun.set(runId, message);
+    else if (message.role !== "user") continue;
+    else if (isServerBotCheckInMessage(message)) checkInRunIds.add(runId);
+    else if (isQuietBotPrompt(message)) backgroundRunIds.add(runId);
+    else conversationRunIds.add(runId);
   }
   // A run that also carries someone's message is a conversation, never hidden.
-  for (const runId of conversationRunIds) dreamingRunIds.delete(runId);
-  if (dreamingRunIds.size === 0) return entries;
+  for (const runId of conversationRunIds) {
+    backgroundRunIds.delete(runId);
+    checkInRunIds.delete(runId);
+  }
+  if (backgroundRunIds.size === 0 && checkInRunIds.size === 0) return entries;
+  const checkInAnswerIds = new Set<MessageId>();
+  for (const runId of checkInRunIds) {
+    backgroundRunIds.add(runId);
+    const reply = lastReplyByRun.get(runId);
+    if (
+      runId !== activeRunId &&
+      reply !== undefined &&
+      !reply.streaming &&
+      reply.text.trim() !== "" &&
+      !isBotNoReplyMessage(reply.text)
+    ) {
+      checkInAnswerIds.add(reply.id);
+    }
+  }
   return entries.filter((entry) => {
     const runId =
       entry.kind === "message"
@@ -1505,7 +1541,8 @@ function withoutBotDreamingRuns(
         : entry.kind === "event"
           ? entry.projectedItem.item.runId
           : timelineEntryRunId(entry);
-    if (runId === null || !dreamingRunIds.has(runId)) return true;
+    if (runId === null || !backgroundRunIds.has(runId)) return true;
+    if (entry.kind === "message") return checkInAnswerIds.has(entry.message.id);
     if (entry.kind !== "work") return false;
     const item = entry.entry.projectedItem?.item;
     return (
@@ -1528,7 +1565,13 @@ function timelineRowEntries(
   >,
 ) {
   const visibility = input.toolCallVisibility ?? "showAll";
-  const entries = withoutBotDreamingRuns(input.timelineEntries, input.pendingApprovalRequestIds);
+  const entries = withoutBotBackgroundRuns(
+    input.timelineEntries,
+    input.pendingApprovalRequestIds,
+    input.isWorking
+      ? deriveUnsettledRunId(input.latestRun ?? null, input.runningRunId ?? null)
+      : null,
+  );
   let shown = entries;
   if (visibility === "zen") {
     const answering = input.isWorking && input.latestRun?.turnEnded !== true;

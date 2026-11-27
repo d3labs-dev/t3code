@@ -61,6 +61,7 @@ import type {
 } from "@t3tools/contracts";
 import { idleCompactionOf, isCompactionCommandMessage, RunId, ThreadId } from "@t3tools/contracts";
 import { isBotDreamingMessage } from "@t3tools/shared/botDreaming";
+import { isBotNoReplyMessage, isServerBotCheckInMessage } from "@t3tools/shared/botProactive";
 import {
   classifyToolActivity,
   collectToolFilePaths,
@@ -2311,7 +2312,8 @@ interface ThreadFeedBuild {
   readonly checkpointSummaries: ReadonlyArray<ThreadCheckpointSummary> | undefined;
   readonly foldedAnswerRunIdByMessageId: ReadonlyMap<string, RunId | null>;
   readonly delegatedChildrenByRun: ReadonlyMap<RunId, ReadonlySet<string>>;
-  readonly dreamingRunIds: ReadonlySet<RunId>;
+  readonly backgroundRunIds: ReadonlySet<RunId>;
+  readonly checkInAnswerIds: ReadonlySet<MessageId>;
   readonly feed: ReadonlyArray<ThreadFeedEntry>;
   /** Grouping is empty before `row`: the rows before it produced `feed.slice(0, feedLength)`. */
   readonly restarts: ReadonlyArray<{ readonly row: number; readonly feedLength: number }>;
@@ -2388,6 +2390,12 @@ function firstChangedIndex<T>(previous: ReadonlyArray<T>, next: ReadonlyArray<T>
   return index;
 }
 
+const LIVE_TURN_ITEM_STATUSES: ReadonlySet<OrchestrationV2TurnItem["status"]> = new Set([
+  "pending",
+  "running",
+  "waiting",
+]);
+
 export function buildThreadFeed(
   visibleTurnItems: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
   options?: {
@@ -2424,11 +2432,28 @@ export function buildThreadFeed(
   // An answer that started a later run stays a normal message at that run's position.
   const foldedAnswerRunIdByMessageId = new Map<string, RunId | null>();
   const delegatedChildrenByRun = new Map<RunId, Set<string>>();
-  const dreamingRunIds = new Set<RunId>();
+  const backgroundRunIds = new Set<RunId>();
+  const checkInRunIds = new Set<RunId>();
   const conversationRunIds = new Set<RunId>();
+  const lastReplyByRun = new Map<
+    RunId,
+    Extract<OrchestrationV2TurnItem, { readonly type: "assistant_message" }>
+  >();
+  const liveRunIds = new Set(
+    (options?.attempts ?? [])
+      .filter((attempt) => attempt.status === "pending" || attempt.status === "running")
+      .map((attempt) => attempt.runId),
+  );
   for (const { item } of visibleTurnItems) {
+    if (item.runId !== null && LIVE_TURN_ITEM_STATUSES.has(item.status)) {
+      liveRunIds.add(item.runId);
+    }
     if (item.type === "user_message" && item.runId !== null) {
-      (isBotDreamingMessage(item.text) ? dreamingRunIds : conversationRunIds).add(item.runId);
+      if (isBotDreamingMessage(item.text)) backgroundRunIds.add(item.runId);
+      else if (isServerBotCheckInMessage({ role: "user", ...item })) checkInRunIds.add(item.runId);
+      else conversationRunIds.add(item.runId);
+    } else if (item.type === "assistant_message" && item.runId !== null) {
+      lastReplyByRun.set(item.runId, item);
     } else if (item.type === "user_input_request" && item.questionAnswer) {
       foldedAnswerRunIdByMessageId.set(`async-answer:${item.questionAnswer.requestId}`, item.runId);
     } else if (item.type === "subagent" && item.origin === "app_owned" && item.runId !== null) {
@@ -2438,7 +2463,26 @@ export function buildThreadFeed(
     }
   }
   // A run that also carries someone's message is a conversation, never hidden.
-  for (const runId of conversationRunIds) dreamingRunIds.delete(runId);
+  for (const runId of conversationRunIds) {
+    backgroundRunIds.delete(runId);
+    checkInRunIds.delete(runId);
+  }
+  // A finished check-in whose last reply is a real message keeps only that reply, so the Bot
+  // reads as texting first.
+  const checkInAnswerIds = new Set<MessageId>();
+  for (const runId of checkInRunIds) {
+    backgroundRunIds.add(runId);
+    const reply = lastReplyByRun.get(runId);
+    if (
+      !liveRunIds.has(runId) &&
+      reply !== undefined &&
+      !reply.streaming &&
+      reply.text.trim() !== "" &&
+      !isBotNoReplyMessage(reply.text)
+    ) {
+      checkInAnswerIds.add(reply.messageId);
+    }
+  }
 
   const cache = options?.cache;
   const previous = cache?.feedBuild ?? null;
@@ -2451,7 +2495,8 @@ export function buildThreadFeed(
     checkpointSummariesEqual(previous.checkpointSummaries, options?.checkpointSummaries) &&
     mapsEqual(previous.foldedAnswerRunIdByMessageId, foldedAnswerRunIdByMessageId) &&
     setMapsEqual(previous.delegatedChildrenByRun, delegatedChildrenByRun) &&
-    setsEqual(previous.dreamingRunIds, dreamingRunIds)
+    setsEqual(previous.backgroundRunIds, backgroundRunIds) &&
+    setsEqual(previous.checkInAnswerIds, checkInAnswerIds)
   ) {
     const firstChanged = firstChangedIndex(previous.rows, visibleTurnItems);
     restartIndex = previous.restarts.length - 1;
@@ -2482,11 +2527,13 @@ export function buildThreadFeed(
     const item = row.item;
     if (turnItemIsWorkspacePreparation(item) && !item.deferredWork) continue;
     if (item.type === "todo_list" || item.type === "checkpoint") continue;
-    // Bot memory consolidation runs in the background: only its errors and pending requests show.
+    // Bot consolidations and check-ins run in the background: only errors, pending requests and a
+    // check-in's answer show.
     if (
       item.runId !== null &&
-      dreamingRunIds.has(item.runId) &&
+      backgroundRunIds.has(item.runId) &&
       item.type !== "error" &&
+      !(item.type === "assistant_message" && checkInAnswerIds.has(item.messageId)) &&
       !(
         (item.type === "approval_request" || item.type === "user_input_request") &&
         (item.status === "pending" || item.status === "waiting")
@@ -2690,7 +2737,8 @@ export function buildThreadFeed(
             checkpointSummaries: options?.checkpointSummaries,
             foldedAnswerRunIdByMessageId,
             delegatedChildrenByRun,
-            dreamingRunIds,
+            backgroundRunIds,
+            checkInAnswerIds,
             feed,
             restarts,
           };

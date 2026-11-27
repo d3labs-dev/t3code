@@ -6,11 +6,13 @@ import {
   botKey,
 } from "@t3tools/client-runtime/state/bots";
 import {
+  BOT_HEARTBEAT_SOFT_CAP_BYTES,
   BOT_MEMORY_SOFT_CAP_BYTES,
   BOT_NOW_SOFT_CAP_BYTES,
   BotId,
   type BotDocuments,
   type BotExchange,
+  type BotProactiveConfig,
   type BotRecord,
   type BotUpdateInput,
   EnvironmentId,
@@ -59,7 +61,8 @@ type EditableBotField =
   | "color"
   | "isPrimary"
   | "muted"
-  | "modelSelection";
+  | "modelSelection"
+  | "proactive";
 
 type BotRecordPatch = Partial<Pick<BotRecord, EditableBotField>>;
 type BotDocumentName = keyof BotDocuments;
@@ -71,25 +74,47 @@ const DOCUMENTS = [
     file: "SOUL.md",
     placeholder: "Who is this Bot? How should it think, talk and decide?",
     softCapBytes: null,
+    primaryOnly: false,
   },
   {
     id: "now",
     file: "NOW.md",
     placeholder: "Active threads, open commitments, and next actions (kept concise).",
     softCapBytes: BOT_NOW_SOFT_CAP_BYTES,
+    primaryOnly: false,
   },
   {
     id: "memory",
     file: "MEMORY.md",
     placeholder: "What should this Bot remember between conversations?",
     softCapBytes: BOT_MEMORY_SOFT_CAP_BYTES,
+    primaryOnly: false,
+  },
+  {
+    id: "heartbeat",
+    file: "HEARTBEAT.md",
+    placeholder: "What should this Bot keep an eye on during proactive check-ins?",
+    softCapBytes: BOT_HEARTBEAT_SOFT_CAP_BYTES,
+    primaryOnly: true,
   },
 ] as const satisfies ReadonlyArray<{
   id: BotDocumentName;
   file: string;
   placeholder: string;
   softCapBytes: number | null;
+  primaryOnly: boolean;
 }>;
+
+const PROACTIVE_INTERVALS = [
+  { value: 15, label: "15m" },
+  { value: 30, label: "30m" },
+  { value: 60, label: "1h" },
+  { value: 120, label: "2h" },
+] as const;
+
+const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const localTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 const formatKilobytes = (bytes: number) => String(Math.ceil((bytes * 10) / 1024) / 10);
 
@@ -514,6 +539,13 @@ function BotSettingsSheetBody(props: {
                   disabled={!editable}
                   onValueChange={(value) => setField({ isPrimary: value })}
                 />
+                {shown.isPrimary ? (
+                  <ProactiveCheckInRows
+                    proactive={shown.proactive}
+                    editable={editable}
+                    onChange={(proactive) => setField({ proactive })}
+                  />
+                ) : null}
                 <View className="h-px bg-border-subtle" />
                 <ListToggleRow
                   label="Muted"
@@ -570,7 +602,7 @@ function BotSettingsSheetBody(props: {
                   </View>
                 )
               ) : (
-                DOCUMENTS.map((doc) => {
+                DOCUMENTS.filter((doc) => shown.isPrimary || !doc.primaryOnly).map((doc) => {
                   const value = documentDrafts[doc.id] ?? savedDocuments[doc.id];
                   const isDirty = dirtyDocuments.some((item) => item.id === doc.id);
                   const bytes = new TextEncoder().encode(value).length;
@@ -663,6 +695,98 @@ function BotSettingsSheetBody(props: {
         </ScrollView>
       </ScreenContent>
     </KeyboardAvoidingView>
+  );
+}
+
+function ProactiveCheckInRows(props: {
+  readonly proactive: BotProactiveConfig;
+  readonly editable: boolean;
+  readonly onChange: (proactive: BotProactiveConfig) => void;
+}) {
+  const { proactive, editable, onChange } = props;
+  return (
+    <>
+      <View className="h-px bg-border-subtle" />
+      <ListToggleRow
+        label="Proactive check-ins"
+        description="Periodically check NOW.md and HEARTBEAT.md in the background and message you only when something needs attention."
+        value={proactive.enabled}
+        disabled={!editable}
+        onValueChange={(enabled) =>
+          onChange({
+            ...proactive,
+            enabled,
+            timezone:
+              enabled && proactive.timezone === "UTC" ? localTimeZone() : proactive.timezone,
+          })
+        }
+      />
+      {proactive.enabled ? (
+        <View className="gap-3 border-t border-border-subtle px-4 py-3">
+          <SegmentedControl
+            variant="card"
+            size="compact"
+            selected={proactive.intervalMinutes}
+            options={PROACTIVE_INTERVALS.map((option) => ({
+              value: option.value,
+              label: option.label,
+              accessibilityLabel: `Check in every ${option.label}`,
+            }))}
+            onSelect={(intervalMinutes) => {
+              if (editable) onChange({ ...proactive, intervalMinutes });
+            }}
+          />
+          <View className="flex-row items-center gap-2">
+            <Text className="text-sm text-foreground-muted">Active</Text>
+            <ClockTimeInput
+              label="Active hours start"
+              value={proactive.activeHoursStart}
+              editable={editable}
+              onChange={(activeHoursStart) => onChange({ ...proactive, activeHoursStart })}
+            />
+            <Text className="text-sm text-foreground-muted">to</Text>
+            <ClockTimeInput
+              label="Active hours end"
+              value={proactive.activeHoursEnd}
+              editable={editable}
+              onChange={(activeHoursEnd) => onChange({ ...proactive, activeHoursEnd })}
+            />
+          </View>
+          <Text textRole="caption" className="text-foreground-muted">
+            {proactive.timezone}
+          </Text>
+        </View>
+      ) : null}
+    </>
+  );
+}
+
+function ClockTimeInput(props: {
+  readonly label: string;
+  readonly value: string;
+  readonly editable: boolean;
+  readonly onChange: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState<{ readonly base: string; readonly text: string } | null>(null);
+  const text = draft !== null && draft.base === props.value ? draft.text : props.value;
+  return (
+    <TextInput
+      accessibilityLabel={props.label}
+      placeholder="HH:MM"
+      value={text}
+      editable={props.editable}
+      keyboardType="numbers-and-punctuation"
+      maxLength={5}
+      onChangeText={(next) => {
+        if (CLOCK_TIME.test(next)) {
+          setDraft(null);
+          props.onChange(next);
+        } else {
+          setDraft({ base: props.value, text: next });
+        }
+      }}
+      className="min-h-10 w-20 text-center font-mono text-sm"
+    />
   );
 }
 

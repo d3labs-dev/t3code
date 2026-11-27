@@ -39,6 +39,7 @@ import {
 } from "./MessagesTimeline.logic";
 import { workEntryIconName } from "./TimelineWorkEntryRow.logic";
 import { BOT_DREAMING_PROMPT } from "@t3tools/shared/botDreaming";
+import { buildBotCheckInHandoffPrompt } from "@t3tools/shared/botProactive";
 
 describe("resolveAssistantMessageCopyState", () => {
   it("copies the rendered representation of Codex directives", () => {
@@ -3217,6 +3218,81 @@ describe("v2 run and attempt history", () => {
     expect(rows([...chat, ...dream, steered])).toEqual(
       expect.arrayContaining(["steered", "no-reply"]),
     );
+  });
+  it("hides a Bot check-in prompt and shows only a real reply", () => {
+    const at = "2026-01-01T00:00:00Z";
+    const checkInRun = RunId.make("check-in");
+    const prompt = buildBotCheckInHandoffPrompt("- PR #286 is green");
+    const message = (
+      id: string,
+      role: "user" | "assistant",
+      text: string,
+      sender: "server" | "web" = "server",
+      streaming = false,
+    ): TimelineEntry => ({
+      id,
+      kind: "message",
+      createdAt: at,
+      message: {
+        id: MessageId.make(id),
+        role,
+        text,
+        runId: checkInRun,
+        createdBy: sender === "server" ? "agent" : "user",
+        creationSource: sender,
+        createdAt: at,
+        updatedAt: at,
+        streaming,
+      },
+    });
+    const work = (id: string, tone: "tool" | "error"): TimelineEntry => ({
+      id,
+      kind: "work",
+      createdAt: at,
+      entry: {
+        id,
+        createdAt: at,
+        runId: checkInRun,
+        label: id,
+        tone,
+        itemType: tone === "error" ? "error" : "file_change",
+      },
+    });
+    const rows = (timelineEntries: ReadonlyArray<TimelineEntry>, running = false) =>
+      deriveMessagesTimelineRows({
+        timelineEntries,
+        isWorking: running,
+        runningRunId: running ? checkInRun : null,
+        turnDiffSummaries: [],
+        supportsConversationRollback: false,
+        toolCallVisibility: "zen",
+      }).map((row) => row.id);
+    const checkIn = message("check-in", "user", prompt);
+    const preamble = message("preamble", "assistant", "Checking PR...");
+
+    expect(rows([checkIn, work("read", "tool")])).toEqual([]);
+    expect(rows([checkIn, message("no-reply", "assistant", "NO_REPLY")])).toEqual([]);
+    expect(rows([checkIn, work("read", "tool"), work("failed", "error")])).toEqual(["failed"]);
+    expect(rows([checkIn, message("reply", "assistant", "Heads up — PR #286 is green.")])).toEqual([
+      "reply",
+    ]);
+    expect(rows([checkIn, preamble], true)).toEqual(["working-indicator-row", "live-activity-row"]);
+    expect(liveAnswerPreview([checkIn, preamble])).toBeNull();
+    expect(
+      rows([checkIn, preamble, message("streaming", "assistant", "PR #286", "server", true)]),
+    ).toEqual([]);
+    expect(rows([checkIn, preamble, message("no-reply", "assistant", "NO_REPLY")])).toEqual([]);
+    expect(
+      rows([
+        checkIn,
+        preamble,
+        work("read", "tool"),
+        message("final", "assistant", "PR #286 is green."),
+      ]),
+    ).toEqual(["final"]);
+    expect(
+      rows([message("typed", "user", prompt, "web"), message("answer", "assistant", "NO_REPLY")]),
+    ).toEqual(["typed", "answer"]);
   });
   it("collapses only output from a superseded V2 attempt within the active logical run", () => {
     const runId = "run-steered" as never;

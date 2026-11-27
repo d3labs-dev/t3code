@@ -12,6 +12,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { BOT_DREAMING_PROMPT } from "@t3tools/shared/botDreaming";
+import { buildBotCheckInHandoffPrompt } from "@t3tools/shared/botProactive";
 import * as Effect from "effect/Effect";
 
 import { ClaudeProviderCapabilitiesV2 } from "./Adapters/ClaudeAdapterV2.ts";
@@ -259,6 +260,15 @@ it.each([
   [
     "a Bot's memory consolidation",
     { text: BOT_DREAMING_PROMPT, role: "user", createdBy: "agent", creationSource: "server" },
+  ],
+  [
+    "a Bot's proactive check-in",
+    {
+      text: buildBotCheckInHandoffPrompt("- PR #286 is green"),
+      role: "user",
+      createdBy: "agent",
+      creationSource: "server",
+    },
   ],
 ])("queues a steer sent while %s runs", (_, message) => {
   const projection = dispatchProjection(baseCapabilities);

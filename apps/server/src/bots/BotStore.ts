@@ -5,8 +5,10 @@ import {
   type BotExchangeStatus,
   BotId,
   BotMcpServerConfig,
+  BotProactiveConfig,
   BotRecord,
   BotSlug,
+  DEFAULT_BOT_PROACTIVE_CONFIG,
   IsoDateTime,
   ModelSelection,
   RunId,
@@ -47,6 +49,7 @@ const BotDbRow = Schema.Struct({
   mcpServerNames: BotNamesJson,
   customMcpServers: Schema.fromJsonString(Schema.Record(TrimmedNonEmptyString, BotMcpServerConfig)),
   skills: BotNamesJson,
+  proactive: Schema.fromJsonString(BotProactiveConfig),
 });
 
 const ExchangeDbRow = Schema.Struct({
@@ -70,6 +73,7 @@ const BOT_COLUMNS = `
   custom_mcp_servers_json AS "customMcpServers",
   skills_json AS "skills",
   system_prompt_mode AS "systemPromptMode",
+  COALESCE(proactive_json, '${JSON.stringify(DEFAULT_BOT_PROACTIVE_CONFIG)}') AS "proactive",
   muted,
   thread_id AS "threadId",
   folder_path AS "folderPath",
@@ -101,7 +105,7 @@ export class BotStore extends Context.Service<
   BotStore,
   {
     readonly insert: (bot: BotRecord) => Effect.Effect<void, BotStoreError>;
-    /** Replaces every column except the id; a primary bot clears the others in the same write. */
+    /** Replaces every record column; a primary bot clears the others in the same write. */
     readonly update: (bot: BotRecord) => Effect.Effect<void, BotStoreError>;
     /** Cancels pending exchanges that involve the bot, then removes it. */
     readonly delete: (botId: BotId, resolvedAt: IsoDateTime) => Effect.Effect<void, BotStoreError>;
@@ -110,6 +114,16 @@ export class BotStore extends Context.Service<
     readonly findByThreadId: (
       threadId: ThreadId,
     ) => Effect.Effect<Option.Option<BotRecord>, BotStoreError>;
+    readonly findByHeartbeatThreadId: (
+      threadId: ThreadId,
+    ) => Effect.Effect<Option.Option<BotRecord>, BotStoreError>;
+    readonly getHeartbeatThreadId: (
+      botId: BotId,
+    ) => Effect.Effect<Option.Option<ThreadId>, BotStoreError>;
+    readonly setHeartbeatThreadId: (input: {
+      readonly botId: BotId;
+      readonly threadId: ThreadId | null;
+    }) => Effect.Effect<void, BotStoreError>;
     readonly list: (options: {
       readonly includeArchived: boolean;
     }) => Effect.Effect<ReadonlyArray<BotRecord>, BotStoreError>;
@@ -168,6 +182,8 @@ const setup = Effect.fn("BotStore.setup")(function* () {
       custom_mcp_servers_json TEXT NOT NULL,
       skills_json TEXT NOT NULL,
       system_prompt_mode TEXT NOT NULL,
+      proactive_json TEXT,
+      heartbeat_thread_id TEXT,
       muted INTEGER NOT NULL DEFAULT 0,
       thread_id TEXT NOT NULL,
       folder_path TEXT NOT NULL,
@@ -178,7 +194,20 @@ const setup = Effect.fn("BotStore.setup")(function* () {
     )
   `;
   yield* sql`CREATE UNIQUE INDEX IF NOT EXISTS bots_slug ON bots (slug)`;
+  const botColumnNames = new Set(
+    (yield* sql<{ readonly name: string }>`PRAGMA table_info(bots)`).map(({ name }) => name),
+  );
+  if (!botColumnNames.has("proactive_json")) {
+    yield* sql`ALTER TABLE bots ADD COLUMN proactive_json TEXT`;
+  }
+  if (!botColumnNames.has("heartbeat_thread_id")) {
+    yield* sql`ALTER TABLE bots ADD COLUMN heartbeat_thread_id TEXT`;
+  }
   yield* sql`CREATE UNIQUE INDEX IF NOT EXISTS bots_thread_id ON bots (thread_id)`;
+  yield* sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS bots_heartbeat_thread_id
+    ON bots (heartbeat_thread_id) WHERE heartbeat_thread_id IS NOT NULL
+  `;
   yield* sql`
     CREATE TABLE IF NOT EXISTS bot_exchanges (
       exchange_id TEXT PRIMARY KEY,
@@ -226,6 +255,7 @@ const make = Effect.gen(function* () {
       botId: Schema.optional(BotId),
       slug: Schema.optional(BotSlug),
       threadId: Schema.optional(ThreadId),
+      heartbeatThreadId: Schema.optional(ThreadId),
       includeArchived: Schema.Boolean,
     }),
     Result: BotDbRow,
@@ -237,8 +267,21 @@ const make = Effect.gen(function* () {
         ...(request.botId === undefined ? [] : [sql`bot_id = ${request.botId}`]),
         ...(request.slug === undefined ? [] : [sql`slug = ${request.slug}`]),
         ...(request.threadId === undefined ? [] : [sql`thread_id = ${request.threadId}`]),
+        ...(request.heartbeatThreadId === undefined
+          ? []
+          : [sql`heartbeat_thread_id = ${request.heartbeatThreadId}`]),
       ])}
       ORDER BY created_at ASC, rowid ASC
+    `,
+  });
+
+  const selectHeartbeatThreadId = SqlSchema.findAll({
+    Request: BotId,
+    Result: Schema.Struct({ heartbeatThreadId: ThreadId }),
+    execute: (botId) => sql`
+      SELECT heartbeat_thread_id AS "heartbeatThreadId"
+      FROM bots
+      WHERE bot_id = ${botId} AND heartbeat_thread_id IS NOT NULL
     `,
   });
 
@@ -321,6 +364,7 @@ const make = Effect.gen(function* () {
     custom_mcp_servers_json: encoded.customMcpServers,
     skills_json: encoded.skills,
     system_prompt_mode: encoded.systemPromptMode,
+    proactive_json: encoded.proactive,
     muted: encoded.muted,
     thread_id: encoded.threadId,
     folder_path: encoded.folderPath,
@@ -436,6 +480,27 @@ const make = Effect.gen(function* () {
     return yield* findOne({ threadId, includeArchived: true });
   }, mapError("findByThreadId"));
 
+  const findByHeartbeatThreadId: BotStore["Service"]["findByHeartbeatThreadId"] = Effect.fn(
+    "BotStore.findByHeartbeatThreadId",
+  )(function* (heartbeatThreadId) {
+    return yield* findOne({ heartbeatThreadId, includeArchived: true });
+  }, mapError("findByHeartbeatThreadId"));
+
+  const getHeartbeatThreadId: BotStore["Service"]["getHeartbeatThreadId"] = Effect.fn(
+    "BotStore.getHeartbeatThreadId",
+  )(function* (botId) {
+    const rows = yield* selectHeartbeatThreadId(botId).pipe(NodeSqliteClient.readOnly);
+    return Option.fromUndefinedOr(rows[0]?.heartbeatThreadId);
+  }, mapError("getHeartbeatThreadId"));
+
+  const setHeartbeatThreadId: BotStore["Service"]["setHeartbeatThreadId"] = Effect.fn(
+    "BotStore.setHeartbeatThreadId",
+  )(function* (input) {
+    yield* sql`
+      UPDATE bots SET heartbeat_thread_id = ${input.threadId} WHERE bot_id = ${input.botId}
+    `;
+  }, mapError("setHeartbeatThreadId"));
+
   const list: BotStore["Service"]["list"] = Effect.fn("BotStore.list")(function* (options) {
     return yield* selectBots({ includeArchived: options.includeArchived }).pipe(
       NodeSqliteClient.readOnly,
@@ -468,6 +533,9 @@ const make = Effect.gen(function* () {
     get,
     findBySlug,
     findByThreadId,
+    findByHeartbeatThreadId,
+    getHeartbeatThreadId,
+    setHeartbeatThreadId,
     list,
     updateHopCount,
     insertExchange,

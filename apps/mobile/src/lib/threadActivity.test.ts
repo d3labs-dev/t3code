@@ -21,6 +21,7 @@ import { deriveThreadCheckpointSummaries } from "@t3tools/client-runtime/state/t
 import { summarizeToolGroup } from "@t3tools/client-runtime/work-log/presentation";
 import { getReviewSectionIdForCheckpoint } from "../features/review/reviewModel";
 import { BOT_DREAMING_PROMPT } from "@t3tools/shared/botDreaming";
+import { buildBotCheckInHandoffPrompt } from "@t3tools/shared/botProactive";
 import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -510,6 +511,60 @@ describe("buildThreadFeed", () => {
     expect(feedIds([...chat, ...dream, steered])).toEqual(
       expect.arrayContaining(["dream-reply", "steered-into-dream"]),
     );
+  });
+
+  it("hides a Bot check-in prompt and shows only a real reply", () => {
+    const checkInRunId = RunId.make("check-in-run");
+    const prompt: OrchestrationV2TurnItem = {
+      ...userMessage("2026-06-20T00:00:04.000Z"),
+      id: TurnItemId.make("check-in-prompt"),
+      runId: checkInRunId,
+      messageId: MessageId.make("check-in-prompt"),
+      createdBy: "agent",
+      creationSource: "server",
+      text: buildBotCheckInHandoffPrompt("- PR #286 is green"),
+    };
+    const read: OrchestrationV2TurnItem = {
+      ...command("2026-06-20T00:00:05.000Z"),
+      id: TurnItemId.make("check-in-read"),
+      runId: checkInRunId,
+    };
+    const reply = (text: string): OrchestrationV2TurnItem => ({
+      ...assistantMessage("2026-06-20T00:00:06.000Z"),
+      id: TurnItemId.make("check-in-reply"),
+      runId: checkInRunId,
+      messageId: MessageId.make("check-in-reply"),
+      text,
+    });
+    const preamble: OrchestrationV2TurnItem = {
+      ...assistantMessage("2026-06-20T00:00:04.500Z"),
+      id: TurnItemId.make("check-in-preamble"),
+      runId: checkInRunId,
+      messageId: MessageId.make("check-in-preamble"),
+      text: "Checking PR...",
+    };
+    const runningRead: OrchestrationV2TurnItem = { ...read, status: "running" };
+    const feedIds = (items: ReadonlyArray<OrchestrationV2TurnItem>) =>
+      buildThreadFeed(items.map((item, index) => projected(item, index))).flatMap((entry) =>
+        entry.type === "activity-group"
+          ? entry.activities.map((activity) => activity.projectedItem.item.id)
+          : [entry.id],
+      );
+
+    expect(feedIds([prompt, read])).toEqual([]);
+    expect(feedIds([prompt, read, reply("NO_REPLY")])).toEqual([]);
+    expect(feedIds([prompt, reply("Heads up — PR #286 is green.")])).toEqual(["check-in-reply"]);
+    expect(feedIds([prompt, preamble, runningRead])).toEqual([]);
+    expect(feedIds([prompt, preamble, read, reply("NO_REPLY")])).toEqual([]);
+    expect(feedIds([prompt, preamble, read, reply("PR #286 is green.")])).toEqual([
+      "check-in-reply",
+    ]);
+    const typed: OrchestrationV2TurnItem = {
+      ...prompt,
+      createdBy: "user",
+      creationSource: "mobile",
+    };
+    expect(feedIds([typed, reply("NO_REPLY")])).toEqual(["check-in-prompt", "check-in-reply"]);
   });
 
   it("keeps async answers in question history instead of user bubbles", () => {

@@ -25,6 +25,7 @@ import {
   type BotStatus,
   type BotUpdateInput,
   CommandId,
+  DEFAULT_BOT_PROACTIVE_CONFIG,
   isCompactionCommandMessage,
   MessageId,
   type OrchestrationV2ConversationMessage,
@@ -38,6 +39,7 @@ import {
 } from "@t3tools/contracts";
 import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
 import { isBotDreamingMessage } from "@t3tools/shared/botDreaming";
+import { isServerBotCheckInMessage } from "@t3tools/shared/botProactive";
 import { latestRootProviderFailure } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -344,6 +346,7 @@ const make = Effect.gen(function* () {
       customMcpServers: input.customMcpServers ?? {},
       skills: input.skills ?? [],
       systemPromptMode: input.systemPromptMode ?? "custom",
+      proactive: input.proactive ?? DEFAULT_BOT_PROACTIVE_CONFIG,
       muted: false,
       threadId: launched.threadId,
       folderPath,
@@ -358,7 +361,15 @@ const make = Effect.gen(function* () {
   }, rosterLock.withPermits(1));
 
   const update: BotService["Service"]["update"] = Effect.fn("BotService.update")(function* (input) {
-    const { botId, slug: requestedSlug, muted, archived, documents, ...editable } = input;
+    const {
+      botId,
+      slug: requestedSlug,
+      muted,
+      archived,
+      proactive,
+      documents,
+      ...editable
+    } = input;
     const bot = yield* requireBot(botId);
     const now = yield* nowIso;
 
@@ -390,6 +401,7 @@ const make = Effect.gen(function* () {
       ...bot,
       ...editable,
       slug: nextSlug,
+      proactive: proactive ?? bot.proactive,
       ...(muted === undefined ? {} : { muted }),
       archivedAt:
         archived === undefined ? bot.archivedAt : archived ? (bot.archivedAt ?? now) : null,
@@ -450,23 +462,31 @@ const make = Effect.gen(function* () {
   const deleteBot: BotService["Service"]["delete"] = Effect.fn("BotService.delete")(
     function* (input) {
       const bot = yield* requireBot(input.botId);
+      const scoutThreadId = yield* store
+        .getHeartbeatThreadId(bot.id)
+        .pipe(Effect.mapError(failed("Couldn't delete the Bot.")));
       yield* store
         .delete(bot.id, yield* nowIso)
         .pipe(Effect.mapError(failed("Couldn't delete the Bot.")));
-      yield* threads
-        .dispatch({
-          type: "thread.archive",
-          commandId: CommandId.make(`bot-delete:${bot.id}`),
-          threadId: bot.threadId,
-        })
-        .pipe(
-          Effect.catch((cause) =>
-            Effect.logWarning("Deleted a Bot without archiving its thread.", {
-              threadId: bot.threadId,
-              cause,
-            }),
-          ),
-        );
+      const threadIds = [bot.threadId, ...Option.toArray(scoutThreadId)];
+      for (const threadId of threadIds) {
+        yield* threads
+          .dispatch({
+            type: "thread.archive",
+            commandId: CommandId.make(
+              threadId === bot.threadId ? `bot-delete:${bot.id}` : `bot-delete:${bot.id}:scout`,
+            ),
+            threadId,
+          })
+          .pipe(
+            Effect.catch((cause) =>
+              Effect.logWarning("Deleted a Bot without archiving its thread.", {
+                threadId,
+                cause,
+              }),
+            ),
+          );
+      }
       yield* notifyChanged;
       return { botId: bot.id };
     },
@@ -763,7 +783,13 @@ const make = Effect.gen(function* () {
   // The reactor sees every domain event; these handlers stay untraced and return before any read
   // for the common events they ignore.
   const onUserMessage = Effect.fnUntraced(function* (message: OrchestrationV2ConversationMessage) {
-    if (isBotDreamingMessage(message.text) || isCompactionCommandMessage(message)) return;
+    if (
+      isBotDreamingMessage(message.text) ||
+      isServerBotCheckInMessage(message) ||
+      isCompactionCommandMessage(message)
+    ) {
+      return;
+    }
     if (message.createdBy === "user" && message.senderThreadId === undefined) {
       const bot = yield* store.findByThreadId(message.threadId);
       if (Option.isSome(bot) && bot.value.hopCount !== 0) {

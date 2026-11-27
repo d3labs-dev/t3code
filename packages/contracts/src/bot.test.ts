@@ -10,6 +10,7 @@ import {
   BotRecord,
   BotSlug,
   BotUpdateInput,
+  DEFAULT_BOT_PROACTIVE_CONFIG,
   slugifyBotName,
 } from "./bot.ts";
 
@@ -105,6 +106,13 @@ const encodedRecord = {
   customMcpServers: { d3labs: { type: "http", url: "https://mcp.d3labs.test" } },
   skills: [],
   systemPromptMode: "custom",
+  proactive: {
+    enabled: true,
+    intervalMinutes: 60,
+    activeHoursStart: "09:00",
+    activeHoursEnd: "18:30",
+    timezone: "Europe/Madrid",
+  },
   hopCount: 2,
   archivedAt: null,
   createdAt: "2026-11-26T00:00:00.000Z",
@@ -114,6 +122,12 @@ const encodedRecord = {
 describe("BotRecord", () => {
   it("survives a persistence round trip", () => {
     expect(encodeRecord(decodeRecord(encodedRecord))).toEqual(encodedRecord);
+  });
+
+  it("decodes an older server's record without proactive settings as opted out", () => {
+    const { proactive: _proactive, ...olderRecord } = encodedRecord;
+    expect(decodeRecord(olderRecord).proactive).toEqual(DEFAULT_BOT_PROACTIVE_CONFIG);
+    expect(DEFAULT_BOT_PROACTIVE_CONFIG.enabled).toBe(false);
   });
 });
 
@@ -166,18 +180,21 @@ describe("BotListResult", () => {
 });
 
 describe("BotDocuments", () => {
-  it("decodes an older server's documents without NOW.md as an empty now", () => {
+  it("decodes an older server's documents without NOW.md or HEARTBEAT.md as empty", () => {
     expect(decodeDocuments({ soul: "a", memory: "b" })).toEqual({
       soul: "a",
       now: "",
       memory: "b",
+      heartbeat: "",
     });
   });
 
-  it("leaves unpatched documents out of an update so NOW.md is not wiped", () => {
-    const { documents } = decodeUpdateInput({ botId: "bot-1", documents: { soul: "a" } });
-    expect(documents).toEqual({ soul: "a" });
-    expect(documents?.now).toBeUndefined();
+  it("leaves unpatched documents and proactive settings out of an update", () => {
+    const update = decodeUpdateInput({ botId: "bot-1", documents: { soul: "a" } });
+    expect(update.documents).toEqual({ soul: "a" });
+    expect(update.documents?.now).toBeUndefined();
+    expect(update.documents?.heartbeat).toBeUndefined();
+    expect(update.proactive).toBeUndefined();
   });
 });
 

@@ -1,9 +1,7 @@
 /**
- * The relay's Android delivery rules, ported from infra/relay/src/agentActivity
- * (agentActivityAggregate, agentActivityAlerts, agentActivityPayloads,
- * fcmPayloads and FcmDeliveries) so this server can push the same data map
- * itself. The native handler in apps/mobile/modules/t3-agent-notifications
- * reads these keys; keep them in step with the relay's.
+ * The relay's Android delivery rules, ported from infra/relay/src/agentActivity.
+ * apps/mobile/modules/t3-agent-notifications reads these keys; keep them in step
+ * with the relay's.
  */
 import type {
   RelayAgentActivityAggregateRow,
@@ -64,9 +62,15 @@ function isFreshTerminalNotification(updatedAt: string, nowMs: number): boolean 
   return !Number.isNaN(updatedAtMs) && nowMs - updatedAtMs <= TERMINAL_NOTIFICATION_FRESHNESS_MS;
 }
 
+/** Counts and cuts by code point, so an emoji is never split into a lone surrogate. */
 function truncateText(value: string, maxLength: number): string {
-  const trimmed = value.trim();
-  return trimmed.length <= maxLength ? trimmed : trimmed.slice(0, maxLength - 3).trimEnd() + "...";
+  const characters = Array.from(value.trim());
+  return characters.length <= maxLength
+    ? characters.join("")
+    : characters
+        .slice(0, maxLength - 3)
+        .join("")
+        .trimEnd() + "...";
 }
 
 function sanitizeDeepLink(value: string): string {
@@ -189,11 +193,15 @@ function alertAllowedForPhase(
   }
 }
 
+/** A finished thread's reply text, which its completion alert shows in place of its status. */
+type AlertBodyByThread = ReadonlyMap<string, string>;
+
 interface TransitionInput {
   readonly previousAggregate: RelayAgentActivityAggregateState;
   readonly nextAggregate: RelayAgentActivityAggregateState;
   readonly preferences: RelayAgentAwarenessPreferences;
   readonly nowMs: number;
+  readonly alertBodyByThread?: AlertBodyByThread | undefined;
 }
 
 function attentionTransitionRows(input: TransitionInput) {
@@ -248,11 +256,19 @@ function alertIdentity(row: Pick<RelayAgentActivityState, "environmentId" | "thr
   return [row.environmentId, row.threadId];
 }
 
-function singleRowAlert(row: RelayAgentActivityAggregateRow, identity: string): AndroidAlert {
+function singleRowAlert(
+  row: RelayAgentActivityAggregateRow,
+  identity: string,
+  alertBodyByThread: AlertBodyByThread | undefined,
+): AndroidAlert {
+  const reply = row.phase === "completed" ? alertBodyByThread?.get(row.threadId)?.trim() : "";
   return {
     alert_id: identity,
     alert_title: truncateText(row.threadTitle, MAX_SUMMARY_TEXT_LENGTH),
-    alert_body: truncateText(`${row.status}: ${row.projectTitle}`, MAX_SUMMARY_TEXT_LENGTH),
+    alert_body: truncateText(
+      reply || `${row.status}: ${row.projectTitle}`,
+      MAX_SUMMARY_TEXT_LENGTH,
+    ),
     alert_path: sanitizeDeepLink(row.deepLink),
   };
 }
@@ -262,6 +278,7 @@ function androidAlertForState(input: {
   readonly state: RelayAgentActivityState;
   readonly preferences: RelayAgentAwarenessPreferences;
   readonly nowMs: number;
+  readonly alertBodyByThread: AlertBodyByThread | undefined;
 }): AndroidAlert | null {
   const { state, preferences, nowMs } = input;
   if (
@@ -274,6 +291,7 @@ function androidAlertForState(input: {
   return singleRowAlert(
     aggregateRowForState(state),
     JSON.stringify([...alertIdentity(state), state.phase, state.updatedAt]),
+    input.alertBodyByThread,
   );
 }
 
@@ -289,6 +307,7 @@ function androidAlertForAggregate(input: TransitionInput): AndroidAlert | null {
     return singleRowAlert(
       first,
       JSON.stringify([...alertIdentity(first), first.phase, first.updatedAt]),
+      input.alertBodyByThread,
     );
   }
   const hero = input.nextAggregate.activities.toSorted(
@@ -405,8 +424,10 @@ export function deliveryForDevice(input: {
   readonly aggregate: RelayAgentActivityAggregateState | null;
   readonly changedState: RelayAgentActivityState | null;
   readonly nowMs: number;
+  readonly alertBodyByThread?: AlertBodyByThread;
 }): DeviceDelivery | null {
-  const { preferences, previousAggregate, aggregate, changedState, nowMs } = input;
+  const { preferences, previousAggregate, aggregate, changedState, nowMs, alertBodyByThread } =
+    input;
   let alert: AndroidAlert | null = null;
   if (changedState !== null && preferences.notificationsEnabled) {
     if (preferences.liveActivitiesEnabled && previousAggregate !== null && aggregate !== null) {
@@ -415,9 +436,10 @@ export function deliveryForDevice(input: {
         nextAggregate: aggregate,
         preferences,
         nowMs,
+        alertBodyByThread,
       });
     } else if (!isExpiredAgentActivityState(changedState, nowMs)) {
-      alert = androidAlertForState({ state: changedState, preferences, nowMs });
+      alert = androidAlertForState({ state: changedState, preferences, nowMs, alertBodyByThread });
     }
   }
   const displayedAggregate =

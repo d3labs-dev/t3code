@@ -1,12 +1,18 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
+  BotId,
+  BotSlug,
+  type BotRecord,
   EnvironmentId,
+  MessageId,
+  type OrchestrationV2ConversationMessage,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ThreadShell,
   type Project,
   ProjectId,
   ProviderInstanceId,
+  RunId,
   RuntimeRequestId,
   ServerPushDeviceRegistration,
   ThreadId,
@@ -16,6 +22,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
@@ -24,6 +31,8 @@ import * as TestClock from "effect/testing/TestClock";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 
+import * as BotService from "../bots/BotService.ts";
+import * as BotStore from "../bots/BotStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
@@ -125,6 +134,63 @@ const completed = (at: DateTime.Utc): Partial<OrchestrationV2ThreadShell> => ({
   latestRunCompletedAt: at,
 });
 
+function bot(threadId: ThreadId, overrides: Partial<BotRecord> = {}): BotRecord {
+  return {
+    id: BotId.make(`bot-${threadId}`),
+    slug: BotSlug.make("kelsier"),
+    name: "Kelsier",
+    role: "Chief of Staff",
+    groupName: null,
+    icon: "sparkles",
+    color: "amber",
+    isPrimary: true,
+    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+    runtimeMode: "full-access",
+    tools: [],
+    mcpServerNames: [],
+    customMcpServers: {},
+    skills: [],
+    systemPromptMode: "preset",
+    proactive: {
+      enabled: false,
+      intervalMinutes: 30,
+      activeHoursStart: "08:00",
+      activeHoursEnd: "22:00",
+      timezone: "UTC",
+    },
+    muted: false,
+    threadId,
+    folderPath: "/bots/kelsier",
+    hopCount: 0,
+    archivedAt: null,
+    createdAt: "2026-09-29T00:00:00.000Z",
+    updatedAt: "2026-09-29T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function assistantReply(
+  threadId: ThreadId,
+  runId: RunId,
+  text: string,
+  at: DateTime.Utc,
+): OrchestrationV2ConversationMessage {
+  return {
+    id: MessageId.make(`reply-${runId}`),
+    threadId,
+    runId,
+    nodeId: null,
+    role: "assistant",
+    text,
+    attachments: [],
+    streaming: false,
+    createdBy: "agent",
+    creationSource: "provider",
+    createdAt: at,
+    updatedAt: at,
+  };
+}
+
 function threadEvent(threadId: ThreadId): OrchestrationV2DomainEvent {
   return { type: "run.updated", threadId } as unknown as OrchestrationV2DomainEvent;
 }
@@ -134,6 +200,9 @@ const makeHarness = Effect.fn("makeHarness")(function* (baseDir: string) {
   const events = yield* Queue.unbounded<OrchestrationV2DomainEvent>();
   const threadReads = yield* Queue.unbounded<ThreadId>();
   const threads = new Map<ThreadId, OrchestrationV2ThreadShell>();
+  const bots = new Map<ThreadId, BotRecord>();
+  const botLists = yield* Queue.unbounded<ReadonlyArray<BotRecord>>();
+  const messages = new Map<ThreadId, ReadonlyArray<OrchestrationV2ConversationMessage>>();
   const requests: Array<ReadonlyArray<ExpoMessage>> = [];
   const urls = new Set<string>();
   let nextTicket: ExpoTicket = { status: "ok", id: "ticket" };
@@ -172,6 +241,9 @@ const makeHarness = Effect.fn("makeHarness")(function* (baseDir: string) {
           streamDomainEvents: Stream.fromQueue(events),
           getThreadShell: (threadId) =>
             Queue.offer(threadReads, threadId).pipe(Effect.as(threads.get(threadId) ?? null)),
+          // ServerPush reads only the messages.
+          getThreadRecords: (threadId) =>
+            Effect.succeed({ messages: messages.get(threadId) ?? [] } as never),
           getShellSnapshot: () =>
             Effect.sync(() => ({
               schemaVersion: 2,
@@ -183,6 +255,21 @@ const makeHarness = Effect.fn("makeHarness")(function* (baseDir: string) {
         Layer.mock(ProjectService)({
           getById: () => Effect.succeedSome(project),
           snapshot: Effect.succeed({ projects: [project] } as never),
+        }),
+        Layer.mock(BotStore.BotStore)({
+          findByThreadId: (threadId) => Effect.succeed(Option.fromUndefinedOr(bots.get(threadId))),
+          findByHeartbeatThreadId: () => Effect.succeedNone,
+        }),
+        Layer.mock(BotService.BotService)({
+          subscribeList: () =>
+            Stream.fromQueue(botLists).pipe(
+              Stream.map((list) => ({
+                bots: list.map((bot) => ({ bot, status: "idle" as const })),
+                availableMcpServers: [],
+                backingProjectId: null,
+                codingThreads: [],
+              })),
+            ),
         }),
         Layer.succeed(HttpClient.HttpClient, expo),
         ServerConfig.layerTest(process.cwd(), baseDir),
@@ -199,10 +286,20 @@ const makeHarness = Effect.fn("makeHarness")(function* (baseDir: string) {
     yield* ServerPush.ServerPush.pipe(Effect.flatMap((serverPush) => serverPush.drain));
   });
 
+  /** Saves Bots the way BotService does, which announces the new list. */
+  const saveBots = (...saved: ReadonlyArray<BotRecord>) =>
+    Effect.gen(function* () {
+      for (const bot of saved) bots.set(bot.threadId, bot);
+      yield* Queue.offer(botLists, [...bots.values()]);
+    });
+
   return {
     layer,
     requests,
     urls,
+    bots,
+    saveBots,
+    messages,
     publish,
     threadReads,
     rejectNextPushes: (error: string) => {
@@ -325,6 +422,145 @@ describe("ServerPush", { concurrent: false }, () => {
           }).pipe(Effect.provide(harness.layer));
         }),
       ),
+  );
+
+  it.effect("names Bot alerts after the Bot, shows its reply, and stays quiet on NO_REPLY", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const baseDir = yield* tempBaseDir;
+        const harness = yield* makeHarness(baseDir);
+        const now = yield* DateTime.now;
+        const justNow = DateTime.add(now, { seconds: 1 });
+        const replying = ThreadId.make("bot-replying");
+        const silent = ThreadId.make("bot-silent");
+        const toolOnly = ThreadId.make("bot-tool-only");
+        const runId = RunId.make("run-1");
+        harness.bots.set(replying, bot(replying));
+        harness.bots.set(silent, bot(silent, { id: BotId.make("bot-silent"), name: "Vin" }));
+        harness.bots.set(
+          toolOnly,
+          bot(toolOnly, { id: BotId.make("bot-tool-only"), name: "Sazed" }),
+        );
+        harness.messages.set(replying, [
+          assistantReply(
+            replying,
+            runId,
+            `## Update\nShipped the **[release notes](https://example.com/notes)** for \`v2\`.\n\n${"More detail. ".repeat(20)}`,
+            justNow,
+          ),
+        ]);
+        harness.messages.set(silent, [
+          assistantReply(silent, runId, "```text\nNO_REPLY\n```", justNow),
+        ]);
+
+        yield* Effect.gen(function* () {
+          const serverPush = yield* ServerPush.ServerPush;
+          yield* serverPush.registerDevice(phone);
+          yield* serverPush.drain;
+
+          yield* harness.publish(threadShell(replying, now));
+          yield* harness.publish(
+            threadShell(replying, justNow, { ...completed(justNow), latestRunId: runId }),
+          );
+          const [done] = harness.requests[1]!;
+          expect(done!.data).toMatchObject({
+            alert_title: "Kelsier",
+            activity_line_0: "Done\tKelsier\tChief of Staff",
+          });
+          expect(done!.data.alert_body).toMatch(
+            /^Update Shipped the release notes for v2\. More detail\. .*\.\.\.$/,
+          );
+          expect(done!.data.alert_body).toHaveLength(120);
+
+          for (const quiet of [silent, toolOnly]) {
+            yield* harness.publish(threadShell(quiet, now));
+            const shown = harness.requests.length;
+            yield* harness.publish(
+              threadShell(quiet, justNow, { ...completed(justNow), latestRunId: runId }),
+            );
+            yield* TestClock.adjust("5 seconds");
+            yield* Queue.take(harness.threadReads);
+            yield* serverPush.drain;
+            expect(harness.requests).toHaveLength(shown + 1);
+            expect(harness.requests[shown]![0]!.data.alert_id).toBeUndefined();
+          }
+        }).pipe(Effect.provide(harness.layer));
+      }),
+    ),
+  );
+
+  it.effect("never shows a muted Bot, and clears its card once it is muted", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const baseDir = yield* tempBaseDir;
+        const harness = yield* makeHarness(baseDir);
+        const now = yield* DateTime.now;
+        const threadId = ThreadId.make("bot-thread");
+        harness.bots.set(threadId, bot(threadId, { muted: true }));
+
+        yield* Effect.gen(function* () {
+          const serverPush = yield* ServerPush.ServerPush;
+          yield* serverPush.registerDevice(phone);
+          yield* serverPush.drain;
+
+          yield* harness.publish(threadShell(threadId, now));
+          expect(harness.requests).toEqual([]);
+
+          harness.bots.set(threadId, bot(threadId));
+          yield* harness.publish(threadShell(threadId, now));
+          expect(harness.requests).toHaveLength(1);
+
+          harness.bots.set(threadId, bot(threadId, { muted: true }));
+          yield* harness.publish(
+            threadShell(threadId, now, {
+              pendingRuntimeRequest: {
+                id: RuntimeRequestId.make("request-1"),
+                kind: "dynamic_tool_call",
+                createdAt: now,
+              },
+            }),
+          );
+          yield* TestClock.adjust("5 seconds");
+          yield* Queue.take(harness.threadReads);
+          yield* serverPush.drain;
+          expect(harness.requests).toHaveLength(2);
+          const [cleared] = harness.requests[1]!;
+          expect(cleared!.data).toMatchObject({ active: "false", activity_expires_at: "0" });
+          expect(cleared!.data.alert_id).toBeUndefined();
+        }).pipe(Effect.provide(harness.layer));
+      }),
+    ),
+  );
+
+  it.effect("clears a Bot's card as soon as it is muted, with no thread change", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const baseDir = yield* tempBaseDir;
+        const harness = yield* makeHarness(baseDir);
+        const now = yield* DateTime.now;
+        const threadId = ThreadId.make("bot-thread");
+
+        yield* Effect.gen(function* () {
+          const serverPush = yield* ServerPush.ServerPush;
+          yield* serverPush.registerDevice(phone);
+          yield* serverPush.drain;
+          yield* harness.saveBots(bot(threadId));
+
+          yield* harness.publish(threadShell(threadId, now));
+          expect(harness.requests).toHaveLength(1);
+
+          yield* harness.saveBots(bot(threadId, { muted: true }));
+          yield* Queue.take(harness.threadReads);
+          yield* serverPush.drain;
+          yield* TestClock.adjust("5 seconds");
+          yield* Queue.take(harness.threadReads);
+          yield* serverPush.drain;
+          expect(harness.requests).toHaveLength(2);
+          const [cleared] = harness.requests[1]!;
+          expect(cleared!.data).toMatchObject({ active: "false", activity_expires_at: "0" });
+        }).pipe(Effect.provide(harness.layer));
+      }),
+    ),
   );
 
   it.effect("keeps pushing to phones registered before a restart", () =>

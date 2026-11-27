@@ -447,6 +447,10 @@
       "types": "./src/botDreaming.ts",
       "import": "./src/botDreaming.ts"
     },
+    "./botProactive": {
+      "types": "./src/botProactive.ts",
+      "import": "./src/botProactive.ts"
+    },
     "./nodeSqliteClient": {
       "types": "./src/nodeSqliteClient.ts",
       "import": "./src/nodeSqliteClient.ts"

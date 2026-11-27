@@ -27,10 +27,12 @@ const documentsPatch = (documents: {
   readonly soul?: string | undefined;
   readonly now?: string | undefined;
   readonly memory?: string | undefined;
+  readonly heartbeat?: string | undefined;
 }) => ({
   ...(documents.soul === undefined ? {} : { soul: documents.soul }),
   ...(documents.now === undefined ? {} : { now: documents.now }),
   ...(documents.memory === undefined ? {} : { memory: documents.memory }),
+  ...(documents.heartbeat === undefined ? {} : { heartbeat: documents.heartbeat }),
 });
 
 const savedBot = (scope: McpInvocationContext.McpInvocationScope, bot: BotRecord) => ({
@@ -120,7 +122,7 @@ export const layer = McpToolAccess.toLayer(BotsToolkit, {
       };
     }),
   ),
-  bot_create: McpToolAccess.writesEnvironment(({ soul, now, memory, ...input }, check) =>
+  bot_create: McpToolAccess.writesEnvironment(({ soul, now, memory, heartbeat, ...input }, check) =>
     Effect.gen(function* () {
       const { scope, caller } = yield* check;
       const modelSelection = input.modelSelection ?? caller?.modelSelection;
@@ -129,13 +131,17 @@ export const layer = McpToolAccess.toLayer(BotsToolkit, {
       }
       const bots = yield* BotService.BotService;
       const { bot } = yield* bots
-        .create({ ...input, modelSelection, documents: documentsPatch({ soul, now, memory }) })
+        .create({
+          ...input,
+          modelSelection,
+          documents: documentsPatch({ soul, now, memory, heartbeat }),
+        })
         .pipe(Effect.mapError(toMcpFailure));
       return savedBot(scope, bot);
     }),
   ),
   bot_update: McpToolAccess.writesEnvironment(
-    ({ botId, slug, soul, now, memory, ...input }, check) =>
+    ({ botId, slug, soul, now, memory, heartbeat, ...input }, check) =>
       Effect.gen(function* () {
         const { scope } = yield* check;
         const bots = yield* BotService.BotService;
@@ -143,7 +149,7 @@ export const layer = McpToolAccess.toLayer(BotsToolkit, {
           .update({
             ...input,
             botId: yield* findBotId(botId, slug),
-            documents: documentsPatch({ soul, now, memory }),
+            documents: documentsPatch({ soul, now, memory, heartbeat }),
           })
           .pipe(Effect.mapError(toMcpFailure));
         return savedBot(scope, bot);

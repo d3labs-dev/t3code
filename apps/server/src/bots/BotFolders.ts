@@ -71,6 +71,7 @@ const DOCUMENT_FILES: Readonly<Record<DocumentName, string>> = {
   soul: "SOUL.md",
   now: "NOW.md",
   memory: "MEMORY.md",
+  heartbeat: "HEARTBEAT.md",
 };
 
 const agentsFileContents = (bot: Pick<BotRecord, "name" | "role">) =>
@@ -87,6 +88,8 @@ const agentsFileContents = (bot: Pick<BotRecord, "name" | "role">) =>
     "- `notes/`: detailed per-project or per-topic notes. Read them on demand.",
     "",
     "`../_shared/` holds handoff files shared with the other Bots.",
+    "",
+    "If you are the primary Bot, `HEARTBEAT.md` may hold an optional checklist for your background check-ins.",
     "",
   ].join("\n");
 
@@ -154,18 +157,19 @@ const make = Effect.gen(function* () {
   const readDocuments: BotFolders["Service"]["readDocuments"] = Effect.fn(
     "BotFolders.readDocuments",
   )(function* (folderPath) {
-    const [soul, now, memory] = yield* Effect.all([
+    const [soul, now, memory, heartbeat] = yield* Effect.all([
       readDocument(documentPath(folderPath, "soul")),
       readDocument(documentPath(folderPath, "now")),
       readDocument(documentPath(folderPath, "memory")),
+      readDocument(documentPath(folderPath, "heartbeat")),
     ]);
-    return { soul, now, memory };
+    return { soul, now, memory, heartbeat };
   });
 
   const writeDocuments: BotFolders["Service"]["writeDocuments"] = Effect.fn(
     "BotFolders.writeDocuments",
   )(function* (folderPath, documents, mode) {
-    for (const name of ["soul", "now", "memory"] as const) {
+    for (const name of ["soul", "now", "memory", "heartbeat"] as const) {
       const contents = documents[name];
       if (contents === undefined) continue;
       const filePath = documentPath(folderPath, name);

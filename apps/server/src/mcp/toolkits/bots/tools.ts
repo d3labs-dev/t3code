@@ -35,11 +35,12 @@ const shared = {
   ],
 };
 
-// Custom MCP servers stay out: their configs carry credentials an agent should not write.
+// Custom MCP servers carry credentials and proactive check-ins are the user's opt-in, so both stay out.
 const botSettings = Struct.omit(BotUpdateInput.fields, [
   "botId",
   "slug",
   "customMcpServers",
+  "proactive",
   "documents",
 ]);
 
@@ -101,7 +102,7 @@ const BotMessageTool = Tool.make("bot_message", {
 const BotCreateTool = Tool.make("bot_create", {
   ...shared,
   description:
-    "Create a Bot. Its thread starts idle until messaged. `modelSelection` defaults to this thread's. `soul`, `now` and `memory` seed its SOUL.md, NOW.md and MEMORY.md.",
+    "Create a Bot. Its thread starts idle until messaged. `modelSelection` defaults to this thread's. `soul`, `now`, `memory` and `heartbeat` seed its SOUL.md, NOW.md, MEMORY.md and HEARTBEAT.md.",
   parameters: Schema.Struct({
     name: BotCreateInput.fields.name,
     slug: BotCreateInput.fields.slug,
@@ -116,7 +117,7 @@ const BotCreateTool = Tool.make("bot_create", {
 const BotUpdateTool = Tool.make("bot_update", {
   ...shared,
   description:
-    "Change a Bot found by `botId` or `slug`. Omitted fields stay. `soul`, `now` and `memory` replace its SOUL.md, NOW.md and MEMORY.md. `archived: true` hides it from the roster.",
+    "Change a Bot found by `botId` or `slug`. Omitted fields stay. `soul`, `now`, `memory` and `heartbeat` replace its SOUL.md, NOW.md, MEMORY.md and HEARTBEAT.md. `archived: true` hides it from the roster.",
   parameters: Schema.Struct({
     botId: Schema.optionalKey(BotId),
     slug: Schema.optionalKey(BotSlug),

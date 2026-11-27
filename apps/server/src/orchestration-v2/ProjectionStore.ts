@@ -7,6 +7,12 @@ import {
   BOT_DREAMING_MESSAGE_PREFIX,
   isServerBotDreamingMessage,
 } from "@t3tools/shared/botDreaming";
+import {
+  BOT_CHECKIN_MESSAGE_PREFIX,
+  BOT_NO_REPLY_TOKEN,
+  isBotNoReplyMessage,
+  isServerBotCheckInMessage,
+} from "@t3tools/shared/botProactive";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { makeThreadFind } from "./ThreadFind.ts";
 import { unsentManualContinuationSource } from "./manualContinuation.ts";
@@ -1950,18 +1956,40 @@ function activeProviderGoalForShell(
 }
 
 function isSilentShellPrompt(message: OrchestrationV2ThreadProjection["messages"][number]) {
-  return idleCompactionOf(message) !== undefined || isServerBotDreamingMessage(message);
+  return (
+    idleCompactionOf(message) !== undefined ||
+    isServerBotDreamingMessage(message) ||
+    isServerBotCheckInMessage(message)
+  );
+}
+
+/** A check-in the Bot answered with a real message reaches the user like any reply. */
+function isAnsweredCheckInRun(
+  run: OrchestrationV2ThreadProjection["runs"][number],
+  messages: OrchestrationV2ThreadProjection["messages"],
+): boolean {
+  if (run.status !== "completed") return false;
+  const reply = messages
+    .filter(
+      (message) => message.runId === run.id && message.role === "assistant" && !message.streaming,
+    )
+    .toSorted(
+      (left, right) =>
+        DateTime.toEpochMillis(right.createdAt) - DateTime.toEpochMillis(left.createdAt),
+    )[0];
+  return reply !== undefined && reply.text.trim() !== "" && !isBotNoReplyMessage(reply.text);
 }
 
 function isSilentRunForShell(
   run: OrchestrationV2ThreadProjection["runs"][number],
   projection: Pick<OrchestrationV2ThreadProjection, "messages" | "turnItems">,
 ): boolean {
+  const prompt = projection.messages.find((message) => message.id === run.userMessageId);
   return (
     run.status !== "failed" &&
-    projection.messages.some(
-      (message) => message.id === run.userMessageId && isSilentShellPrompt(message),
-    ) &&
+    prompt !== undefined &&
+    isSilentShellPrompt(prompt) &&
+    !(isServerBotCheckInMessage(prompt) && isAnsweredCheckInRun(run, projection.messages)) &&
     !projection.turnItems.some(
       (item) => item.runId === run.id && item.type === "compaction" && item.status === "failed",
     )
@@ -7883,23 +7911,62 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         )
       )`;
     };
-    // Mirrors isSilentShellPrompt; JavaScript trimStart drops the same whitespace.
-    const isSilentShellMessage = (alias: string) => {
+    const whitespace = sql.literal(
+      "char(9, 10, 11, 12, 13, 32, 160, 5760, 8192, 8193, 8194, 8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202, 8232, 8233, 8239, 8287, 12288, 65279)",
+    );
+    // Mirrors isServerBotDreamingMessage and isServerBotCheckInMessage; JavaScript trimStart
+    // drops the same whitespace.
+    const isServerPrefixedMessage = (alias: string, prefix: string) => {
       const payload = sql.literal(`${alias}.payload_json`);
       return sql`(
-        ${isIdleCompactionMessage(alias)}
-        OR (
-          ${sql.literal(`${alias}.role`)} = 'user'
-          AND json_extract(${payload}, '$.createdBy') = 'agent'
-          AND json_extract(${payload}, '$.creationSource') = 'server'
-          AND substr(
-            ltrim(json_extract(${payload}, '$.text'),
-              char(9, 10, 11, 12, 13, 32, 160, 5760, 8192, 8193, 8194, 8195,
-                8196, 8197, 8198, 8199, 8200, 8201, 8202, 8232, 8233, 8239, 8287, 12288, 65279)
-            ),
-            1,
-            ${BOT_DREAMING_MESSAGE_PREFIX.length}
-          ) = ${BOT_DREAMING_MESSAGE_PREFIX}
+        ${sql.literal(`${alias}.role`)} = 'user'
+        AND json_extract(${payload}, '$.createdBy') = 'agent'
+        AND json_extract(${payload}, '$.creationSource') = 'server'
+        AND substr(ltrim(json_extract(${payload}, '$.text'), ${whitespace}), 1, ${prefix.length})
+          = ${prefix}
+      )`;
+    };
+    // Mirrors isSilentShellPrompt.
+    const isSilentShellMessage = (alias: string) => sql`(
+      ${isIdleCompactionMessage(alias)}
+      OR ${isServerPrefixedMessage(alias, BOT_DREAMING_MESSAGE_PREFIX)}
+      OR ${isServerPrefixedMessage(alias, BOT_CHECKIN_MESSAGE_PREFIX)}
+    )`;
+    // Mirrors isAnsweredCheckInRun; strips the same fence and marks as isBotNoReplyMessage.
+    const isAnsweredCheckInShellRun = (alias: string) => {
+      const run = sql.literal(alias);
+      return sql`(
+        ${run}.status = 'completed'
+        AND EXISTS (
+          SELECT 1 FROM orchestration_v2_projection_messages checkin
+          WHERE checkin.message_id = json_extract(${run}.payload_json, '$.userMessageId')
+            AND ${isServerPrefixedMessage("checkin", BOT_CHECKIN_MESSAGE_PREFIX)}
+        )
+        AND EXISTS (
+          SELECT 1 FROM (
+            SELECT trim(json_extract(reply.payload_json, '$.text'), ${whitespace}) AS text
+            FROM orchestration_v2_projection_messages reply
+            WHERE reply.run_id = ${run}.run_id
+              AND reply.role = 'assistant'
+              AND reply.streaming = 0
+            ORDER BY reply.created_at DESC, reply.message_id DESC
+            LIMIT 1
+          ) latest
+          WHERE latest.text <> ''
+            AND upper(rtrim(
+              ltrim(
+                CASE
+                  WHEN substr(latest.text, 1, 3) = ${"```"}
+                    AND instr(latest.text, char(10)) > 0
+                    AND substr(latest.text, 4, instr(latest.text, char(10)) - 4)
+                      NOT GLOB ${"*[^A-Za-z0-9+ \t-]*"}
+                  THEN substr(latest.text, instr(latest.text, char(10)) + 1)
+                  ELSE latest.text
+                END,
+                ${"`*_\"'"} || ${whitespace}
+              ),
+              ${"`*_\"'.!"} || ${whitespace}
+            )) <> ${BOT_NO_REPLY_TOKEN}
         )
       )`;
     };
@@ -7912,7 +7979,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           SELECT 1 FROM orchestration_v2_projection_messages prompt
           WHERE prompt.message_id = json_extract(${run}.payload_json, '$.userMessageId')
             AND ${isSilentShellMessage("prompt")}
-        ) AND NOT EXISTS (
+        ) AND NOT ${isAnsweredCheckInShellRun(alias)}
+        AND NOT EXISTS (
           SELECT 1 FROM orchestration_v2_projection_turn_items compaction
           WHERE compaction.thread_id = ${run}.thread_id AND compaction.run_id = ${run}.run_id
             AND compaction.type = 'compaction'

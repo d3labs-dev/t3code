@@ -43,6 +43,7 @@ function deliver(input: {
   readonly after: ReadonlyArray<RelayAgentActivityState>;
   readonly changed: RelayAgentActivityState | null;
   readonly preferences?: RelayAgentAwarenessPreferences;
+  readonly alertBodyByThread?: ReadonlyMap<string, string>;
 }) {
   return deliveryForDevice({
     deviceId: "device",
@@ -53,6 +54,9 @@ function deliver(input: {
     aggregate: makeAggregateState({ states: input.after, nowMs }),
     changedState: input.changed,
     nowMs,
+    ...(input.alertBodyByThread === undefined
+      ? {}
+      : { alertBodyByThread: input.alertBodyByThread }),
   });
 }
 
@@ -100,6 +104,37 @@ describe("deliveryForDevice", () => {
     expect(deliver({ before: [running], after: [late], changed: late })?.data.alert_id).toBe(
       undefined,
     );
+  });
+
+  it("shows a finished thread's reply in its completion alert, and only there", () => {
+    const replies = new Map([["a", `Shipped it. ${"x".repeat(200)}`]]);
+    const running = threadState("a", "running");
+    const done = threadState("a", "completed");
+    for (const before of [[running], null]) {
+      const body = deliver({ before, after: [done], changed: done, alertBodyByThread: replies })
+        ?.data.alert_body;
+      expect(body).toHaveLength(120);
+      expect(body).toMatch(/^Shipped it\. x+\.\.\.$/);
+    }
+    expect(
+      deliver({
+        before: [running],
+        after: [done],
+        changed: done,
+        alertBodyByThread: new Map([["a", "🚀".repeat(200)]]),
+      })?.data.alert_body,
+    ).toBe(`${"🚀".repeat(117)}...`);
+
+    const waiting = threadState("a", "waiting_for_approval");
+    const failed = threadState("a", "failed");
+    expect(
+      deliver({ before: [running], after: [waiting], changed: waiting, alertBodyByThread: replies })
+        ?.data.alert_body,
+    ).toBe("Approval: T3 Code");
+    expect(
+      deliver({ before: [running], after: [failed], changed: failed, alertBodyByThread: replies })
+        ?.data.alert_body,
+    ).toBe("Failed: T3 Code");
   });
 
   it("honors the phone's per-phase and notification switches", () => {

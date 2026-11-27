@@ -164,6 +164,7 @@ import {
   runtimeModeCeilingRefusal,
   threadsStartingWork,
 } from "./DispatchModeLimit.ts";
+import { SubagentThreadParent } from "./SubagentThreadParent.ts";
 import {
   applyToProjection,
   emptyProjection,
@@ -3752,6 +3753,22 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       });
     }
 
+    const subagentParentId = yield* SubagentThreadParent;
+    const subagentParent =
+      subagentParentId === undefined ? null : yield* findThread(subagentParentId);
+    if (
+      subagentParentId !== undefined &&
+      (subagentParent === null ||
+        subagentParent.deletedAt !== null ||
+        subagentParent.projectId !== command.projectId)
+    ) {
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: `Subagent parent ${subagentParentId} is missing or belongs to another project.`,
+      });
+    }
+
     const now = yield* DateTime.now;
     const emitEvent = emit(events, command);
     const thread: OrchestrationV2AppThread = {
@@ -3773,11 +3790,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ...(command.linkOrigin === undefined || command.delegatedFrom === undefined
         ? {}
         : { delegatedFrom: command.delegatedFrom }),
-      lineage: {
-        parentThreadId: null,
-        relationshipToParent: null,
-        rootThreadId: command.threadId,
-      },
+      lineage:
+        subagentParent === null
+          ? { parentThreadId: null, relationshipToParent: null, rootThreadId: command.threadId }
+          : {
+              parentThreadId: subagentParent.id,
+              relationshipToParent: "subagent",
+              rootThreadId: subagentParent.lineage.rootThreadId,
+            },
       forkedFrom: null,
       createdAt: now,
       updatedAt: now,

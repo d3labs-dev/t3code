@@ -5,6 +5,7 @@
  * and the relay's Android delivery rules (serverPushPayloads).
  */
 import {
+  type BotRecord,
   type OrchestrationV2ThreadShell,
   type Project,
   type ServerPushDeviceRegistration,
@@ -12,6 +13,7 @@ import {
   type ThreadId,
   WS_METHODS,
 } from "@t3tools/contracts";
+import { isBotNoReplyMessage } from "@t3tools/shared/botProactive";
 import type {
   RelayAgentActivityAggregateState,
   RelayAgentActivityState,
@@ -22,11 +24,13 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/http/HttpClient";
@@ -34,6 +38,8 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
+import * as BotService from "../bots/BotService.ts";
+import * as BotStore from "../bots/BotStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
@@ -104,6 +110,28 @@ function terminalWorkSinceStart(
   );
 }
 
+function isSilentBot(bot: BotRecord): boolean {
+  return bot.muted || bot.archivedAt !== null;
+}
+
+/** What a change to a Bot can change on its card. */
+const botCardKey = (bot: BotRecord) =>
+  JSON.stringify([bot.muted, bot.archivedAt, bot.name, bot.role]);
+
+/** A Bot's reply as one plain line, or null when the Bot chose not to reply. */
+function botReplyPreview(text: string): string | null {
+  if (text.trim() === "" || isBotNoReplyMessage(text)) return null;
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*\n]+)\*\*|__([^_\n]+)__/g, "$1$2")
+    .replace(/(^|[^\w*])([*_])([^*_\n]+)\2(?![\w*])/g, "$1$3")
+    .replace(/`([^`\n]+)`/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** @public */
 export const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
@@ -114,6 +142,8 @@ export const make = Effect.gen(function* () {
   const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
   const threads = yield* ThreadManagement.ThreadManagementService;
   const projects = yield* ProjectService.ProjectService;
+  const botStore = yield* Effect.serviceOption(BotStore.BotStore);
+  const botService = yield* Effect.serviceOption(BotService.BotService);
   const scope = yield* Effect.scope;
   const startedAt = yield* Clock.currentTimeMillis;
   const devicesPath = path.join(config.stateDir, "server-push-devices.json");
@@ -138,6 +168,7 @@ export const make = Effect.gen(function* () {
     ]),
   );
   const states = new Map<ThreadId, RelayAgentActivityState>();
+  const botPreviews = new Map<ThreadId, string>();
   const confirmDeadlines = new Map<ThreadId, number>();
 
   const persistDevices = Effect.suspend(() =>
@@ -203,6 +234,7 @@ export const make = Effect.gen(function* () {
         aggregate,
         changedState: input.changedState,
         nowMs,
+        alertBodyByThread: botPreviews,
       });
       if (delivery === null) continue;
       const alertId = delivery.data.alert_id;
@@ -276,14 +308,55 @@ export const make = Effect.gen(function* () {
     yield* Effect.forEach(threadIds, enqueueThread, { discard: true });
   });
 
-  // The relay publisher's guards against startup and transient noise.
-  const updateThread = Effect.fn("ServerPush.updateThread")(function* (threadId: ThreadId) {
-    if (devices.size === 0) return;
+  // A failed lookup fails the job, so a muted Bot never falls back to an ordinary thread's alert.
+  const findBot = (threadId: ThreadId) =>
+    Option.isNone(botStore)
+      ? Effect.succeed({ bot: Option.none<BotRecord>(), checkInScout: false })
+      : Effect.all({
+          bot: botStore.value.findByThreadId(threadId),
+          checkInScout: botStore.value
+            .findByHeartbeatThreadId(threadId)
+            .pipe(Effect.map(Option.isSome)),
+        });
+
+  // Null when the run ended without a reply, undefined when it could not be read, so the alert
+  // falls back to the status line.
+  const readBotReply = (shell: OrchestrationV2ThreadShell) =>
+    shell.latestRunId === null
+      ? Effect.undefined
+      : threads
+          .getThreadRecords(shell.id, ["messages"], {
+            messageRunIds: [shell.latestRunId],
+            messageRoles: ["assistant"],
+          })
+          .pipe(
+            Effect.map((records) => {
+              const reply = records.messages.findLast(
+                (message) => message.role === "assistant" && !message.streaming,
+              );
+              return reply === undefined ? null : botReplyPreview(reply.text);
+            }),
+            Effect.catchCause((cause) =>
+              Effect.logWarning("server push could not read the Bot's reply", {
+                threadId: shell.id,
+                cause: Cause.pretty(cause),
+              }).pipe(Effect.as(undefined)),
+            ),
+          );
+
+  const resolveThreadState = Effect.fn("ServerPush.resolveThreadState")(function* (
+    threadId: ThreadId,
+  ) {
     const environmentId = yield* serverEnvironment.getEnvironmentId;
-    // Archived threads leave the card, as they do for the relay.
+    const { bot, checkInScout } = yield* findBot(threadId);
+    // Archived threads leave the card, as they do for the relay; muted and archived Bots and their
+    // check-in scouts never reach it.
     const shell = yield* threads.getThreadShell(threadId);
     const thread =
-      shell === null || shell.archivedAt !== null
+      shell === null ||
+      shell.archivedAt !== null ||
+      checkInScout ||
+      (Option.isSome(bot) && isSilentBot(bot.value))
         ? Option.none<OrchestrationV2ThreadShell>()
         : Option.some(shell);
     const project = Option.isSome(thread)
@@ -295,6 +368,24 @@ export const make = Effect.gen(function* () {
       project,
       pendingSubagentRequest: null,
     });
+    botPreviews.delete(threadId);
+    if (state === null || Option.isNone(bot) || Option.isNone(thread)) return { thread, state };
+    const botState: RelayAgentActivityState = {
+      ...state,
+      projectTitle: bot.value.role.trim() || "Bot",
+      threadTitle: bot.value.name,
+    };
+    if (botState.phase !== "completed") return { thread, state: botState };
+    const reply = yield* readBotReply(thread.value);
+    if (reply === null) return { thread, state: null };
+    if (reply !== undefined) botPreviews.set(threadId, reply);
+    return { thread, state: botState };
+  });
+
+  // The relay publisher's guards against startup and transient noise.
+  const updateThread = Effect.fn("ServerPush.updateThread")(function* (threadId: ThreadId) {
+    if (devices.size === 0) return;
+    const { thread, state } = yield* resolveThreadState(threadId);
     const previous = states.get(threadId);
     if (isTerminalState(state) && previous === undefined) {
       if (!terminalWorkSinceStart(thread, startedAt)) return;
@@ -346,6 +437,7 @@ export const make = Effect.gen(function* () {
         if (firstDevice) {
           // Thread states are not tracked while no phone listens.
           states.clear();
+          botPreviews.clear();
           confirmDeadlines.clear();
           yield* catchUp;
         }
@@ -375,6 +467,35 @@ export const make = Effect.gen(function* () {
         : Effect.void,
     ),
   );
+
+  if (Option.isSome(botService)) {
+    const cardKeys = new Map<ThreadId, string>();
+    yield* forkParked(
+      Stream.runForEach(
+        botService.value.subscribeList({ includeArchived: true }).pipe(
+          Stream.tapCause((cause) =>
+            Effect.logWarning("server push Bot list failed", { cause: Cause.pretty(cause) }),
+          ),
+          Stream.retry(Schedule.spaced(Duration.seconds(5))),
+        ),
+        (list) =>
+          Effect.forEach(
+            list.bots,
+            ({ bot }) => {
+              const previous = cardKeys.get(bot.threadId);
+              const next = botCardKey(bot);
+              cardKeys.set(bot.threadId, next);
+              const changed =
+                previous === undefined
+                  ? isSilentBot(bot) && states.has(bot.threadId)
+                  : previous !== next;
+              return devices.size > 0 && changed ? enqueueThread(bot.threadId) : Effect.void;
+            },
+            { discard: true },
+          ),
+      ),
+    );
+  }
 
   return ServerPush.of({
     registerDevice: Effect.fn("ServerPush.registerDevice")((registration) =>

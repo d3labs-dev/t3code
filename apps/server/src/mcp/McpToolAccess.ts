@@ -18,6 +18,7 @@ import type * as Scope from "effect/Scope";
 import { McpSchema } from "effect/ai";
 import type { Tool, Toolkit } from "effect/ai";
 
+import * as BotStore from "../bots/BotStore.ts";
 import {
   DispatchModeLimit,
   type DispatchModeRefusal,
@@ -113,17 +114,41 @@ export class Declaration<out Handler> {
   }
 }
 
+const readOnlyClientDenied = new OrchestratorMcpFailure({
+  code: "capability_denied",
+  message:
+    "This tool changes the environment, and this MCP client was approved for read-only access.",
+});
+
+const checkInScoutDenied = new OrchestratorMcpFailure({
+  code: "capability_denied",
+  message: "Background check-in scouts have read-only access to T3 Code.",
+});
+
+/** A primary Bot's background check-in scout reads only; an unreadable Bot store refuses. */
+const refuseCheckInScout = Effect.fn("McpToolAccess.refuseCheckInScout")(function* (
+  threadId: ThreadId,
+) {
+  const botStore = yield* Effect.serviceOption(BotStore.BotStore);
+  if (Option.isNone(botStore)) return;
+  const scoutOf = yield* botStore.value.findByHeartbeatThreadId(threadId).pipe(
+    Effect.catch((cause) =>
+      Effect.logWarning("Refused an MCP write: couldn't tell whether a Bot scout made it.", {
+        threadId,
+        cause,
+      }).pipe(Effect.andThen(Effect.fail(checkInScoutDenied))),
+    ),
+  );
+  if (Option.isSome(scoutOf)) return yield* checkInScoutDenied;
+});
+
 const refuseReadOnlyClient = McpInvocationContext.McpInvocationContext.pipe(
   Effect.flatMap((scope) =>
     scope.client?.access === "read-only"
-      ? Effect.fail(
-          new OrchestratorMcpFailure({
-            code: "capability_denied",
-            message:
-              "This tool changes the environment, and this MCP client was approved for read-only access.",
-          }),
-        )
-      : Effect.void,
+      ? Effect.fail(readOnlyClientDenied)
+      : scope.thread === undefined
+        ? Effect.void
+        : refuseCheckInScout(scope.thread.threadId),
   ),
 );
 

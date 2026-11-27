@@ -172,12 +172,19 @@ it.effect("creates a Bot on the calling thread's model, lists it, and updates it
 
       expect(
         yield* toolkit
-          .handle("bot_update", { slug: "scout", role: "Checks sources", muted: true })
+          .handle("bot_update", {
+            slug: "scout",
+            role: "Checks sources",
+            muted: true,
+            heartbeat: "- Watch CI.",
+          })
           .pipe(lastResult, asCaller(userThreadId)),
       ).toMatchObject({ botId: scout.id, slug: "scout" });
-      expect((yield* bots.get({ botId: scout.id })).bot).toMatchObject({
-        role: "Checks sources",
-        muted: true,
+      const updated = yield* bots.get({ botId: scout.id });
+      expect(updated.bot).toMatchObject({ role: "Checks sources", muted: true });
+      expect(updated.documents).toMatchObject({
+        soul: "I cite primary sources.",
+        heartbeat: "- Watch CI.",
       });
       expect(
         yield* toolkit
@@ -269,6 +276,33 @@ it.effect("searches a Bot's own thread and the coding threads it messaged, only 
         matches: [expect.objectContaining({ threadId: scout.threadId, isBotThread: true })],
       });
       expect(yield* search({}, userThreadId)).toMatchObject({ code: "invalid_request" });
+    }),
+  ),
+);
+
+it.effect("lets a primary Bot's check-in scout read Bots but not change them", () =>
+  withBotTools(({ toolkit, bots, store }) =>
+    Effect.gen(function* () {
+      const kelsier = (yield* bots.create({ name: "Kelsier", modelSelection: botModel })).bot;
+      const scoutThreadId = ThreadId.make("thread:bot-scout:kelsier");
+      yield* store.setHeartbeatThreadId({ botId: kelsier.id, threadId: scoutThreadId });
+
+      expect(
+        yield* toolkit.handle("bot_list", {}).pipe(lastResult, asCaller(scoutThreadId)),
+      ).toEqual({ bots: [expect.objectContaining({ slug: "kelsier" })] });
+      for (const denied of [
+        toolkit.handle("bot_update", { slug: "kelsier", muted: true }),
+        toolkit.handle("bot_create", { name: "Vin" }),
+      ]) {
+        expect(yield* denied.pipe(lastResult, asCaller(scoutThreadId))).toEqual(
+          expect.objectContaining({
+            code: "capability_denied",
+            message: "Background check-in scouts have read-only access to T3 Code.",
+          }),
+        );
+      }
+      expect((yield* bots.get({ botId: kelsier.id })).bot.muted).toBe(false);
+      expect((yield* bots.list({})).bots).toHaveLength(1);
     }),
   ),
 );

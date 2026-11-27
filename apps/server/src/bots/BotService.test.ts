@@ -6,6 +6,7 @@ import {
   type BotListResult,
   type BotRecord,
   BotSlug,
+  DEFAULT_BOT_PROACTIVE_CONFIG,
   EventId,
   MessageId,
   type OrchestrationV2Actor,
@@ -20,6 +21,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -28,6 +30,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import type * as Scope from "effect/Scope";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
 
 import * as ServerConfig from "../config.ts";
@@ -332,6 +335,7 @@ it.effect("creates bots with unique slugs, one primary, an idle thread and seede
       })).bot;
       assert.strictEqual(engineer.slug, "engineer");
       assert.isTrue(engineer.isPrimary);
+      assert.deepStrictEqual(engineer.proactive, DEFAULT_BOT_PROACTIVE_CONFIG);
       assert.deepStrictEqual(engineer.tools, [
         "Read",
         "Write",
@@ -420,7 +424,7 @@ it.effect("creates bots with unique slugs, one primary, an idle thread and seede
 it.effect(
   "updates a bot and its thread, archives it, and deletes it while keeping its folder",
   () =>
-    withBots((harness, bots) =>
+    withBots((harness, bots, store) =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
@@ -478,12 +482,18 @@ it.effect(
         assert.lengthOf((yield* bots.list({ includeArchived: true })).bots, 2);
         assert.isNull((yield* bots.update({ botId: scout.id, archived: false })).bot.archivedAt);
 
+        const checkInThreadId = ThreadId.make("thread:bot-scout:check-in");
+        yield* store.setHeartbeatThreadId({ botId: scout.id, threadId: checkInThreadId });
         assert.deepStrictEqual(yield* bots.delete({ botId: scout.id }), { botId: scout.id });
-        assert.deepStrictEqual(harness.dispatched.at(-1), {
-          type: "thread.archive",
-          commandId: harness.dispatched.at(-1)!.commandId,
-          threadId: scout.threadId,
-        });
+        assert.deepStrictEqual(
+          harness.dispatched
+            .slice(-2)
+            .map((command) => [command.type, "threadId" in command ? command.threadId : null]),
+          [
+            ["thread.archive", scout.threadId],
+            ["thread.archive", checkInThreadId],
+          ],
+        );
         assert.strictEqual(
           (yield* bots.get({ botId: scout.id }).pipe(Effect.flip)).code,
           "bot_not_found",
@@ -526,7 +536,7 @@ it.effect(
 it.effect(
   "builds a harness profile only for bot threads, with the bot's tools, MCP servers and auth",
   () =>
-    withBots((harness, bots) =>
+    withBots((harness, bots, store) =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
@@ -569,7 +579,11 @@ it.effect(
             memory: "- The repo uses vp.",
           },
         })).bot;
-        yield* bots.create({ name: "Reviewer", role: "Reviews PRs", modelSelection });
+        const reviewer = (yield* bots.create({
+          name: "Reviewer",
+          role: "Reviews PRs",
+          modelSelection,
+        })).bot;
 
         const available = (yield* bots.list({})).availableMcpServers;
         assert.deepStrictEqual(available, [
@@ -634,6 +648,35 @@ it.effect(
         assert.include(bothOverCap, "`MEMORY.md` is 4097 bytes, over its 4096-byte soft cap");
         const underCap = yield* housekeepingFor({ now: "", memory: "x".repeat(4_096) });
         assert.notInclude(underCap, "Memory housekeeping");
+
+        yield* bots.update({
+          botId: engineer.id,
+          tools: ["Read", "Write", "Edit", "Bash", "Grep", "WebFetch"],
+          documents: { now: "- Ship 2.0.", heartbeat: "- Watch CI on main." },
+        });
+        yield* bots.update({ botId: reviewer.id, documents: { heartbeat: "- Watch reviews." } });
+        const primaryContext = Option.getOrThrow(
+          yield* bots.resolveHarnessProfile(engineer.threadId),
+        ).dynamicContext;
+        assert.include(primaryContext, "## HEARTBEAT.md\n\n- Watch CI on main.");
+        const specialistContext = Option.getOrThrow(
+          yield* bots.resolveHarnessProfile(reviewer.threadId),
+        ).dynamicContext;
+        assert.notInclude(specialistContext, "HEARTBEAT.md");
+
+        const scoutThreadId = harness.addThread("Engineer check-in");
+        yield* store.setHeartbeatThreadId({ botId: engineer.id, threadId: scoutThreadId });
+        const scout = Option.getOrThrow(yield* bots.resolveHarnessProfile(scoutThreadId));
+        assert.strictEqual(scout.botId, engineer.id);
+        assert.strictEqual(scout.systemPromptMode, "custom");
+        assert.deepStrictEqual(scout.tools, ["Read", "Grep", "WebFetch"]);
+        assert.deepStrictEqual(scout.mcpServers, profile.mcpServers);
+        assert.include(scout.staticInstructions, "NO_REPLY");
+        assert.include(scout.dynamicContext, "## SOUL.md\n\nI ship small PRs.");
+        assert.include(scout.dynamicContext, "## NOW.md\n\n- Ship 2.0.");
+        assert.include(scout.dynamicContext, "## HEARTBEAT.md\n\n- Watch CI on main.");
+        assert.notInclude(scout.dynamicContext, "MEMORY.md");
+        assert.notInclude(scout.dynamicContext, "Bot roster");
       }),
     ),
 );
@@ -712,6 +755,67 @@ it.effect(
         assert.include(resumed.text, "hop 1/6");
       }),
     ),
+);
+
+it.effect("migrates an older bots table and keeps the heartbeat thread across Bot edits", () =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-bot-store-" });
+    const configLayer = ServerConfig.layerTest(baseDir, baseDir);
+    const { stateDir } = yield* ServerConfig.ServerConfig.pipe(Effect.provide(configLayer));
+    yield* fileSystem.makeDirectory(stateDir, { recursive: true });
+    yield* Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`
+        CREATE TABLE bots (
+          bot_id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL,
+          group_name TEXT, icon TEXT NOT NULL, color TEXT NOT NULL,
+          is_primary INTEGER NOT NULL DEFAULT 0, model_selection_json TEXT NOT NULL,
+          runtime_mode TEXT NOT NULL, tools_json TEXT NOT NULL,
+          mcp_server_names_json TEXT NOT NULL, custom_mcp_servers_json TEXT NOT NULL,
+          skills_json TEXT NOT NULL, system_prompt_mode TEXT NOT NULL,
+          muted INTEGER NOT NULL DEFAULT 0, thread_id TEXT NOT NULL, folder_path TEXT NOT NULL,
+          hop_count INTEGER NOT NULL DEFAULT 0, archived_at TEXT,
+          created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        )
+      `;
+      yield* sql`
+        INSERT INTO bots VALUES (
+          'bot-1', 'matcha', 'Matcha', '', NULL, 'bot', '#6366f1', 1,
+          ${JSON.stringify(modelSelection)}, 'full-access', '["Read"]', '[]', '{}', '[]',
+          'custom', 0, 'thread-1', '/bots/bot-1', 0, NULL,
+          '2026-11-26T00:00:00.000Z', '2026-11-26T00:00:00.000Z'
+        )
+      `;
+    }).pipe(
+      Effect.provide(NodeSqliteClient.layer({ filename: path.join(stateDir, "bots.sqlite") })),
+    );
+
+    yield* Effect.gen(function* () {
+      const store = yield* BotStore.BotStore;
+      const migrated = Option.getOrThrow(yield* store.findByThreadId(ThreadId.make("thread-1")));
+      assert.deepStrictEqual(migrated.proactive, DEFAULT_BOT_PROACTIVE_CONFIG);
+      const heartbeatThreadId = ThreadId.make("thread-heartbeat");
+      yield* store.setHeartbeatThreadId({ botId: migrated.id, threadId: heartbeatThreadId });
+      const proactive = {
+        ...DEFAULT_BOT_PROACTIVE_CONFIG,
+        enabled: true,
+        intervalMinutes: 60,
+        timezone: "Europe/Madrid",
+      };
+      yield* store.update({ ...migrated, name: "Renamed", proactive });
+
+      assert.deepStrictEqual((yield* readBot(store, migrated)).proactive, proactive);
+      assert.deepStrictEqual(
+        yield* store.getHeartbeatThreadId(migrated.id),
+        Option.some(heartbeatThreadId),
+      );
+      const scouting = Option.getOrThrow(yield* store.findByHeartbeatThreadId(heartbeatThreadId));
+      assert.strictEqual(scouting.name, "Renamed");
+      assert.isTrue(Option.isNone(yield* store.findByHeartbeatThreadId(migrated.threadId)));
+    }).pipe(Effect.provide(BotStore.layer.pipe(Layer.provide(configLayer))));
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
 it.effect("wakes the sender once when the peer's run ends", () =>
