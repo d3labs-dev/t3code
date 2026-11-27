@@ -85,3 +85,18 @@ export function botHandoffPreviewLine(body: string): string {
     .find((line) => line !== "");
   return first ?? "";
 }
+
+const BOT_HANDOFF_STATUS_LABELS: Readonly<Record<string, string>> = {
+  completed: "Completed",
+  waiting: "Needs input",
+  failed: "Failed",
+  interrupted: "Interrupted",
+  cancelled: "Cancelled",
+};
+
+/** The status worth showing beside a handoff; a peer Bot's completed reply needs none. */
+export function botHandoffStatusLabel(handoff: BotHandoffMessage): string | null {
+  if (handoff.kind === "from_bot") return null;
+  if (handoff.kind === "bot_reply" && handoff.status === "completed") return null;
+  return BOT_HANDOFF_STATUS_LABELS[handoff.status] ?? handoff.status;
+}

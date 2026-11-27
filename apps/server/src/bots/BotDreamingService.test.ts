@@ -138,6 +138,8 @@ describe("BotDreamingService", () => {
               id: dreamRun.userMessageId,
               runId: dreamRun.id,
               text: BOT_DREAMING_PROMPT,
+              createdBy: "agent",
+              creationSource: "server",
             },
           ],
         };

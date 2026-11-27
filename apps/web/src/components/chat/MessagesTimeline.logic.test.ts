@@ -3166,6 +3166,7 @@ describe("v2 run and attempt history", () => {
       role: "user" | "assistant",
       runId: RunId,
       text = id,
+      sender: "server" | "web" = "server",
     ): TimelineEntry => ({
       id,
       kind: "message",
@@ -3175,6 +3176,8 @@ describe("v2 run and attempt history", () => {
         role,
         text,
         runId,
+        createdBy: sender === "server" ? "agent" : "user",
+        creationSource: sender,
         createdAt: at,
         updatedAt: at,
         streaming: false,
@@ -3214,9 +3217,13 @@ describe("v2 run and attempt history", () => {
       "final",
       "dream-error",
     ]);
-    const steered = message("steered", "user", dreamRun, "Are you there?");
+    const steered = message("steered", "user", dreamRun, "Are you there?", "web");
     expect(rows([...chat, ...dream, steered])).toEqual(
       expect.arrayContaining(["steered", "no-reply"]),
+    );
+    const typed = message("typed", "user", dreamRun, BOT_DREAMING_PROMPT, "web");
+    expect(rows([...chat, typed, ...dream.slice(1)])).toEqual(
+      expect.arrayContaining(["typed", "no-reply"]),
     );
   });
   it("hides a Bot check-in prompt and shows only a real reply", () => {

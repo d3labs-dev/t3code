@@ -65,7 +65,7 @@ import {
 } from "@t3tools/contracts";
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/shell";
 import type { ToolCallVisibility } from "@t3tools/contracts/settings";
-import { isBotDreamingMessage } from "@t3tools/shared/botDreaming";
+import { isServerBotDreamingMessage } from "@t3tools/shared/botDreaming";
 import { isBotNoReplyMessage, isServerBotCheckInMessage } from "@t3tools/shared/botProactive";
 import { resolveT3McpToolDefinition } from "@t3tools/shared/t3McpToolPresentation";
 import { compactDynamicToolOutput } from "@t3tools/shared/toolOutput";
@@ -1456,7 +1456,7 @@ function deriveInFlightSteerAnswerIds(entries: ReadonlyArray<TimelineEntry>): Re
 type TimelineMessage = Extract<TimelineEntry, { kind: "message" }>["message"];
 
 const isQuietBotPrompt = (message: TimelineMessage) =>
-  isBotDreamingMessage(message.text) || isServerBotCheckInMessage(message);
+  isServerBotDreamingMessage(message) || isServerBotCheckInMessage(message);
 
 export function liveAnswerPreview(entries: ReadonlyArray<TimelineEntry>): string | null {
   const boundary = lastResponseBoundaryIndex(entries);

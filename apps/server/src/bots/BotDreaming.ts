@@ -1,5 +1,5 @@
 import { type BotRecord, isCompactionCommandMessage } from "@t3tools/contracts";
-import { isBotDreamingMessage } from "@t3tools/shared/botDreaming";
+import { isServerBotDreamingMessage } from "@t3tools/shared/botDreaming";
 import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import * as DateTime from "effect/DateTime";
 
@@ -70,7 +70,7 @@ export function botDreamingAction(
     const message = messageById.get(run.userMessageId);
     return (
       message !== undefined &&
-      (isCompactionCommandMessage(message) || isBotDreamingMessage(message.text))
+      (isCompactionCommandMessage(message) || isServerBotDreamingMessage(message))
     );
   };
   const latestMessage = messageById.get(latestRun.userMessageId);
@@ -95,7 +95,7 @@ export function botDreamingAction(
   const cacheExpiresAt = usage?.promptCacheExpiresAt;
   const cacheExpiryMs = cacheExpiresAt === undefined ? Number.NaN : Date.parse(cacheExpiresAt);
   const claudeCacheWarm = Number.isFinite(cacheExpiryMs) && nowMs < cacheExpiryMs;
-  if (isBotDreamingMessage(latestMessage.text)) {
+  if (isServerBotDreamingMessage(latestMessage)) {
     return NATIVE_COMPACTION_DRIVERS.has(driver) && (driver !== "claudeAgent" || claudeCacheWarm)
       ? { kind: "compact_after_dream", runId: latestRun.id }
       : null;

@@ -167,6 +167,15 @@ const makeHarness = Effect.gen(function* () {
               lineage: { relationshipToParent: thread.relationshipToParent },
             } as never);
       }),
+    getThreadTitles: (threadIds) =>
+      Effect.sync(() =>
+        Object.fromEntries(
+          threadIds.flatMap((threadId) => {
+            const thread = threads.get(threadId);
+            return thread === undefined ? [] : [[threadId, thread.title]];
+          }),
+        ),
+      ),
     getThreadRecords: (threadId, _fields, filter) =>
       Effect.sync(() => {
         const thread = threads.get(threadId)!;
@@ -417,6 +426,13 @@ it.effect("creates bots with unique slugs, one primary, an idle thread and seede
       assert.include(agentsFile, "`notes/`");
       assert.isTrue(yield* fileSystem.exists(path.join(engineerFolder, "notes")));
       assert.isTrue(yield* fileSystem.exists(path.join(harness.baseDir, "bots", "_shared")));
+      // Empty, so a fresh primary Bot doesn't start background check-ins.
+      for (const file of ["NOW.md", "HEARTBEAT.md"]) {
+        assert.strictEqual(yield* fileSystem.readFileString(path.join(engineerFolder, file)), "");
+      }
+      yield* fileSystem.remove(path.join(engineerFolder, "NOW.md"));
+      yield* bots.get({ botId: engineer.id });
+      assert.strictEqual(yield* fileSystem.readFileString(path.join(engineerFolder, "NOW.md")), "");
     }),
   ),
 );
@@ -490,8 +506,8 @@ it.effect(
             .slice(-2)
             .map((command) => [command.type, "threadId" in command ? command.threadId : null]),
           [
-            ["thread.archive", scout.threadId],
-            ["thread.archive", checkInThreadId],
+            ["thread.delete", scout.threadId],
+            ["thread.delete", checkInThreadId],
           ],
         );
         assert.strictEqual(
@@ -991,9 +1007,21 @@ it.effect(
           ],
         );
 
+        harness.threads.delete(flaky.threadId);
+        yield* Queue.offer(harness.events, {
+          id: EventId.make("event"),
+          threadId: flaky.threadId,
+          occurredAt: at,
+          type: "thread.deleted",
+          payload: {} as never,
+        });
+        assert.deepStrictEqual(yield* nextLinks((links) => links.length === 1), [
+          [engineer.id, fix.threadId, "woken"],
+        ]);
+
         yield* bots.update({ botId: engineer.id, archived: true });
         assert.lengthOf((yield* bots.list({})).codingThreads, 0);
-        assert.lengthOf((yield* bots.list({ includeArchived: true })).codingThreads, 2);
+        assert.lengthOf((yield* bots.list({ includeArchived: true })).codingThreads, 1);
       }),
     ),
 );

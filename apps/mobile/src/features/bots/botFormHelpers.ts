@@ -5,25 +5,26 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, ModelSelection } from "@t3tools/contracts";
-import { Atom } from "effect/reactivity";
+import { AsyncResult } from "effect/reactivity";
 
 import * as Dialog from "../../components/ui/Dialog";
 import { buildModelOptions, type ModelOption } from "../../lib/modelOptions";
 import { useEnvironmentServerConfig } from "../../state/entities";
-import type { BotVisualStyle } from "./botAvatars";
+import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { type BotVisualStyle, parseBotVisualStyle } from "./botAvatars";
 
 export const SUGGESTED_BOT_GROUPS = ["Engineering", "Operations", "Creative"] as const;
 
-const botVisualStyleAtom = Atom.make<BotVisualStyle>("flat").pipe(
-  Atom.withLabel("mobile-bots:visual-style"),
-);
-
 export function useBotVisualStyle(): BotVisualStyle {
-  return useAtomValue(botVisualStyleAtom);
+  const preferencesResult = useAtomValue(mobilePreferencesAtom);
+  return parseBotVisualStyle(
+    AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value.botVisualStyle : undefined,
+  );
 }
 
 export function useSetBotVisualStyle(): (style: BotVisualStyle) => void {
-  return useAtomSet(botVisualStyleAtom);
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  return (botVisualStyle) => savePreferences({ botVisualStyle });
 }
 
 export function reportBotCommandFailure(

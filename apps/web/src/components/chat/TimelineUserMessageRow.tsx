@@ -94,7 +94,7 @@ import {
 } from "./TimelineRowParts";
 import { UserMessageContextReferenceChip } from "./UserMessageContextChips";
 import { BotHandoffMessageCard } from "../bots/BotHandoffMessageCard";
-import { parseBotHandoffMessage } from "../bots/botHandoffMessage";
+import { parseBotHandoffMessage } from "@t3tools/client-runtime/bot-handoff-message";
 import {
   resolvePreviewAnnotationImage,
   userMessageFileLabel,

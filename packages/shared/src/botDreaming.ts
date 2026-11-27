@@ -1,7 +1,7 @@
 /** Server, web and mobile match this prefix to keep memory consolidation turns out of Bot chats. */
 export const BOT_DREAMING_MESSAGE_PREFIX = "[Bot memory consolidation]";
 
-export function isBotDreamingMessage(text: string): boolean {
+function isBotDreamingMessage(text: string): boolean {
   return text.trimStart().startsWith(BOT_DREAMING_MESSAGE_PREFIX);
 }
 

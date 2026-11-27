@@ -303,7 +303,7 @@ function BotSettingsSheetBody(props: {
     if (!canDelete || busy) return;
     Dialog.confirm({
       title: `Delete ${bot.name}?`,
-      message: "This removes the Bot from your roster. Its files on disk stay untouched.",
+      message: "This removes the Bot and deletes its chat. Its files on disk stay untouched.",
       confirmText: "Delete",
       destructive: true,
       onConfirm: () => {
@@ -785,7 +785,7 @@ function ClockTimeInput(props: {
           setDraft({ base: props.value, text: next });
         }
       }}
-      className="min-h-10 w-20 text-center font-mono text-sm"
+      className="min-h-10 min-w-0 flex-1 text-center font-mono text-sm"
     />
   );
 }

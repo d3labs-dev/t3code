@@ -11,7 +11,7 @@ import {
   BOT_DREAMING_NON_COMPACT_COOLDOWN_TURNS,
   botDreamingAction,
 } from "./BotDreaming.ts";
-import { at, botRecords, MINUTE_MS, NOW_MS } from "./BotDreaming.testFixtures.ts";
+import { at, botRecords, MINUTE_MS, NOW_MS, serverDreamRun } from "./BotDreaming.testFixtures.ts";
 
 const activeBot = { archivedAt: null, muted: false };
 const idle = { hasPendingBotExchanges: false };
@@ -55,14 +55,14 @@ describe("botDreamingAction", () => {
         Array.from({ length: count }, (_, index) => ({ text: `Message ${index}` }));
       const manyTurns = botRecords({
         ...smallContext,
-        runs: [{ text: BOT_DREAMING_PROMPT }, ...turns(BOT_DREAMING_FALLBACK_TURNS)],
+        runs: [serverDreamRun, ...turns(BOT_DREAMING_FALLBACK_TURNS)],
       });
       expect(botDreamingAction(manyTurns, activeBot, idle, NOW_MS)).toMatchObject(expected);
       const sinceDream = botRecords({
         ...smallContext,
         runs: [
           ...turns(BOT_DREAMING_FALLBACK_TURNS),
-          { text: BOT_DREAMING_PROMPT },
+          serverDreamRun,
           ...turns(BOT_DREAMING_FALLBACK_TURNS - 1),
         ],
       });
@@ -77,7 +77,7 @@ describe("botDreamingAction", () => {
         usedTokens: 90_000,
         runs: [
           { text: "Plan the release" },
-          { text: BOT_DREAMING_PROMPT },
+          serverDreamRun,
           ...Array.from({ length: turnCount }, (_, index) => ({ text: `Message ${index}` })),
         ],
       });
@@ -102,21 +102,29 @@ describe("botDreamingAction", () => {
     const dreamed = botRecords({
       driver,
       cacheExpiresInMs: 60 * MINUTE_MS,
-      runs: [{ text: "Plan the release" }, { text: BOT_DREAMING_PROMPT }],
+      runs: [{ text: "Plan the release" }, serverDreamRun],
     });
     expect(botDreamingAction(dreamed, activeBot, idle, NOW_MS)).toEqual(
       compacts ? { kind: "compact_after_dream", runId: lastRunId(dreamed) } : null,
     );
+    const typedPrefix = botRecords({
+      driver,
+      cacheExpiresInMs: 60 * MINUTE_MS,
+      runs: [{ text: "Plan the release" }, { text: BOT_DREAMING_PROMPT }],
+    });
+    expect(botDreamingAction(typedPrefix, activeBot, idle, NOW_MS)).toMatchObject({
+      kind: "dream",
+    });
   });
 
   it("skips compacting after a Claude dream once the prompt cache is cold", () => {
     const dreamed = botRecords({
       cacheExpiresInMs: 2 * MINUTE_MS,
-      runs: [{ text: "Plan the release" }, { text: BOT_DREAMING_PROMPT }],
+      runs: [{ text: "Plan the release" }, serverDreamRun],
     });
     expect(botDreamingAction(dreamed, activeBot, idle, NOW_MS + 2 * MINUTE_MS)).toBeNull();
     const uncached = botRecords({
-      runs: [{ text: "Plan the release" }, { text: BOT_DREAMING_PROMPT }],
+      runs: [{ text: "Plan the release" }, serverDreamRun],
     });
     expect(botDreamingAction(uncached, activeBot, idle, NOW_MS)).toBeNull();
   });
@@ -158,7 +166,7 @@ describe("botDreamingAction", () => {
     expectSkipped(
       botRecords({
         driver: "antigravity",
-        runs: [{ text: "Plan the release" }, { text: BOT_DREAMING_PROMPT }],
+        runs: [{ text: "Plan the release" }, serverDreamRun],
       }),
     );
     const steered = botRecords(warm);

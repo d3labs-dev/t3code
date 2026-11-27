@@ -44,7 +44,7 @@ export class BotFolders extends Context.Service<
     readonly folderFor: (botId: BotId) => string;
     /** Creates `_shared/`, the bot's folder and its `notes/`; returns the folder path. */
     readonly ensure: (folderPath: string) => Effect.Effect<string, BotFolderError>;
-    /** A missing document reads as empty. */
+    /** A missing document reads as empty and is created empty, since the Bot reads it with its own tools. */
     readonly readDocuments: (folderPath: string) => Effect.Effect<BotDocuments, BotFolderError>;
     /** `seed` writes only documents that do not exist yet, so a kept folder keeps its memory. */
     readonly writeDocuments: (
@@ -143,11 +143,15 @@ const make = Effect.gen(function* () {
     },
   );
 
+  // "wx" never clobbers a document the Bot wrote meanwhile, and a missing folder stays missing.
   const readDocument = (filePath: string) =>
     fileSystem.readFileString(filePath).pipe(
       Effect.catchIf(
         (error) => error.reason._tag === "NotFound",
-        () => Effect.succeed(""),
+        () =>
+          fileSystem
+            .writeFileString(filePath, "", { flag: "wx" })
+            .pipe(Effect.ignore, Effect.as("")),
       ),
       Effect.mapError(
         (cause) => new BotFolderError({ operation: "read-document", path: filePath, cause }),

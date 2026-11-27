@@ -60,7 +60,7 @@ import type {
   TurnItemId,
 } from "@t3tools/contracts";
 import { idleCompactionOf, isCompactionCommandMessage, RunId, ThreadId } from "@t3tools/contracts";
-import { isBotDreamingMessage } from "@t3tools/shared/botDreaming";
+import { isServerBotDreamingMessage } from "@t3tools/shared/botDreaming";
 import { isBotNoReplyMessage, isServerBotCheckInMessage } from "@t3tools/shared/botProactive";
 import {
   classifyToolActivity,
@@ -2449,7 +2449,7 @@ export function buildThreadFeed(
       liveRunIds.add(item.runId);
     }
     if (item.type === "user_message" && item.runId !== null) {
-      if (isBotDreamingMessage(item.text)) backgroundRunIds.add(item.runId);
+      if (isServerBotDreamingMessage({ role: "user", ...item })) backgroundRunIds.add(item.runId);
       else if (isServerBotCheckInMessage({ role: "user", ...item })) checkInRunIds.add(item.runId);
       else conversationRunIds.add(item.runId);
     } else if (item.type === "assistant_message" && item.runId !== null) {

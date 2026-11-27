@@ -1,3 +1,8 @@
+import {
+  type BotHandoffMessage,
+  botHandoffPreviewLine,
+  botHandoffStatusLabel,
+} from "@t3tools/client-runtime/bot-handoff-message";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { ArrowUpRightIcon, ChevronDownIcon, CodeXmlIcon } from "lucide-react";
 import { use, useState } from "react";
@@ -13,20 +18,14 @@ import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BotAvatar } from "./BotAvatar";
 import { useOpenThreadInMode } from "./botActions";
-import { type BotHandoffMessage, botHandoffPreviewLine } from "./botHandoffMessage";
 import { BOT_THEME_COLOR, DEFAULT_BOT_AVATAR_SHAPE } from "./botAvatars";
 
-const STATUS_BADGE: Readonly<
-  Record<
-    string,
-    { readonly label: string; readonly variant: "success" | "warning" | "error" | "secondary" }
-  >
+const STATUS_BADGE_VARIANT: Readonly<
+  Record<string, "success" | "warning" | "error" | "secondary">
 > = {
-  completed: { label: "Completed", variant: "success" },
-  waiting: { label: "Needs input", variant: "warning" },
-  failed: { label: "Failed", variant: "error" },
-  interrupted: { label: "Interrupted", variant: "secondary" },
-  cancelled: { label: "Cancelled", variant: "secondary" },
+  completed: "success",
+  waiting: "warning",
+  failed: "error",
 };
 
 export function BotHandoffMessageCard({
@@ -69,15 +68,11 @@ export function BotHandoffMessageCard({
         ? `Reply from ${peerBot?.bot.name ?? handoff.botName}`
         : handoff.title;
 
-  const statusBadge =
+  const statusLabel = botHandoffStatusLabel(handoff);
+  const statusVariant =
     handoff.kind === "from_bot"
-      ? null
-      : handoff.kind === "bot_reply" && handoff.status === "completed"
-        ? null
-        : (STATUS_BADGE[handoff.status] ?? {
-            label: handoff.status,
-            variant: "secondary" as const,
-          });
+      ? "secondary"
+      : (STATUS_BADGE_VARIANT[handoff.status] ?? "secondary");
 
   const preview = botHandoffPreviewLine(handoff.body);
   const hasMultipleLines = handoff.body.includes("\n") || handoff.body.length > 110;
@@ -114,9 +109,9 @@ export function BotHandoffMessageCard({
               {handoff.kind === "coding_thread_update" ? (
                 <span className="shrink-0 text-2xs text-muted-foreground">Coding thread</span>
               ) : null}
-              {statusBadge ? (
-                <Badge size="sm" variant={statusBadge.variant}>
-                  {statusBadge.label}
+              {statusLabel !== null ? (
+                <Badge size="sm" variant={statusVariant}>
+                  {statusLabel}
                 </Badge>
               ) : null}
             </span>

@@ -47,7 +47,16 @@ import {
 import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { useViewabilityAmount, type LegendListRef } from "@legendapp/list/react-native";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  type BotHandoffMessage,
+  botHandoffPreviewLine,
+  botHandoffStatusLabel,
+  parseBotHandoffMessage,
+} from "@t3tools/client-runtime/bot-handoff-message";
+import {
+  scopeThreadRef,
+  scopedThreadKey as scopedThreadRefKey,
+} from "@t3tools/client-runtime/environment";
 import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
 import {
   IDLE_COMPACTING_LABELS,
@@ -310,6 +319,9 @@ import { resolveUserMessageIntentBadge } from "./userMessageIntentBadge";
 import { fileChipClipboardPath, fileChipMenu, resolveFileChipTarget } from "./fileChipMenu";
 import { useFileChipShare } from "./useFileChipShare";
 import { useOpenLinkedThread } from "./useOpenLinkedThread";
+import { BotAvatar } from "../bots/BotAvatar";
+import { BOT_THEME_COLOR, DEFAULT_BOT_AVATAR_SHAPE } from "../bots/botAvatars";
+import { useBotForThread, useBotsIndex } from "../../state/bots";
 import {
   MarkdownImageAvailableWidthContext,
   ThreadMarkdownImage,
@@ -1691,6 +1703,175 @@ function ThreadAutomationMessageRow(props: {
   );
 }
 
+/** Peer-Bot messages and coding-thread updates fold to who sent them and their first line. */
+function BotHandoffMessageRow(props: {
+  readonly environmentId: EnvironmentId;
+  readonly handoff: BotHandoffMessage;
+  readonly senderThreadId: ThreadId | undefined;
+  readonly timestampLabel: string;
+  readonly expanded: boolean;
+  readonly onToggle: () => void;
+  readonly bubbleColor: ColorValue;
+  readonly bubbleMaxWidth: number | "85%";
+  readonly contentMaxWidth: number;
+  readonly iconSubtleColor: ColorValue;
+  readonly markdownStyles: MarkdownStyleSet;
+  readonly reviewCommentColors: ReviewCommentColors;
+  readonly skills?: ReadonlyArray<SelectableMarkdownSkill>;
+  readonly linkHandlers: MarkdownLinkHandlers;
+  readonly renderImage: MarkdownImageRenderer;
+}) {
+  const { handoff, environmentId, senderThreadId } = props;
+  const index = useBotsIndex();
+  const openLinkedThread = useOpenLinkedThread();
+  const peerBot =
+    handoff.kind === "coding_thread_update"
+      ? null
+      : ((senderThreadId !== undefined
+          ? index.botByThreadKey.get(
+              scopedThreadRefKey(scopeThreadRef(environmentId, senderThreadId)),
+            )
+          : undefined) ??
+        index.bots.find(
+          (candidate) =>
+            candidate.environmentId === environmentId && candidate.bot.slug === handoff.botSlug,
+        ) ??
+        null);
+  const peerName =
+    handoff.kind === "coding_thread_update" ? null : (peerBot?.bot.name ?? handoff.botName);
+  const heading =
+    handoff.kind === "from_bot"
+      ? `From ${peerName}`
+      : handoff.kind === "bot_reply"
+        ? `Reply from ${peerName}`
+        : handoff.title;
+  const detail =
+    handoff.kind === "from_bot"
+      ? `Hop ${handoff.hopCount}/${handoff.hopLimit}`
+      : handoff.kind === "coding_thread_update"
+        ? ["Coding thread", botHandoffStatusLabel(handoff)].filter(Boolean).join(" · ")
+        : botHandoffStatusLabel(handoff);
+  const preview = botHandoffPreviewLine(handoff.body);
+  const targetThreadId =
+    handoff.kind === "coding_thread_update"
+      ? handoff.threadId
+      : (peerBot?.bot.threadId ?? senderThreadId ?? null);
+
+  return (
+    <View className="mb-2 items-end">
+      <View
+        className="min-w-0 rounded-[20px]"
+        style={{
+          backgroundColor: props.bubbleColor,
+          maxWidth: props.bubbleMaxWidth,
+          ...(props.expanded ? { width: props.bubbleMaxWidth } : null),
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={[heading, detail, preview].filter(Boolean).join(". ")}
+          accessibilityHint={`Double tap to ${props.expanded ? "hide" : "show"} the message.`}
+          accessibilityState={{ expanded: props.expanded }}
+          hitSlop={4}
+          className="min-h-10 flex-row items-center gap-2 px-3.5 py-2"
+          onPress={() => {
+            void Haptics.selectionAsync();
+            props.onToggle();
+          }}
+        >
+          {handoff.kind === "coding_thread_update" ? (
+            <SymbolView
+              name="chevron.left.forwardslash.chevron.right"
+              size={14}
+              weight="medium"
+              tintColorClassName="accent-user-bubble-foreground-muted"
+              type="monochrome"
+            />
+          ) : (
+            <BotAvatar
+              icon={peerBot?.bot.icon ?? DEFAULT_BOT_AVATAR_SHAPE.id}
+              color={peerBot?.bot.color ?? BOT_THEME_COLOR}
+              size="sm"
+            />
+          )}
+          <View className="min-w-0 shrink gap-0.5">
+            <View className="min-w-0 flex-row items-center gap-1.5">
+              <Text
+                numberOfLines={1}
+                className="min-w-0 shrink font-t3-medium text-sm text-user-bubble-foreground"
+              >
+                {heading}
+              </Text>
+              {detail ? (
+                <Text
+                  numberOfLines={1}
+                  className="shrink-0 text-xs text-user-bubble-foreground-muted"
+                >
+                  {detail}
+                </Text>
+              ) : null}
+            </View>
+            {!props.expanded && preview !== "" ? (
+              <Text numberOfLines={1} className="text-sm text-user-bubble-foreground-muted">
+                {preview}
+              </Text>
+            ) : null}
+          </View>
+          <ThreadDisclosureChevron
+            expanded={props.expanded}
+            collapsedDirection="down"
+            size={11}
+            tintColor={props.iconSubtleColor}
+          />
+        </Pressable>
+        {props.expanded && handoff.body !== "" ? (
+          <View className="px-3.5 pb-2.5">
+            <MarkdownImageAvailableWidthContext value={props.contentMaxWidth}>
+              <UserMessageContent
+                text={renderAssistantCitationsAsText(handoff.body)}
+                environmentId={environmentId}
+                markdownStyles={props.markdownStyles}
+                reviewCommentColors={props.reviewCommentColors}
+                skills={props.skills}
+                linkHandlers={props.linkHandlers}
+                renderImage={props.renderImage}
+              />
+            </MarkdownImageAvailableWidthContext>
+          </View>
+        ) : null}
+      </View>
+      {props.expanded ? (
+        <View className="mt-1 flex-row items-center justify-end gap-2 pr-0.5">
+          {targetThreadId !== null ? (
+            <Pressable
+              accessibilityRole="link"
+              hitSlop={6}
+              onPress={() =>
+                openLinkedThread({
+                  environmentId: String(environmentId),
+                  threadId: String(targetThreadId),
+                })
+              }
+            >
+              <Text className="font-t3-medium text-xs text-foreground-secondary">
+                {handoff.kind === "coding_thread_update" ? "Open thread" : `Open ${peerName}`}
+              </Text>
+            </Pressable>
+          ) : null}
+          <Text className="font-t3-medium text-xs tabular-nums text-foreground-secondary">
+            {props.timestampLabel}
+          </Text>
+          <UserMessageCopyButton
+            text={handoff.body}
+            onCopy={undefined}
+            tintColor={props.iconSubtleColor}
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 /** Leads with why T3 Code compacted, when it did so without being asked. */
 function compactionLabel(label: string, title: string | undefined) {
   const text =
@@ -2161,6 +2342,29 @@ function renderFeedEntry(
           text={presentation.text}
           context={message.context}
           scheduledTaskId={presentation.scheduledTaskId}
+          timestampLabel={timestampLabel}
+          expanded={props.expandedWorkRows[rowId] ?? false}
+          onToggle={() => props.onToggleWorkRow(rowId, entry.id)}
+          bubbleColor={userBubbleColor}
+          bubbleMaxWidth={props.duoColumns ? "85%" : props.userBubbleMaxWidth}
+          contentMaxWidth={props.userBubbleMaxWidth - USER_BUBBLE_HORIZONTAL_PADDING * 2}
+          iconSubtleColor={iconSubtleColor}
+          markdownStyles={markdownStyles.user}
+          reviewCommentColors={props.reviewCommentColors}
+          skills={props.skills}
+          linkHandlers={props.markdownLinkHandlers}
+          renderImage={props.renderMarkdownImage}
+        />
+      );
+    }
+    const botHandoff = isUser ? parseBotHandoffMessage(message) : null;
+    if (botHandoff !== null) {
+      const rowId = `agent:${message.id}`;
+      return (
+        <BotHandoffMessageRow
+          environmentId={props.environmentId}
+          handoff={botHandoff}
+          senderThreadId={message.senderThreadId}
           timestampLabel={timestampLabel}
           expanded={props.expandedWorkRows[rowId] ?? false}
           onToggle={() => props.onToggleWorkRow(rowId, entry.id)}
@@ -2952,6 +3156,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const { listRef, onIsAtEndChange, onHeaderMaterialVisibilityChange } = props;
   const workflowOpening = useWorkflowOpening(props.detailRef);
   const guestShare = useThreadGuestShare(props.detailRef);
+  const bot = useBotForThread(scopeThreadRef(props.environmentId, props.threadId));
   const deviceType = useDeviceType();
   const duoColumns = useNativeWorkspaceColumnsSupported() && isDuoDevice(deviceType);
   const openPullRequest = useOpenPullRequest();
@@ -4149,6 +4354,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               ) {
                 return "message:assistant-progress";
               }
+              if (parseBotHandoffMessage(entry.message) !== null) return "message:bot-handoff";
               const { attribution } = resolveUserMessagePresentation(entry.message);
               return attribution === "automation" || attribution === "agent"
                 ? `message:${attribution}`
@@ -4235,7 +4441,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           >
             <ThreadFeedPlaceholder
               title="No conversation yet"
-              detail="Ask the agent to inspect the repo, run a command, or continue the active thread."
+              detail={
+                bot
+                  ? `Say hello to ${bot.bot.name}, or ask it to plan work or launch a coding thread.`
+                  : "Ask the agent to inspect the repo, run a command, or continue the active thread."
+              }
               topInset={topContentInset}
               bottomInset={bottomContentInset}
               horizontalPadding={horizontalPadding}

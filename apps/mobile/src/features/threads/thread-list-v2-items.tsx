@@ -1369,7 +1369,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         {props.supervisedByBot ? (
           <View
             className={cn(
-              "max-w-32 shrink-0 flex-row items-center gap-1 rounded-full px-1.5 py-0.5",
+              "min-w-0 max-w-[50%] shrink flex-row items-center gap-1 rounded-full px-1.5 py-0.5",
               selected ? "bg-primary-foreground/15" : "bg-subtle",
             )}
           >

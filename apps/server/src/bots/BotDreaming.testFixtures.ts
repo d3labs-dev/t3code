@@ -10,6 +10,7 @@ import {
   RunId,
   ThreadId,
 } from "@t3tools/contracts";
+import { BOT_DREAMING_PROMPT } from "@t3tools/shared/botDreaming";
 import * as DateTime from "effect/DateTime";
 
 import type { BotDreamingRecords } from "./BotDreaming.ts";
@@ -26,7 +27,10 @@ type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
 export interface BotRunFixture {
   readonly text: string;
   readonly status?: BotDreamingRecords["runs"][number]["status"];
+  readonly sentByServer?: boolean;
 }
+
+export const serverDreamRun: BotRunFixture = { text: BOT_DREAMING_PROMPT, sentByServer: true };
 
 /** A Bot thread whose runs completed in order, the last one now. */
 export function botRecords(
@@ -92,8 +96,9 @@ export function botRecords(
       text: runFixtures[index]!.text,
       attachments: [],
       streaming: false,
-      createdBy: "user" as const,
-      creationSource: "web" as const,
+      ...(runFixtures[index]!.sentByServer === true
+        ? { createdBy: "agent" as const, creationSource: "server" as const }
+        : { createdBy: "user" as const, creationSource: "web" as const }),
       createdAt: at(-MINUTE_MS),
       updatedAt: at(-MINUTE_MS),
     })),

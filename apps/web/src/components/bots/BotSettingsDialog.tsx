@@ -498,7 +498,7 @@ function BotDangerZone({ entry }: { readonly entry: ScopedBotEntry }) {
     if (busy) return;
     const confirmed =
       (await requestConfirmDialog(
-        `Delete ${bot.name}? Its thread is archived and it stops watching its coding threads. Its folder stays on disk.`,
+        `Delete ${bot.name}? Its chat is deleted and it stops watching its coding threads. Its folder stays on disk.`,
         { variant: "destructive" },
       )) ?? false;
     if (!confirmed) return;
@@ -541,7 +541,7 @@ function BotDangerZone({ entry }: { readonly entry: ScopedBotEntry }) {
       />
       <SettingsRow
         title="Delete Bot"
-        description="Archives its thread and stops its watches. Its folder stays on disk."
+        description="Deletes its chat and stops its watches. Its folder stays on disk."
         control={
           <Button
             size="sm"
@@ -627,7 +627,7 @@ function ProactiveCheckInRows(props: {
                   type="time"
                   nativeInput
                   aria-label="Active hours start"
-                  className="w-28"
+                  className="w-auto"
                   disabled={!editable}
                   value={proactive.activeHoursStart}
                   onChange={(event) => setActiveHour("activeHoursStart", event.currentTarget.value)}
@@ -637,7 +637,7 @@ function ProactiveCheckInRows(props: {
                   type="time"
                   nativeInput
                   aria-label="Active hours end"
-                  className="w-28"
+                  className="w-auto"
                   disabled={!editable}
                   value={proactive.activeHoursEnd}
                   onChange={(event) => setActiveHour("activeHoursEnd", event.currentTarget.value)}

@@ -20,6 +20,7 @@ import {
   type SidebarProjectGroupingMode,
 } from "@t3tools/contracts";
 import { ToolCallVisibility } from "@t3tools/contracts/settings";
+import { type BotVisualStyle, parseBotVisualStyle } from "../features/bots/botAvatars";
 import type { AndroidNavigationStyle } from "../lib/androidNavigationStyle";
 import type { ComposerEnterBehavior } from "../lib/composerEnterBehavior";
 import type { FollowUpBehavior } from "../lib/followUpBehavior";
@@ -150,6 +151,8 @@ export interface Preferences {
   readonly darkThemeId?: MobileThemeId;
   readonly themeMode?: MobileThemeMode;
   readonly androidNavigationStyle?: AndroidNavigationStyle;
+  /** Avatar finish for every Bot on this device. */
+  readonly botVisualStyle?: BotVisualStyle;
   readonly baseFontSize?: number;
   readonly terminalFontSize?: number | null;
   readonly markdownFontSize?: number;
@@ -264,6 +267,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     darkThemeId?: MobileThemeId;
     themeMode?: MobileThemeMode;
     androidNavigationStyle?: AndroidNavigationStyle;
+    botVisualStyle?: BotVisualStyle;
     baseFontSize?: number;
     terminalFontSize?: number | null;
     markdownFontSize?: number;
@@ -357,6 +361,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (parsed.androidNavigationStyle === "one-ui" || parsed.androidNavigationStyle === "material") {
     preferences.androidNavigationStyle = parsed.androidNavigationStyle;
+  }
+  if (parsed.botVisualStyle !== undefined) {
+    preferences.botVisualStyle = parseBotVisualStyle(parsed.botVisualStyle);
   }
   if (typeof parsed.baseFontSize === "number") preferences.baseFontSize = parsed.baseFontSize;
   if (typeof parsed.terminalFontSize === "number" || parsed.terminalFontSize === null) {

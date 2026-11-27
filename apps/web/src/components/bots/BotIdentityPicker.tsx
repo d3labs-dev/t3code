@@ -306,9 +306,8 @@ function ImageUploader(props: {
           description: error instanceof Error ? error.message : String(error),
         }),
       );
-    } finally {
-      setReading(false);
     }
+    setReading(false);
   };
   return (
     <div className="flex flex-col gap-2">

@@ -38,7 +38,7 @@ import {
   slugifyBotName,
 } from "@t3tools/contracts";
 import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
-import { isBotDreamingMessage } from "@t3tools/shared/botDreaming";
+import { isServerBotDreamingMessage } from "@t3tools/shared/botDreaming";
 import { isServerBotCheckInMessage } from "@t3tools/shared/botProactive";
 import { latestRootProviderFailure } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as Context from "effect/Context";
@@ -79,7 +79,7 @@ export class BotService extends Context.Service<
     /** Starts the bot's thread idle: no turn runs until someone messages it. */
     readonly create: (input: BotCreateInput) => Effect.Effect<BotDetailResult, BotError>;
     readonly update: (input: BotUpdateInput) => Effect.Effect<BotDetailResult, BotError>;
-    /** Archives the bot's thread and keeps its folder on disk. */
+    /** Deletes the bot's threads and keeps its folder on disk. */
     readonly delete: (input: BotDeleteInput) => Effect.Effect<BotDeleteResult, BotError>;
     readonly sendMessage: (input: BotMessageInput) => Effect.Effect<BotMessageResult, BotError>;
     readonly listExchanges: (
@@ -244,6 +244,17 @@ const make = Effect.gen(function* () {
     return bootstrapped.project.id;
   });
 
+  // Bots live in their own database, so links to deleted threads are dropped here, not in SQL.
+  const listLiveCodingThreadLinks = Effect.fn("BotService.listLiveCodingThreadLinks")(
+    function* (includeArchived: boolean) {
+      const links = yield* store.listCodingThreadLinks({ includeArchived });
+      if (links.length === 0) return links;
+      const titles = yield* threads.getThreadTitles(links.map((link) => link.threadId));
+      return links.filter((link) => Object.hasOwn(titles, link.threadId));
+    },
+    Effect.mapError(failed("Couldn't list the Bots' coding threads.")),
+  );
+
   const list: BotService["Service"]["list"] = Effect.fn("BotService.list")(function* (input) {
     const includeArchived = input.includeArchived === true;
     const [entries, availableMcpServers, projectId, codingThreads] = yield* Effect.all(
@@ -254,9 +265,7 @@ const make = Effect.gen(function* () {
         ),
         folders.listAvailableMcpServers,
         backingProjectId,
-        store
-          .listCodingThreadLinks({ includeArchived })
-          .pipe(Effect.mapError(failed("Couldn't list the Bots' coding threads."))),
+        listLiveCodingThreadLinks(includeArchived),
       ],
       { concurrency: "unbounded" },
     );
@@ -472,7 +481,7 @@ const make = Effect.gen(function* () {
       for (const threadId of threadIds) {
         yield* threads
           .dispatch({
-            type: "thread.archive",
+            type: "thread.delete",
             commandId: CommandId.make(
               threadId === bot.threadId ? `bot-delete:${bot.id}` : `bot-delete:${bot.id}:scout`,
             ),
@@ -480,7 +489,7 @@ const make = Effect.gen(function* () {
           })
           .pipe(
             Effect.catch((cause) =>
-              Effect.logWarning("Deleted a Bot without archiving its thread.", {
+              Effect.logWarning("Deleted a Bot without deleting its thread.", {
                 threadId,
                 cause,
               }),
@@ -784,7 +793,7 @@ const make = Effect.gen(function* () {
   // for the common events they ignore.
   const onUserMessage = Effect.fnUntraced(function* (message: OrchestrationV2ConversationMessage) {
     if (
-      isBotDreamingMessage(message.text) ||
+      isServerBotDreamingMessage(message) ||
       isServerBotCheckInMessage(message) ||
       isCompactionCommandMessage(message)
     ) {
@@ -824,6 +833,11 @@ const make = Effect.gen(function* () {
 
   const notifyIfBotThread = Effect.fnUntraced(function* (threadId: ThreadId) {
     if (Option.isSome(yield* store.findByThreadId(threadId))) yield* notifyChanged;
+  });
+
+  const notifyIfCodingThread = Effect.fnUntraced(function* (threadId: ThreadId) {
+    const links = yield* store.listCodingThreadLinks({ includeArchived: true });
+    if (links.some((link) => link.threadId === threadId)) yield* notifyChanged;
   });
 
   const onRunEnded = Effect.fnUntraced(function* (run: OrchestrationV2Run) {
@@ -893,6 +907,9 @@ const make = Effect.gen(function* () {
           if (event.payload.status !== "pending") return;
           yield* notifyIfBotThread(event.threadId);
           if (event.runId !== undefined) yield* onRequestPending(event.threadId, event.runId);
+          return;
+        case "thread.deleted":
+          yield* notifyIfCodingThread(event.threadId);
           return;
       }
     },

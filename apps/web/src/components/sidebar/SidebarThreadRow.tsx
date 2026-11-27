@@ -1178,7 +1178,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   // Only the trailing icons would remain, so the row moves them to the title line instead.
   const supervisorBot = props.supervisorBot?.botEntry.bot ?? null;
   const supervisorPill = supervisorBot ? (
-    <span className="inline-flex max-w-28 shrink-0 items-center gap-1 rounded-full bg-sidebar-control-surface/60 py-px ps-0.5 pe-1.5 text-2xs text-sidebar-muted-foreground">
+    <span className="inline-flex min-w-0 max-w-1/2 items-center gap-1 rounded-full bg-sidebar-control-surface/60 py-px ps-0.5 pe-1.5 text-2xs text-sidebar-muted-foreground">
       <BotAvatar icon={supervisorBot.icon} color={supervisorBot.color} size="xs" />
       <span className="min-w-0 truncate">via {supervisorBot.name}</span>
     </span>

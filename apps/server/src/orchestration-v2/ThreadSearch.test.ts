@@ -133,6 +133,7 @@ const message = (
     readonly minute?: number;
     readonly streaming?: boolean;
     readonly createdBy?: "user" | "agent";
+    readonly creationSource?: "web" | "server";
     readonly runId?: RunId;
   } = {},
 ): OrchestrationV2DomainEvent => ({
@@ -143,7 +144,7 @@ const message = (
   occurredAt: at(options.minute ?? 1),
   payload: {
     createdBy: options.createdBy ?? (role === "user" ? "user" : "agent"),
-    creationSource: role === "user" ? "web" : "provider",
+    creationSource: options.creationSource ?? (role === "user" ? "web" : "provider"),
     id: MessageId.make(id),
     threadId,
     runId: options.runId ?? null,
@@ -1564,11 +1565,11 @@ it.effect.each([true, false])(
             "consolidation-7",
             "user",
             "[Bot memory consolidation]\n\nReview lighthouse notes",
-            {
-              minute: 7,
-              createdBy: "agent",
-            },
+            { minute: 7, createdBy: "agent", creationSource: "server" },
           ),
+          message(bot, "typed-consolidation", "user", "[Bot memory consolidation] by hand", {
+            minute: 12,
+          }),
           message(bot, "streaming-8", "assistant", "lighthouse still typing", {
             minute: 8,
             streaming: true,
@@ -1640,7 +1641,9 @@ it.effect.each([true, false])(
         ["[From Bot: Navani (navani), hop 1/3] Check the lighthouse logs"],
       );
       assert.deepEqual(yield* recall({ threadIds, query: "compact" }), []);
-      assert.deepEqual(yield* recall({ threadIds, query: "consolidation" }), []);
+      assert.deepEqual(yield* recall({ threadIds, query: "consolidation" }), [
+        ["typed-consolidation", bot, "user", "user"],
+      ]);
       assert.deepEqual(yield* recall({ threadIds: [], query: "lighthouse" }), []);
       assert.deepEqual(yield* recall({ threadIds, query: "  " }), []);
     }).pipe(Effect.provide(layerTest)),
