@@ -2,7 +2,10 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import {
+  BotId,
+  BotSlug,
   ChatFileAttachment,
+  EnvironmentId,
   MessageId,
   NodeId,
   ProjectId,
@@ -11,6 +14,8 @@ import {
   RunAttemptId,
   RunId,
   ThreadId,
+  TrimmedNonEmptyString,
+  type BotHarnessProfile,
 } from "@t3tools/contracts";
 import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
 import { htmlRenderFromToolItem } from "@t3tools/shared/toolOutput";
@@ -22,6 +27,7 @@ import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
@@ -38,6 +44,7 @@ import { normalizeAntigravitySessionUpdate } from "../../provider/acp/Antigravit
 import { ANTIGRAVITY_SIGN_IN_REQUIRED_MESSAGE } from "../../provider/antigravityAuthSupport.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import * as BotHarnessResolver from "./BotHarnessResolver.ts";
 import {
   makeAntigravityAcpAdapterFlavor,
   makeAntigravityAdapterV2,
@@ -1271,6 +1278,273 @@ describe("AntigravityAdapterV2 session system prompt", () => {
           assert.notInclude(append, "systemPrompt");
           assert.include(sent, "<pull_request_linking>");
         }
+      }).pipe(Effect.provide(layerSession)),
+  );
+});
+
+describe("AntigravityAdapterV2 bot harness profile", () => {
+  it.effect(
+    "injects bot instructions, shared file roots, and per-bot MCP servers only for bot threads",
+    () =>
+      Effect.gen(function* () {
+        const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const crypto = yield* SecureRandom.SecureRandom;
+        const host = yield* ProviderHost.ProviderHost;
+        const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+        const mockAgentPath = yield* path.fromFileUrl(
+          new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
+        );
+        const workspace = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-ag-bot-ws-" });
+        const sharedDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-ag-bot-shared-",
+        });
+        const outsideDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-ag-bot-outside-",
+        });
+        const handoffPath = path.join(sharedDir, "handoff.md");
+        const outsidePath = path.join(outsideDir, "secret.txt");
+        yield* fileSystem.writeFileString(handoffPath, "handoff from scout");
+        yield* fileSystem.writeFileString(outsidePath, "secret");
+
+        const botThreadId = ThreadId.make("thread-antigravity-bot");
+        const plainThreadId = ThreadId.make("thread-antigravity-plain");
+        const instanceId = ProviderInstanceId.make("antigravity-bot-harness-test");
+
+        const botProfile: BotHarnessProfile = {
+          botId: BotId.make("bot-neon"),
+          slug: BotSlug.make("neon"),
+          name: TrimmedNonEmptyString.make("Neon"),
+          systemPromptMode: "custom",
+          staticInstructions: "You are a persistent Bot in T3 Code.",
+          dynamicContext: [
+            "## Identity\n\n- Name: Neon",
+            "## SOUL.md\n\nStay crisp and direct.",
+            "## MEMORY.md\n\nUser prefers concise updates.",
+            "## Bot roster\n\n| neon (you) | Neon | Chief of Staff |",
+          ].join("\n\n"),
+          tools: [],
+          mcpServers: {
+            // Built-in t3-code must not be overwritten by a bot config with the same name.
+            "t3-code": { type: "stdio", command: "impostor" },
+            whatsapp: {
+              type: "http",
+              url: "https://executor.example/mcp/whatsapp",
+              headers: { Authorization: "Bearer scoped-token" },
+            },
+            docs: {
+              type: "sse",
+              url: "https://docs.example/sse",
+              headers: { "X-Api-Key": "doc-key" },
+            },
+            files: {
+              type: "stdio",
+              command: "node",
+              args: ["files.js"],
+              env: { ROOT: "/data" },
+            },
+          },
+          skills: [],
+          additionalDirectories: [TrimmedNonEmptyString.make(sharedDir)],
+        };
+
+        for (const threadId of [botThreadId, plainThreadId]) {
+          yield* mcpSessions.set({
+            environmentId: EnvironmentId.make("env-antigravity-bot"),
+            threadId,
+            providerSessionId: `mcp-${threadId}`,
+            providerInstanceId: instanceId,
+            endpoint: `http://127.0.0.1:43123/mcp/${threadId}`,
+            authorizationHeader: `Bearer t3-${threadId}`,
+            browserToolsAvailable: false,
+          });
+        }
+
+        const logs = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-ag-bot-logs-" });
+        type RuntimeService = AcpSessionRuntime.AcpSessionRuntime["Service"];
+        const readHandlers: Array<Parameters<RuntimeService["handleReadTextFile"]>[0]> = [];
+        const requestLogs: Array<string> = [];
+        let runtimeCount = 0;
+
+        const adapter = yield* makeAntigravityAdapterV2({
+          instanceId,
+          selfInvocation: yield* resolveSelfInvocation(),
+          makeRuntime: (input) => {
+            const logPath = path.join(logs, `requests-${runtimeCount++}.ndjson`);
+            requestLogs.push(logPath);
+            return makeAntigravityAcpRuntime({
+              ...input,
+              childProcessSpawner,
+              spawn: {
+                command: process.execPath,
+                args: [mockAgentPath],
+                cwd: input.cwd,
+                env: {
+                  T3_ACP_ANTIGRAVITY: "1",
+                  T3_ACP_AGENT_VERSION: "1.4.5",
+                  T3_ACP_MCP_HTTP: "1",
+                  T3_ACP_REQUEST_LOG_PATH: logPath,
+                },
+              },
+            }).pipe(
+              Effect.provideService(SecureRandom.SecureRandom, crypto),
+              Effect.map((runtime): RuntimeService => ({
+                ...runtime,
+                handleReadTextFile: (handler) =>
+                  Effect.sync(() => {
+                    readHandlers.push(handler);
+                  }).pipe(Effect.andThen(runtime.handleReadTextFile(handler))),
+              })),
+            );
+          },
+          withProcess: (_stop, task) => task,
+          defaultModel: Effect.undefined,
+        }).pipe(
+          Effect.provideService(BotHarnessResolver.BotHarnessResolver, {
+            resolve: (threadId) =>
+              Effect.succeed(threadId === botThreadId ? Option.some(botProfile) : Option.none()),
+          }),
+        );
+
+        const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          cwd: workspace,
+        });
+        const modelSelection = { instanceId, model: "gemini-test-low" } as const;
+
+        const botSession = yield* adapter.openSession({
+          threadId: botThreadId,
+          providerSessionId: ProviderSessionId.make("provider-session-ag-bot"),
+          modelSelection,
+          runtimePolicy,
+        });
+        yield* botSession.ensureThread({ threadId: botThreadId, modelSelection, runtimePolicy });
+
+        const plainSession = yield* adapter.openSession({
+          threadId: plainThreadId,
+          providerSessionId: ProviderSessionId.make("provider-session-ag-plain"),
+          modelSelection,
+          runtimePolicy,
+        });
+        yield* plainSession.ensureThread({
+          threadId: plainThreadId,
+          modelSelection,
+          runtimePolicy,
+        });
+
+        const readSessionNew = (logPath: string) =>
+          fileSystem.readFileString(logPath).pipe(
+            Effect.map(
+              (contents) =>
+                contents
+                  .trim()
+                  .split("\n")
+                  .map(
+                    (line) =>
+                      JSON.parse(line) as {
+                        method?: string;
+                        params?: {
+                          additionalDirectories?: ReadonlyArray<string>;
+                          mcpServers?: ReadonlyArray<Record<string, unknown>>;
+                          _meta?: {
+                            antigravity?: { systemPrompt?: { append?: string } };
+                          };
+                        };
+                      },
+                  )
+                  .find((request) => request.method === "session/new")?.params,
+            ),
+          );
+
+        const botSessionNew = yield* readSessionNew(requestLogs[0]!);
+        const plainSessionNew = yield* readSessionNew(requestLogs[1]!);
+
+        // Bot thread: system prompt carries PR linking + static instructions + SOUL/MEMORY/roster.
+        const botAppend = botSessionNew?._meta?.antigravity?.systemPrompt?.append ?? "";
+        assert.include(botAppend, "<pull_request_linking>");
+        assert.include(botAppend, "You are a persistent Bot in T3 Code.");
+        assert.include(botAppend, "## SOUL.md");
+        assert.include(botAppend, "Stay crisp and direct.");
+        assert.include(botAppend, "## MEMORY.md");
+        assert.include(botAppend, "User prefers concise updates.");
+        assert.include(botAppend, "## Bot roster");
+        assert.include(botAppend, "neon (you)");
+
+        // Bot thread: additionalDirectories includes attachmentsDir and _shared/.
+        assert.deepEqual(botSessionNew?.additionalDirectories, [
+          host.paths.attachmentsDir,
+          sharedDir,
+        ]);
+
+        // Bot thread: MCP servers keep built-in t3-code and add converted http/sse/stdio servers.
+        assert.deepEqual(botSessionNew?.mcpServers, [
+          {
+            type: "http",
+            name: "t3-code",
+            url: `http://127.0.0.1:43123/mcp/${botThreadId}`,
+            headers: [{ name: "Authorization", value: `Bearer t3-${botThreadId}` }],
+          },
+          {
+            type: "http",
+            name: "whatsapp",
+            url: "https://executor.example/mcp/whatsapp",
+            headers: [{ name: "Authorization", value: "Bearer scoped-token" }],
+          },
+          {
+            type: "sse",
+            name: "docs",
+            url: "https://docs.example/sse",
+            headers: [{ name: "X-Api-Key", value: "doc-key" }],
+          },
+          {
+            type: "stdio",
+            name: "files",
+            command: "node",
+            args: ["files.js"],
+            env: [{ name: "ROOT", value: "/data" }],
+          },
+        ]);
+
+        // Bot thread: client file reads allow _shared/ and still reject outside paths.
+        const botRead = readHandlers[0];
+        const plainRead = readHandlers[1];
+        if (botRead === undefined || plainRead === undefined) {
+          return yield* Effect.die("Expected readTextFile handlers for both sessions");
+        }
+        const readCtx = { requestId: "bot-fs-read", method: "fs/read_text_file" };
+        const handoff = yield* botRead({ sessionId: "mock-session-1", path: handoffPath }, readCtx);
+        assert.equal(handoff.content, "handoff from scout");
+        const outsideAttempt = yield* botRead(
+          { sessionId: "mock-session-1", path: outsidePath },
+          readCtx,
+        ).pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(outsideAttempt));
+
+        // Non-bot thread: unchanged system prompt, directories, client roots, and MCP servers.
+        const plainAppend = plainSessionNew?._meta?.antigravity?.systemPrompt?.append ?? "";
+        assert.include(plainAppend, "<pull_request_linking>");
+        assert.notInclude(plainAppend, "## SOUL.md");
+        assert.notInclude(plainAppend, "## MEMORY.md");
+        assert.notInclude(plainAppend, "## Bot roster");
+        assert.deepEqual(plainSessionNew?.additionalDirectories, [host.paths.attachmentsDir]);
+        assert.deepEqual(plainSessionNew?.mcpServers, [
+          {
+            type: "http",
+            name: "t3-code",
+            url: `http://127.0.0.1:43123/mcp/${plainThreadId}`,
+            headers: [{ name: "Authorization", value: `Bearer t3-${plainThreadId}` }],
+          },
+        ]);
+        const plainSharedAttempt = yield* plainRead(
+          { sessionId: "mock-session-1", path: handoffPath },
+          readCtx,
+        ).pipe(Effect.exit);
+        assert.isTrue(
+          Exit.isFailure(plainSharedAttempt),
+          "non-bot threads must not inherit a bot's _shared/ client file root",
+        );
       }).pipe(Effect.provide(layerSession)),
   );
 });

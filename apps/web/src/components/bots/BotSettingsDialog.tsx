@@ -3,9 +3,11 @@ import { type ScopedBotEntry, botKey } from "@t3tools/client-runtime/state/bots"
 import {
   BOT_DEFAULT_TOOLS,
   type BotDocuments,
+  type BotMcpServerConfig,
   type BotRecord,
   type BotSystemPromptMode,
   type BotUpdateInput,
+  TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Equal from "effect/Equal";
@@ -15,6 +17,7 @@ import {
   CheckIcon,
   CopyIcon,
   FolderIcon,
+  LockIcon,
   PlusIcon,
   Trash2Icon,
   XIcon,
@@ -71,6 +74,7 @@ type EditableBotField =
   | "systemPromptMode"
   | "tools"
   | "mcpServerNames"
+  | "customMcpServers"
   | "skills";
 
 type BotRecordPatch = Partial<Pick<BotRecord, EditableBotField>>;
@@ -619,6 +623,225 @@ function ChipInput(props: {
   );
 }
 
+const CUSTOM_MCP_TRANSPORTS = [
+  { id: "http", label: "HTTP" },
+  { id: "sse", label: "SSE" },
+] as const satisfies ReadonlyArray<{ id: "http" | "sse"; label: string }>;
+
+const RESERVED_CUSTOM_MCP_NAME = "t3-code";
+
+function isValidHttpMcpUrl(raw: string): boolean {
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function customMcpServerSummary(config: BotMcpServerConfig): string {
+  if (config.type === "stdio") {
+    return [config.command, ...(config.args ?? [])].join(" ");
+  }
+  return config.url;
+}
+
+function CustomMcpServersEditor(props: {
+  readonly servers: BotRecord["customMcpServers"];
+  readonly disabled: boolean;
+  readonly onChange: (servers: BotRecord["customMcpServers"]) => void;
+}) {
+  const [name, setName] = useState("");
+  const [transport, setTransport] = useState<"http" | "sse">("http");
+  const [url, setUrl] = useState("");
+  const [authorization, setAuthorization] = useState("");
+
+  const entries = Object.entries(props.servers);
+  const trimmedName = name.trim();
+  const trimmedUrl = url.trim();
+  const trimmedAuth = authorization.trim();
+  const nameIsReserved = trimmedName === RESERVED_CUSTOM_MCP_NAME;
+  const urlInvalid = trimmedUrl !== "" && !isValidHttpMcpUrl(trimmedUrl);
+  const isUpdating = trimmedName !== "" && Object.hasOwn(props.servers, trimmedName);
+  const canAdd =
+    !props.disabled && trimmedName !== "" && !nameIsReserved && trimmedUrl !== "" && !urlInvalid;
+
+  const add = () => {
+    if (!canAdd) return;
+    const config: BotMcpServerConfig = {
+      type: transport,
+      url: TrimmedNonEmptyString.make(trimmedUrl),
+      ...(trimmedAuth === "" ? {} : { headers: { Authorization: trimmedAuth } }),
+    };
+    props.onChange({
+      ...props.servers,
+      [TrimmedNonEmptyString.make(trimmedName)]: config,
+    });
+    setName("");
+    setUrl("");
+    setAuthorization("");
+  };
+
+  const remove = (serverName: string) => {
+    const next: Record<string, BotMcpServerConfig> = {};
+    for (const [entryName, config] of entries) {
+      if (entryName !== serverName) next[entryName] = config;
+    }
+    props.onChange(next);
+  };
+
+  const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    add();
+  };
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {entries.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          {entries.map(([serverName, config]) => {
+            const summary = customMcpServerSummary(config);
+            const hasHeaders =
+              config.type !== "stdio" &&
+              config.headers !== undefined &&
+              Object.keys(config.headers).length > 0;
+            return (
+              <div
+                key={serverName}
+                className="flex min-w-0 items-center gap-2 rounded-lg border border-border/60 bg-muted/25 py-1.5 ps-2.5 pe-1.5 text-sm"
+              >
+                <span className="shrink-0 font-medium text-foreground">{serverName}</span>
+                <Badge size="sm" variant="outline" className="shrink-0">
+                  {config.type}
+                </Badge>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground" />
+                    }
+                  >
+                    {summary}
+                  </TooltipTrigger>
+                  <TooltipPopup variant="code" className="max-w-sm break-all">
+                    {summary}
+                  </TooltipPopup>
+                </Tooltip>
+                {hasHeaders ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <span className="inline-flex shrink-0 items-center text-muted-foreground" />
+                      }
+                    >
+                      <LockIcon className="size-3.5" aria-hidden />
+                    </TooltipTrigger>
+                    <TooltipPopup>Includes custom headers</TooltipPopup>
+                  </Tooltip>
+                ) : null}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        size="icon-xs"
+                        variant="ghost-muted"
+                        aria-label={`Remove ${serverName}`}
+                        disabled={props.disabled}
+                        onClick={() => remove(serverName)}
+                      />
+                    }
+                  >
+                    <XIcon aria-hidden />
+                  </TooltipTrigger>
+                  <TooltipPopup>Remove {serverName}</TooltipPopup>
+                </Tooltip>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">No custom MCP servers yet.</p>
+      )}
+      <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/20 p-2.5">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            size="sm"
+            className="sm:w-40 sm:shrink-0"
+            aria-label="Custom MCP server name"
+            aria-invalid={nameIsReserved || undefined}
+            placeholder="Name (e.g. whatsapp)"
+            disabled={props.disabled}
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+            onKeyDown={onInputKeyDown}
+          />
+          <Select
+            value={transport}
+            disabled={props.disabled}
+            onValueChange={(value) => {
+              if (value === "http" || value === "sse") setTransport(value);
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              className="w-full sm:w-24 sm:min-w-24 sm:shrink-0"
+              aria-label="Custom MCP server transport"
+            >
+              <SelectValue>
+                {CUSTOM_MCP_TRANSPORTS.find((option) => option.id === transport)?.label}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectPopup>
+              {CUSTOM_MCP_TRANSPORTS.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+          <Input
+            size="sm"
+            font="mono"
+            className="min-w-0 flex-1"
+            aria-label="Custom MCP server URL"
+            aria-invalid={urlInvalid || undefined}
+            placeholder="https://..."
+            disabled={props.disabled}
+            value={url}
+            onChange={(event) => setUrl(event.currentTarget.value)}
+            onKeyDown={onInputKeyDown}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            size="sm"
+            type="password"
+            autoComplete="off"
+            className="min-w-0 flex-1"
+            aria-label="Authorization header"
+            placeholder="Authorization header (optional)"
+            disabled={props.disabled}
+            value={authorization}
+            onChange={(event) => setAuthorization(event.currentTarget.value)}
+            onKeyDown={onInputKeyDown}
+          />
+          <Button size="sm" variant="outline" disabled={!canAdd} onClick={add}>
+            <PlusIcon aria-hidden />
+            {isUpdating ? "Update" : "Add"}
+          </Button>
+        </div>
+        {nameIsReserved ? (
+          <p className="text-2xs text-destructive">
+            {RESERVED_CUSTOM_MCP_NAME} is reserved for T3 Code&apos;s built-in MCP server.
+          </p>
+        ) : urlInvalid ? (
+          <p className="text-2xs text-destructive">Enter a valid http:// or https:// URL.</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function CapabilitiesSection(props: {
   readonly entry: ScopedBotEntry;
   readonly shown: BotRecord;
@@ -734,6 +957,16 @@ function CapabilitiesSection(props: {
           selected={shown.mcpServerNames}
           disabled={!editable}
           onChange={(mcpServerNames) => set({ mcpServerNames })}
+        />
+      </BotField>
+      <BotField
+        label="Custom MCP servers"
+        hint="Attach scoped MCP server URLs directly to this Bot."
+      >
+        <CustomMcpServersEditor
+          servers={shown.customMcpServers}
+          disabled={!editable}
+          onChange={(customMcpServers) => set({ customMcpServers })}
         />
       </BotField>
       <BotField label="Skills">

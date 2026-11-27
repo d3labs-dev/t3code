@@ -763,7 +763,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(
     ProviderInstanceRegistryHydration.layer.pipe(
       Layer.provide(SqlitePersistence.layerConfig),
-      // Providers are built here, so the Claude adapter reads bot profiles from this context.
+      // Providers are built here, so provider adapters read bot profiles from this context.
       Layer.provide(layerBotHarnessResolver.pipe(Layer.provide(layerBotStorage))),
     ),
   ),

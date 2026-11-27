@@ -1,18 +1,25 @@
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
+  type BotHarnessProfile,
+  type BotMcpServerConfig,
   ProviderDriverKind,
   ProviderInstanceId,
+  ThreadId,
   type OrchestrationV2ProviderCapabilities,
   type ProviderSetupError,
 } from "@t3tools/contracts";
+import { AgentScopeThreadId } from "@t3tools/shared/AgentScope";
 import type { SelfInvocation } from "@t3tools/shared/nodeRuntime";
+import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Exit from "effect/Exit";
 import * as Semaphore from "effect/Semaphore";
 import * as Scope from "effect/Scope";
+import type * as EffectAcpSchema from "effect-acp/compat";
 import * as EffectAcpErrors from "effect-acp/errors";
 
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
@@ -50,8 +57,64 @@ import {
   type AcpAdapterV2Flavor,
   type AcpAdapterV2RuntimeInput,
 } from "@t3tools/provider-acp/server/adapter";
+import * as BotHarnessResolver from "./BotHarnessResolver.ts";
 
 const ANTIGRAVITY_PROVIDER = ProviderDriverKind.make("antigravity");
+
+const AntigravityExtraFileRoots = Context.Reference<ReadonlyArray<string>>(
+  "t3/orchestration-v2/AntigravityExtraFileRoots",
+  { defaultValue: () => [] },
+);
+
+function antigravityBotSessionSystemPromptAppend(profile: BotHarnessProfile): string {
+  return [PULL_REQUEST_LINKING_INSTRUCTIONS, profile.staticInstructions, profile.dynamicContext]
+    .filter((section) => section.trim().length > 0)
+    .join("\n\n");
+}
+
+function toAcpBotMcpServer(name: string, config: BotMcpServerConfig): EffectAcpSchema.McpServer {
+  switch (config.type) {
+    case "stdio":
+      return {
+        name,
+        command: config.command,
+        args: [...(config.args ?? [])],
+        env: Object.entries(config.env ?? {}).map(([envName, value]) => ({
+          name: envName,
+          value,
+        })),
+      };
+    case "http":
+      return {
+        type: "http",
+        name,
+        url: config.url,
+        headers: Object.entries(config.headers ?? {}).map(([headerName, value]) => ({
+          name: headerName,
+          value,
+        })),
+      };
+    case "sse":
+      return {
+        type: "sse",
+        name,
+        url: config.url,
+        headers: Object.entries(config.headers ?? {}).map(([headerName, value]) => ({
+          name: headerName,
+          value,
+        })),
+      };
+  }
+}
+
+function mergeAcpMcpServers(
+  base: ReadonlyArray<EffectAcpSchema.McpServer>,
+  extra: ReadonlyArray<EffectAcpSchema.McpServer>,
+): ReadonlyArray<EffectAcpSchema.McpServer> {
+  if (extra.length === 0) return base;
+  const existingNames = new Set(base.map((server) => server.name));
+  return [...base, ...extra.filter((server) => !existingNames.has(server.name))];
+}
 
 const AntigravityProviderCapabilitiesV2 = {
   ...AcpProviderCapabilitiesV2,
@@ -129,25 +192,76 @@ interface AntigravityFlavorServices {
   readonly fileSystem: FileSystem.FileSystem;
   readonly path: Path.Path;
   readonly host: ProviderHost.ProviderHost["Service"];
+  readonly botHarnessResolver?: Effect.Success<typeof BotHarnessResolver.BotHarnessResolver>;
 }
 
 export function makeAntigravityAcpAdapterFlavor(
   options: AntigravityAdapterV2Options & AntigravityFlavorServices,
 ): AcpAdapterV2Flavor {
   const { profileDirectory } = options;
-  const antigravityClientFileRoots = (cwd: string | null) =>
-    cwd === null ? [options.host.paths.attachmentsDir] : [cwd, options.host.paths.attachmentsDir];
+  const antigravityClientFileRoots = (cwd: string | null, extraRoots: ReadonlyArray<string> = []) =>
+    Array.from(
+      new Set([...(cwd === null ? [] : [cwd]), options.host.paths.attachmentsDir, ...extraRoots]),
+    );
   const makeRuntime = Effect.fn("AntigravityAdapterV2.makeRuntime")(
     function* (input: AcpAdapterV2RuntimeInput) {
       const scope = yield* Scope.fork(yield* Effect.scope);
+      const rawThreadId = yield* AgentScopeThreadId;
+      const botProfile =
+        rawThreadId === undefined ||
+        rawThreadId.trim().length === 0 ||
+        options.botHarnessResolver === undefined
+          ? Option.none<BotHarnessProfile>()
+          : yield* options.botHarnessResolver.resolve(ThreadId.make(rawThreadId.trim()));
+      const sessionSystemPromptAppend = Option.match(botProfile, {
+        onNone: () => PULL_REQUEST_LINKING_INSTRUCTIONS,
+        onSome: antigravityBotSessionSystemPromptAppend,
+      });
+      const botAdditionalDirectories = Option.match(botProfile, {
+        onNone: () => [] as ReadonlyArray<string>,
+        onSome: (profile) => profile.additionalDirectories,
+      });
+      const additionalDirectories = Array.from(
+        new Set([options.host.paths.attachmentsDir, ...botAdditionalDirectories]),
+      );
+      const botMcpServers = Option.match(botProfile, {
+        onNone: () => [] as ReadonlyArray<EffectAcpSchema.McpServer>,
+        onSome: (profile) =>
+          Object.entries(profile.mcpServers).map(([name, config]) =>
+            toAcpBotMcpServer(name, config),
+          ),
+      });
+      const withBotMcpServers = <
+        T extends {
+          readonly mcpServers?: ReadonlyArray<EffectAcpSchema.McpServer>;
+          readonly acpMcpServers?: ReadonlyArray<EffectAcpSchema.McpServer>;
+          readonly httpMcpServers?: ReadonlyArray<EffectAcpSchema.McpServer>;
+        },
+      >(
+        target: T,
+      ): T =>
+        botMcpServers.length === 0
+          ? target
+          : {
+              ...target,
+              ...(target.mcpServers === undefined
+                ? {}
+                : { mcpServers: mergeAcpMcpServers(target.mcpServers, botMcpServers) }),
+              ...(target.acpMcpServers === undefined
+                ? {}
+                : { acpMcpServers: mergeAcpMcpServers(target.acpMcpServers, botMcpServers) }),
+              ...(target.httpMcpServers === undefined
+                ? {}
+                : { httpMcpServers: mergeAcpMcpServers(target.httpMcpServers, botMcpServers) }),
+            };
       const runtime = yield* options
         .withProcess(
           Scope.close(scope, Exit.void),
           options.makeRuntime({
-            ...input,
+            ...withBotMcpServers(input),
             clientFileReads: true,
-            sessionSystemPromptAppend: PULL_REQUEST_LINKING_INSTRUCTIONS,
-            additionalDirectories: [options.host.paths.attachmentsDir],
+            sessionSystemPromptAppend,
+            additionalDirectories,
           }),
         )
         .pipe(Effect.provideService(Scope.Scope, scope));
@@ -158,9 +272,40 @@ export function makeAntigravityAcpAdapterFlavor(
       let projectUpdate: Parameters<typeof runtime.handleSessionUpdate>[0] | undefined;
       return {
         ...runtime,
+        ...(botMcpServers.length === 0
+          ? {}
+          : {
+              loadSession: (sessionId, activationOptions) =>
+                runtime.loadSession(
+                  sessionId,
+                  activationOptions === undefined
+                    ? undefined
+                    : withBotMcpServers(activationOptions),
+                ),
+              resumeSession: (sessionId, activationOptions) =>
+                runtime.resumeSession(
+                  sessionId,
+                  activationOptions === undefined
+                    ? undefined
+                    : withBotMcpServers(activationOptions),
+                ),
+              forkSession: (sessionId, activationOptions, meta) =>
+                runtime.forkSession(
+                  sessionId,
+                  activationOptions === undefined
+                    ? undefined
+                    : withBotMcpServers(activationOptions),
+                  meta,
+                ),
+            }),
         handleReadTextFile: (handler) =>
           runtime.handleReadTextFile((request, context) =>
-            handler(request, context).pipe(
+            (botAdditionalDirectories.length === 0
+              ? handler(request, context)
+              : handler(request, context).pipe(
+                  Effect.provideService(AntigravityExtraFileRoots, botAdditionalDirectories),
+                )
+            ).pipe(
               Effect.onExit((exit) => {
                 const served = reads.attempted(request.path, Exit.isSuccess(exit));
                 if (served === undefined || projectUpdate === undefined) return Effect.void;
@@ -253,13 +398,15 @@ export function makeAntigravityAcpAdapterFlavor(
     sessionModeForPolicy: (policy) => antigravityPermissionMode(policy.runtimeMode),
     runtimeModeForSessionMode: antigravityRuntimeModeForSessionMode,
     clientFileSystem: {
-      readTextFile: (request, cwd) =>
-        readAntigravityClientTextFile({
+      readTextFile: Effect.fn("AntigravityAdapterV2.readTextFile")(function* (request, cwd) {
+        const extraRoots = yield* AntigravityExtraFileRoots;
+        return yield* readAntigravityClientTextFile({
           fileSystem: options.fileSystem,
           path: options.path,
-          allowedRoots: antigravityClientFileRoots(cwd),
+          allowedRoots: antigravityClientFileRoots(cwd, extraRoots),
           request,
-        }),
+        });
+      }),
     },
     approvalOptions: antigravityApprovalOptions,
     extractPermissionQuestion: (request) => {
@@ -298,6 +445,7 @@ export const makeAntigravityAdapterV2 = Effect.fn("makeAntigravityAdapterV2")(fu
     fileSystem: yield* FileSystem.FileSystem,
     path: yield* Path.Path,
     host: yield* ProviderHost.ProviderHost,
+    botHarnessResolver: yield* BotHarnessResolver.BotHarnessResolver,
   };
   return yield* makeAcpAdapterV2({
     instanceId: options.instanceId,
