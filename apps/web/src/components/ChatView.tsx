@@ -3452,6 +3452,7 @@ export default function ChatView(props: ChatViewProps) {
                   activeThreadKey={activeThreadKey}
                   syncing={threadSyncPhase !== null}
                   detailLoading={threadDetailLoading}
+                  toolCallVisibilityOverride={activeBot ? "zen" : undefined}
                   citationRequest={citationRequest}
                   citationHistory={citationHistory}
                   onCiteAssistantText={citeAssistantTextStable}

@@ -98,7 +98,7 @@ import { WorktreeSetupCard } from "./WorktreeSetupCard";
 import { useOpenPrLink } from "~/lib/openPullRequestLink";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { cn } from "~/lib/utils";
-import { type TimestampFormat } from "@t3tools/contracts/settings";
+import { type TimestampFormat, type ToolCallVisibility } from "@t3tools/contracts/settings";
 import { type HandoffTimelineRun } from "./V2LifecycleRow";
 import { TimelineSystemDivider } from "./TimelineSystemDivider";
 
@@ -327,6 +327,8 @@ interface MessagesTimelineProps {
   findQuery?: string;
   activeFindMatch?: ThreadFindMatch | null;
   findNavigationId?: number;
+  /** Forces a specific timeline density for specialized threads (e.g. quiet Bot chats). */
+  toolCallVisibilityOverride?: ToolCallVisibility | undefined;
 }
 
 export function MessagesTimeline(props: MessagesTimelineProps) {
@@ -373,6 +375,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   findQuery = "",
   activeFindMatch = null,
   findNavigationId = 0,
+  toolCallVisibilityOverride,
   latestRun,
   announcedRun = null,
   detailBehindShell = false,
@@ -633,7 +636,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     }
   }
 
-  const preferredToolCallVisibility = useClientSettings((settings) => settings.toolCallVisibility);
+  const settingsToolCallVisibility = useClientSettings((settings) => settings.toolCallVisibility);
+  const preferredToolCallVisibility = toolCallVisibilityOverride ?? settingsToolCallVisibility;
   const screenReaderAnnouncements = useClientSettings(
     (settings) => settings.screenReaderAnnouncements,
   );

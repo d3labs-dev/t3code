@@ -93,6 +93,8 @@ import {
   TimelineRowTimestamp,
 } from "./TimelineRowParts";
 import { UserMessageContextReferenceChip } from "./UserMessageContextChips";
+import { BotHandoffMessageCard } from "../bots/BotHandoffMessageCard";
+import { parseBotHandoffMessage } from "../bots/botHandoffMessage";
 import {
   resolvePreviewAnnotationImage,
   userMessageFileLabel,
@@ -270,12 +272,15 @@ export function UserMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mes
 
 function UserMessageContent({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  const botHandoff = parseBotHandoffMessage(row.message);
   return ctx.workflowOpening?.messageId === row.message.id ? (
     <WorkflowOpeningBlock
       opening={ctx.workflowOpening}
       environmentId={ctx.activeThreadEnvironmentId}
       onOpenThread={(threadId) => ctx.onOpenThread(ThreadId.make(threadId))}
     />
+  ) : botHandoff !== null ? (
+    <BotHandoffMessageCard row={row} handoff={botHandoff} />
   ) : resolveUserMessagePresentation(row.message).attribution === "automation" ? (
     <AutomationMessageRow row={row} />
   ) : (
