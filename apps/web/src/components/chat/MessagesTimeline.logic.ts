@@ -65,6 +65,7 @@ import {
 } from "@t3tools/contracts";
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/shell";
 import type { ToolCallVisibility } from "@t3tools/contracts/settings";
+import { isBotDreamingMessage } from "@t3tools/shared/botDreaming";
 import { resolveT3McpToolDefinition } from "@t3tools/shared/t3McpToolPresentation";
 import { compactDynamicToolOutput } from "@t3tools/shared/toolOutput";
 import { htmlRenderReferencesEqual, type HtmlRenderReference } from "@t3tools/shared/htmlRender";
@@ -1404,6 +1405,14 @@ function settleSupersededReasoning(entries: ReadonlyArray<TimelineEntry>) {
   });
 }
 
+function workEntryIsError(work: WorkLogEntry): boolean {
+  return (
+    work.tone === "error" ||
+    work.sourceActivityKind === "runtime.error" ||
+    (work.itemType === "error" && work.toolLifecycleStatus !== "completed")
+  );
+}
+
 function workShownAsFinalAnswerOnly(
   entry: TimelineEntry,
   pendingApprovalRequestIds: ReadonlySet<RuntimeRequestId> | undefined,
@@ -1418,9 +1427,7 @@ function workShownAsFinalAnswerOnly(
     work.questionAnswer !== undefined ||
     timelineEntryIsCompaction(entry) ||
     timelineEntryStartsResponse(entry) ||
-    work.tone === "error" ||
-    work.sourceActivityKind === "runtime.error" ||
-    (work.itemType === "error" && work.toolLifecycleStatus !== "completed")
+    workEntryIsError(work)
   );
 }
 
@@ -1474,6 +1481,40 @@ function runningSubagentsAtRunTail(entries: ReadonlyArray<TimelineEntry>, runId:
   return running;
 }
 
+/** Bot memory consolidation runs in the background: only its errors and pending approvals show. */
+function withoutBotDreamingRuns(
+  entries: ReadonlyArray<TimelineEntry>,
+  pendingApprovalRequestIds: ReadonlySet<RuntimeRequestId> | undefined,
+): ReadonlyArray<TimelineEntry> {
+  const dreamingRunIds = new Set<RunId>();
+  const conversationRunIds = new Set<RunId>();
+  for (const entry of entries) {
+    if (entry.kind !== "message" || entry.message.role !== "user" || entry.message.runId === null)
+      continue;
+    (isBotDreamingMessage(entry.message.text) ? dreamingRunIds : conversationRunIds).add(
+      entry.message.runId,
+    );
+  }
+  // A run that also carries someone's message is a conversation, never hidden.
+  for (const runId of conversationRunIds) dreamingRunIds.delete(runId);
+  if (dreamingRunIds.size === 0) return entries;
+  return entries.filter((entry) => {
+    const runId =
+      entry.kind === "message"
+        ? entry.message.runId
+        : entry.kind === "event"
+          ? entry.projectedItem.item.runId
+          : timelineEntryRunId(entry);
+    if (runId === null || !dreamingRunIds.has(runId)) return true;
+    if (entry.kind !== "work") return false;
+    const item = entry.entry.projectedItem?.item;
+    return (
+      workEntryIsError(entry.entry) ||
+      (item?.type === "approval_request" && pendingApprovalRequestIds?.has(item.requestId) === true)
+    );
+  });
+}
+
 function timelineRowEntries(
   input: Pick<
     MessagesTimelineRowsInput,
@@ -1487,7 +1528,7 @@ function timelineRowEntries(
   >,
 ) {
   const visibility = input.toolCallVisibility ?? "showAll";
-  const entries = input.timelineEntries;
+  const entries = withoutBotDreamingRuns(input.timelineEntries, input.pendingApprovalRequestIds);
   let shown = entries;
   if (visibility === "zen") {
     const answering = input.isWorking && input.latestRun?.turnEnded !== true;

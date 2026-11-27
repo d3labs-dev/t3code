@@ -43,6 +43,7 @@ import * as Schema from "effect/Schema";
 import * as Tracer from "effect/Tracer";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as Statement from "effect/sql/Statement";
+import { BOT_DREAMING_PROMPT } from "@t3tools/shared/botDreaming";
 import { projectThreadAwarenessV2 } from "@t3tools/shared/agentAwareness";
 import { MCP_APP_OUTPUT_KEY } from "@t3tools/shared/mcpApp";
 
@@ -7672,6 +7673,15 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
     ["a typed /compact", "user", "mobile", undefined, false, "/compact"],
     ["a normalized idle command", "agent", "server", undefined, true, " \t\u00a0/COMPACT\u3000\n"],
     ["an ordinary prompt with idle metadata", "user", "web", "onReturn", false, "Continue"],
+    [
+      "a Bot memory consolidation",
+      "agent",
+      "server",
+      undefined,
+      true,
+      ` \u00a0${BOT_DREAMING_PROMPT}`,
+    ],
+    ["a typed consolidation prefix", "user", "web", undefined, false, BOT_DREAMING_PROMPT],
   ] as const)(
     "keeps the shell on the user's last turn only during %s",
     ([name, createdBy, creationSource, idleCompaction, silent, text]) =>

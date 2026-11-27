@@ -3,6 +3,10 @@ import { applyOrchestrationV2ThreadVisit, pendingGuestMessageCount } from "@t3to
 import { applyThreadPullRequestLinkUpdate } from "../sourceControl/threadPullRequests.ts";
 import { projectTurnItemForWire } from "./WireProjection.ts";
 import * as Stream from "effect/Stream";
+import {
+  BOT_DREAMING_MESSAGE_PREFIX,
+  isServerBotDreamingMessage,
+} from "@t3tools/shared/botDreaming";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { makeThreadFind } from "./ThreadFind.ts";
 import { unsentManualContinuationSource } from "./manualContinuation.ts";
@@ -1753,8 +1757,8 @@ export function threadShellFromProjection(
         (left, right) =>
           DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt),
       )[0] ?? null;
-  // T3 Code's own idle compactions stay out of the shell unless they fail, so thread lists,
-  // notifications and the relay keep presenting the user's last turn.
+  // T3 Code's own idle compactions and Bot memory consolidations stay out of the shell unless
+  // they fail, so thread lists, notifications and the relay keep presenting the user's last turn.
   const runs = projection.runs.filter((run) => !isSilentRunForShell(run, projection));
   const latestRun =
     usageLimitRunPresentedAsLatest(
@@ -1781,7 +1785,7 @@ export function threadShellFromProjection(
   );
 
   const userMessages = projection.messages
-    .filter((message) => message.role === "user" && idleCompactionOf(message) === undefined)
+    .filter((message) => message.role === "user" && !isSilentShellPrompt(message))
     .toSorted(
       (left, right) =>
         DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt),
@@ -1945,6 +1949,10 @@ function activeProviderGoalForShell(
   return providerThreads.find((thread) => thread.id === activeProviderThreadId)?.goal ?? null;
 }
 
+function isSilentShellPrompt(message: OrchestrationV2ThreadProjection["messages"][number]) {
+  return idleCompactionOf(message) !== undefined || isServerBotDreamingMessage(message);
+}
+
 function isSilentRunForShell(
   run: OrchestrationV2ThreadProjection["runs"][number],
   projection: Pick<OrchestrationV2ThreadProjection, "messages" | "turnItems">,
@@ -1952,7 +1960,7 @@ function isSilentRunForShell(
   return (
     run.status !== "failed" &&
     projection.messages.some(
-      (message) => message.id === run.userMessageId && idleCompactionOf(message) !== undefined,
+      (message) => message.id === run.userMessageId && isSilentShellPrompt(message),
     ) &&
     !projection.turnItems.some(
       (item) => item.runId === run.id && item.type === "compaction" && item.status === "failed",
@@ -7875,6 +7883,26 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         )
       )`;
     };
+    // Mirrors isSilentShellPrompt; JavaScript trimStart drops the same whitespace.
+    const isSilentShellMessage = (alias: string) => {
+      const payload = sql.literal(`${alias}.payload_json`);
+      return sql`(
+        ${isIdleCompactionMessage(alias)}
+        OR (
+          ${sql.literal(`${alias}.role`)} = 'user'
+          AND json_extract(${payload}, '$.createdBy') = 'agent'
+          AND json_extract(${payload}, '$.creationSource') = 'server'
+          AND substr(
+            ltrim(json_extract(${payload}, '$.text'),
+              char(9, 10, 11, 12, 13, 32, 160, 5760, 8192, 8193, 8194, 8195,
+                8196, 8197, 8198, 8199, 8200, 8201, 8202, 8232, 8233, 8239, 8287, 12288, 65279)
+            ),
+            1,
+            ${BOT_DREAMING_MESSAGE_PREFIX.length}
+          ) = ${BOT_DREAMING_MESSAGE_PREFIX}
+        )
+      )`;
+    };
     // Mirrors isSilentRunForShell.
     const isSilentShellRun = (alias: string) => {
       const run = sql.literal(alias);
@@ -7883,7 +7911,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         AND EXISTS (
           SELECT 1 FROM orchestration_v2_projection_messages prompt
           WHERE prompt.message_id = json_extract(${run}.payload_json, '$.userMessageId')
-            AND ${isIdleCompactionMessage("prompt")}
+            AND ${isSilentShellMessage("prompt")}
         ) AND NOT EXISTS (
           SELECT 1 FROM orchestration_v2_projection_turn_items compaction
           WHERE compaction.thread_id = ${run}.thread_id AND compaction.run_id = ${run}.run_id
@@ -8087,7 +8115,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 FROM orchestration_v2_projection_messages message
                 WHERE message.thread_id = t.thread_id
                   AND message.role = 'user'
-                  AND NOT ${isIdleCompactionMessage("message")}
+                  AND NOT ${isSilentShellMessage("message")}
                 ORDER BY message.updated_at DESC, message.message_id DESC
                 LIMIT 1
               ) AS latest_user_message_at,
@@ -8097,7 +8125,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 WHERE message.thread_id = t.thread_id
                   AND message.role = 'user'
                   AND json_extract(message.payload_json, '$.createdBy') = 'user'
-                  AND NOT ${isIdleCompactionMessage("message")}
+                  AND NOT ${isSilentShellMessage("message")}
                 ORDER BY message.updated_at DESC, message.message_id DESC
                 LIMIT 1
               ) AS latest_user_authored_message_at,
@@ -8386,7 +8414,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 SELECT message.updated_at
                 FROM orchestration_v2_projection_messages message
                 WHERE message.thread_id = t.thread_id AND message.role = 'user'
-                  AND NOT ${isIdleCompactionMessage("message")}
+                  AND NOT ${isSilentShellMessage("message")}
                 ORDER BY message.updated_at DESC, message.message_id DESC
                 LIMIT 1
               ) AS latest_user_message_at,
@@ -8395,7 +8423,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 FROM orchestration_v2_projection_messages message
                 WHERE message.thread_id = t.thread_id AND message.role = 'user'
                   AND json_extract(message.payload_json, '$.createdBy') = 'user'
-                  AND NOT ${isIdleCompactionMessage("message")}
+                  AND NOT ${isSilentShellMessage("message")}
                 ORDER BY message.updated_at DESC, message.message_id DESC
                 LIMIT 1
               ) AS latest_user_authored_message_at
@@ -8441,7 +8469,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                     SELECT 1 FROM orchestration_v2_projection_messages message
                     WHERE message.thread_id = t.thread_id AND message.role = 'user'
                       AND json_extract(message.payload_json, '$.createdBy') = 'user'
-                      AND NOT ${isIdleCompactionMessage("message")}
+                      AND NOT ${isSilentShellMessage("message")}
                       AND message.updated_at > COALESCE(
                         json_extract(link.payload_json, '$.startedAt'), link.updated_at
                       )

@@ -23,9 +23,14 @@ const toMcpFailure = (error: BotError) =>
 const invalidRequest = (message: string) =>
   new OrchestratorMcpFailure({ code: "invalid_request", message });
 
-const documentsPatch = (soul: string | undefined, memory: string | undefined) => ({
-  ...(soul === undefined ? {} : { soul }),
-  ...(memory === undefined ? {} : { memory }),
+const documentsPatch = (documents: {
+  readonly soul?: string | undefined;
+  readonly now?: string | undefined;
+  readonly memory?: string | undefined;
+}) => ({
+  ...(documents.soul === undefined ? {} : { soul: documents.soul }),
+  ...(documents.now === undefined ? {} : { now: documents.now }),
+  ...(documents.memory === undefined ? {} : { memory: documents.memory }),
 });
 
 const savedBot = (scope: McpInvocationContext.McpInvocationScope, bot: BotRecord) => ({
@@ -46,6 +51,19 @@ const findBotId = Effect.fn("mcp.findBotId")(function* (
   const bot = yield* bots.getBySlug(slug).pipe(Effect.mapError(toMcpFailure));
   if (Option.isNone(bot)) return yield* invalidRequest(`No Bot has the slug "${slug}".`);
   return bot.value.id;
+});
+
+const callingBot = Effect.fn("mcp.callingBot")(function* (tool: string) {
+  const scope = yield* McpInvocationContext.McpInvocationContext;
+  const bots = yield* BotService.BotService;
+  const bot =
+    scope.thread === undefined
+      ? Option.none<BotRecord>()
+      : yield* bots.getByThreadId(scope.thread.threadId).pipe(Effect.mapError(toMcpFailure));
+  if (Option.isNone(bot)) {
+    return yield* invalidRequest(`Only a Bot's own thread can call ${tool}.`);
+  }
+  return { scope, bot: bot.value };
 });
 
 export const layer = McpToolAccess.toLayer(BotsToolkit, {
@@ -71,17 +89,10 @@ export const layer = McpToolAccess.toLayer(BotsToolkit, {
   ),
   bot_message: McpToolAccess.writesEnvironment((input) =>
     Effect.gen(function* () {
-      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const { scope, bot: sender } = yield* callingBot("bot_message");
       const bots = yield* BotService.BotService;
-      const sender =
-        scope.thread === undefined
-          ? Option.none<BotRecord>()
-          : yield* bots.getByThreadId(scope.thread.threadId).pipe(Effect.mapError(toMcpFailure));
-      if (Option.isNone(sender)) {
-        return yield* invalidRequest("Only a Bot's own thread can send bot_message.");
-      }
       const { exchange } = yield* bots
-        .sendMessage({ ...input, fromBotId: sender.value.id })
+        .sendMessage({ ...input, fromBotId: sender.id })
         .pipe(Effect.mapError(toMcpFailure));
       return {
         exchangeId: exchange.id,
@@ -94,7 +105,22 @@ export const layer = McpToolAccess.toLayer(BotsToolkit, {
       };
     }),
   ),
-  bot_create: McpToolAccess.writesEnvironment(({ soul, memory, ...input }, check) =>
+  bot_search_history: McpToolAccess.readsAsCaller((input) =>
+    Effect.gen(function* () {
+      const { scope, bot } = yield* callingBot("bot_search_history");
+      const bots = yield* BotService.BotService;
+      const { matches } = yield* bots
+        .searchHistory({ ...input, botId: bot.id })
+        .pipe(Effect.mapError(toMcpFailure));
+      return {
+        matches: matches.map((match) => ({
+          ...match,
+          link: McpInvocationContext.threadLinkFor(scope, match.threadId),
+        })),
+      };
+    }),
+  ),
+  bot_create: McpToolAccess.writesEnvironment(({ soul, now, memory, ...input }, check) =>
     Effect.gen(function* () {
       const { scope, caller } = yield* check;
       const modelSelection = input.modelSelection ?? caller?.modelSelection;
@@ -103,23 +129,24 @@ export const layer = McpToolAccess.toLayer(BotsToolkit, {
       }
       const bots = yield* BotService.BotService;
       const { bot } = yield* bots
-        .create({ ...input, modelSelection, documents: documentsPatch(soul, memory) })
+        .create({ ...input, modelSelection, documents: documentsPatch({ soul, now, memory }) })
         .pipe(Effect.mapError(toMcpFailure));
       return savedBot(scope, bot);
     }),
   ),
-  bot_update: McpToolAccess.writesEnvironment(({ botId, slug, soul, memory, ...input }, check) =>
-    Effect.gen(function* () {
-      const { scope } = yield* check;
-      const bots = yield* BotService.BotService;
-      const { bot } = yield* bots
-        .update({
-          ...input,
-          botId: yield* findBotId(botId, slug),
-          documents: documentsPatch(soul, memory),
-        })
-        .pipe(Effect.mapError(toMcpFailure));
-      return savedBot(scope, bot);
-    }),
+  bot_update: McpToolAccess.writesEnvironment(
+    ({ botId, slug, soul, now, memory, ...input }, check) =>
+      Effect.gen(function* () {
+        const { scope } = yield* check;
+        const bots = yield* BotService.BotService;
+        const { bot } = yield* bots
+          .update({
+            ...input,
+            botId: yield* findBotId(botId, slug),
+            documents: documentsPatch({ soul, now, memory }),
+          })
+          .pipe(Effect.mapError(toMcpFailure));
+        return savedBot(scope, bot);
+      }),
   ),
 });

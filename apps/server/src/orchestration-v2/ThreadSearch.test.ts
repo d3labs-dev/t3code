@@ -285,6 +285,29 @@ it.effect("ThreadSearch excludes legacy placeholders still in the index", () =>
 );
 
 it.layer(layerTest)("ThreadSearch", (it) => {
+  it.effect("reads a Bot's thread messages by thread instead of scanning every message", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const request = { substrings: "[]", shortSpellings: "[]", threadIds: '["thread:bot"]' };
+      for (const query of [
+        ThreadSearch.threadHandoffHitsQuery(sql, request),
+        ThreadSearch.threadIndexedHitsQuery(sql, { ...request, match: null }),
+      ]) {
+        const plan = (yield* sql<{ readonly detail: string }>`EXPLAIN QUERY PLAN ${query}`).map(
+          (row) => row.detail,
+        );
+        assert.isTrue(
+          plan.some((detail) => /^SEARCH messages USING INDEX \S+ \(thread_id=\?/.test(detail)),
+          plan.join("\n"),
+        );
+        assert.isFalse(
+          plan.some((detail) => detail.startsWith("SCAN messages")),
+          plan.join("\n"),
+        );
+      }
+    }),
+  );
+
   it.effect("reads the newest hits without sorting all of them", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
@@ -1499,4 +1522,126 @@ it.effect("searches on the reader worker while the writer is busy", () =>
       );
     }).pipe(Effect.provide(layerFile));
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect.each([true, false])(
+  "ThreadSearch.searchThreadMessages recalls every match in a Bot's threads (indexed: %s)",
+  (indexed) =>
+    Effect.gen(function* () {
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const search = yield* ThreadSearch.ThreadSearch;
+      const sql = yield* SqlClient.SqlClient;
+      const project = ProjectId.make("project:bot-recall");
+      const bot = ThreadId.make("thread:bot");
+      const coding = ThreadId.make("thread:bot-coding");
+      const deleted = ThreadId.make("thread:bot-deleted");
+      const unrelated = ThreadId.make("thread:bot-unrelated");
+      yield* createProject(project);
+      yield* Effect.forEach(
+        [
+          thread(bot, project),
+          message(bot, "user-1", "user", "Deploy the lighthouse service", { minute: 1 }),
+          message(bot, "assistant-2", "assistant", "The lighthouse is live", { minute: 2 }),
+          message(
+            bot,
+            "from-bot-5",
+            "user",
+            "[From Bot: Navani (navani), hop 1/3]\n\nCheck the lighthouse logs",
+            {
+              minute: 5,
+              createdBy: "agent",
+            },
+          ),
+          message(
+            bot,
+            "coding-update-6",
+            "user",
+            "[Coding thread update: Lighthouse fix (thread:bot-coding), status: completed]\n\nDone",
+            { minute: 6, createdBy: "agent" },
+          ),
+          message(
+            bot,
+            "consolidation-7",
+            "user",
+            "[Bot memory consolidation]\n\nReview lighthouse notes",
+            {
+              minute: 7,
+              createdBy: "agent",
+            },
+          ),
+          message(bot, "streaming-8", "assistant", "lighthouse still typing", {
+            minute: 8,
+            streaming: true,
+          }),
+          message(bot, "weaker-9", "user", "lighthouses everywhere", { minute: 9 }),
+          message(bot, "agent-compact", "user", "/compact", { minute: 10, createdBy: "agent" }),
+          message(bot, "user-compact", "user", " /compact ", { minute: 11 }),
+          thread(coding, project, { archivedAt: at(5) }),
+          message(coding, "coding-4", "assistant", "Lighthouse migration done", { minute: 4 }),
+          thread(deleted, project, { deletedAt: at(5) }),
+          message(deleted, "deleted-10", "user", "lighthouse in a deleted thread", { minute: 10 }),
+          thread(unrelated, project),
+          message(unrelated, "unrelated-10", "user", "lighthouse elsewhere", { minute: 10 }),
+        ],
+        projections.apply,
+        { discard: true },
+      );
+      // Newer handoffs that miss the query must not use up the hit limit.
+      yield* sql`
+        WITH RECURSIVE filler(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM filler WHERE n < 2001)
+        INSERT INTO orchestration_v2_projection_messages
+          (message_id, thread_id, run_id, node_id, role, streaming, created_at, updated_at, payload_json)
+        SELECT 'filler-' || n, thread_id, run_id, node_id, role, streaming,
+          '2099-01-01T00:00:00.000Z', updated_at,
+          json_set(payload_json, '$.id', 'filler-' || n, '$.text', 'Unrelated handoff ' || n)
+        FROM orchestration_v2_projection_messages, filler
+        WHERE message_id = 'from-bot-5'
+      `;
+      if (!indexed) {
+        yield* sql`DROP TRIGGER orchestration_v2_message_search_insert`;
+        yield* sql`DROP TRIGGER orchestration_v2_message_search_update`;
+        yield* sql`DROP TRIGGER orchestration_v2_message_search_delete`;
+        yield* sql`DROP TABLE orchestration_v2_message_search`;
+      }
+      const recall = (input: Parameters<typeof search.searchThreadMessages>[0]) =>
+        search
+          .searchThreadMessages(input)
+          .pipe(
+            Effect.map(({ matches }) =>
+              matches.map((match) => [
+                match.messageId,
+                match.threadId,
+                match.source,
+                match.createdBy,
+              ]),
+            ),
+          );
+      const threadIds = [bot, coding, deleted, bot];
+      assert.deepEqual(yield* recall({ threadIds, query: "lighthouse" }), [
+        ["coding-update-6", bot, "user", "agent"],
+        ["from-bot-5", bot, "user", "agent"],
+        ["coding-4", coding, "assistant", "agent"],
+        ["assistant-2", bot, "assistant", "agent"],
+        ["user-1", bot, "user", "user"],
+        ["weaker-9", bot, "user", "user"],
+      ]);
+      assert.deepEqual(yield* recall({ threadIds, query: "lighthouse", limit: 2 }), [
+        ["coding-update-6", bot, "user", "agent"],
+        ["from-bot-5", bot, "user", "agent"],
+      ]);
+      assert.deepEqual(yield* recall({ threadIds: [coding], query: "lighthouse" }), [
+        ["coding-4", coding, "assistant", "agent"],
+      ]);
+      assert.deepEqual(
+        (yield* search.searchThreadMessages({
+          threadIds: [bot],
+          query: "navani logs",
+        })).matches.map((match) => match.snippet),
+        ["[From Bot: Navani (navani), hop 1/3] Check the lighthouse logs"],
+      );
+      assert.deepEqual(yield* recall({ threadIds, query: "compact" }), []);
+      assert.deepEqual(yield* recall({ threadIds, query: "consolidation" }), []);
+      assert.deepEqual(yield* recall({ threadIds: [], query: "lighthouse" }), []);
+      assert.deepEqual(yield* recall({ threadIds, query: "  " }), []);
+    }).pipe(Effect.provide(layerTest)),
 );

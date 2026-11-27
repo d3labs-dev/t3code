@@ -22,7 +22,9 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as SqlSchema from "effect/sql/SqlSchema";
+import * as Struct from "effect/Struct";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import { BOT_DREAMING_MESSAGE_PREFIX } from "@t3tools/shared/botDreaming";
 import {
   messageSearchTokens,
   foldSearchQuery,
@@ -67,7 +69,7 @@ export class ThreadSearchError extends Schema.TaggedError<ThreadSearchError>()(
 
 // Token lists bind as JSON arrays, so any number of them is one parameter.
 const TokenList = Schema.fromJsonString(Schema.Array(Schema.String));
-const SearchRequest = Schema.Struct({
+const MessageMatchRequest = Schema.Struct({
   /** The FTS5 query, or null to scan messages instead. */
   match: Schema.NullOr(Schema.String),
   /** Tokens every hit must contain, as typed or as their GLOB folding case and Latin accents. */
@@ -76,6 +78,9 @@ const SearchRequest = Schema.Struct({
   ),
   /** For each short word outside ASCII, the spellings a hit must contain one of. */
   shortSpellings: Schema.fromJsonString(Schema.Array(Schema.Array(Schema.String))),
+});
+const SearchRequest = Schema.Struct({
+  ...MessageMatchRequest.fields,
   projectId: Schema.NullOr(ProjectId),
   /** Threads the caller already lists, left out before the hit limit. */
   excludedThreadIds: TokenList,
@@ -89,6 +94,14 @@ const SearchRow = Schema.Struct({
   text: Schema.String,
   messageCreatedAt: Schema.NullOr(IsoDateTime),
 });
+const ThreadMessagesRequest = Schema.Struct({
+  ...MessageMatchRequest.fields,
+  threadIds: TokenList,
+});
+const ThreadHandoffsRequest = ThreadMessagesRequest.mapFields(Struct.omit(["match"]));
+const ThreadMessageRow = SearchRow.mapFields(Struct.omit(["messageRowid", "projectId"])).mapFields(
+  Struct.assign({ createdBy: Schema.Literals(["user", "agent"]) }),
+);
 
 const ThreadOpensRow = Schema.Struct({
   threadId: ThreadId,
@@ -100,6 +113,7 @@ const decodeThreadOpens = Schema.decodeUnknownOption(
 );
 
 const SNIPPET_LENGTH = 240;
+const THREAD_MESSAGE_LIMIT = { default: 15, max: 50 };
 // The newest hits read per query. A common word stops here instead of reading
 // every message, so time stays flat as history grows.
 const MESSAGE_HIT_LIMIT = 2000;
@@ -163,7 +177,7 @@ function accentInsensitiveGlob(token: string): string {
 function buildMessageSearch(
   query: string,
   hasIndex: boolean,
-): Omit<typeof SearchRequest.Type, "projectId" | "excludedThreadIds"> | null {
+): typeof MessageMatchRequest.Type | null {
   const { long, short } = messageSearchTokens(query);
   if (long.length === 0) return null;
   // Two-character CJK words are too short for trigrams.
@@ -212,6 +226,55 @@ export function buildSearchSnippet(text: string, matchStart: number): string {
   const cut = end < shown.length || rawEnd < text.length;
   return `${start > 0 ? "…" : ""}${shown.slice(0, end)}${cut ? "…" : ""}`;
 }
+
+// A message a reader can reach in its thread that holds every token the index
+// cannot check.
+const shownMessageCondition = (
+  sql: SqlClient.SqlClient,
+  {
+    substrings,
+    shortSpellings,
+  }: Pick<typeof MessageMatchRequest.Encoded, "substrings" | "shortSpellings">,
+) => sql`
+  -- Answers to an agent's question show inside its question card, where
+  -- neither find nor a jump can reach them.
+  messages.message_id NOT LIKE 'async-answer:%'
+  -- Nor can they reach a rolled-back turn, or a message of a stopped turn
+  -- that no shown item carries, such as a queued prompt that never ran.
+  AND NOT EXISTS (
+    SELECT 1 FROM orchestration_v2_projection_runs AS runs
+    WHERE runs.run_id = messages.run_id
+      AND (
+        runs.status = 'rolled_back'
+        OR (
+          runs.status = 'cancelled'
+          AND NOT EXISTS (
+            SELECT 1 FROM orchestration_v2_projection_turn_items AS items
+            WHERE items.run_id = runs.run_id
+              AND json_extract(items.payload_json, '$.messageId') = messages.message_id
+              AND json_extract(items.payload_json, '$.inputIntent') IS NOT 'queued_turn'
+          )
+        )
+      )
+  )
+  AND NOT EXISTS (
+    -- The text read once, not once per check.
+    SELECT 1 FROM (SELECT ${foldedMessageSearchText(sql)} AS text) AS message,
+      json_each(${substrings}) AS substring
+    WHERE instr(lower(message.text), json_extract(substring.value, '$.token')) = 0
+      AND NOT (
+        (${sql.literal(MESSAGE_HOLDS_ACCENTED_LATIN)})
+        AND message.text GLOB json_extract(substring.value, '$.accentInsensitive')
+      )
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM json_each(${shortSpellings}) AS token
+    WHERE NOT EXISTS (
+      SELECT 1 FROM json_each(token.value) AS spelling
+      WHERE instr(${foldedMessageSearchText(sql)}, spelling.value) > 0
+    )
+  )
+`;
 
 // Filter hidden subagents and side chats before the hit limit; JS checks word starts and ranking.
 // Both paths narrow ASCII tokens with Latin-1 and Extended-A/B/Additional accent variants.
@@ -277,55 +340,114 @@ export const messageHitsQuery = (
             AND ${nonPlaceholderMessageCondition(sql)}
         `
     }
-      -- Answers to an agent's question show inside its question card, where
-      -- neither find nor a jump can reach them.
-      AND messages.message_id NOT LIKE 'async-answer:%'
-      -- Nor can they reach a rolled-back turn, or a message of a stopped turn
-      -- that no shown item carries, such as a queued prompt that never ran.
-      AND NOT EXISTS (
-        SELECT 1 FROM orchestration_v2_projection_runs AS runs
-        WHERE runs.run_id = messages.run_id
-          AND (
-            runs.status = 'rolled_back'
-            OR (
-              runs.status = 'cancelled'
-              AND NOT EXISTS (
-                SELECT 1 FROM orchestration_v2_projection_turn_items AS items
-                WHERE items.run_id = runs.run_id
-                  AND json_extract(items.payload_json, '$.messageId') = messages.message_id
-                  AND json_extract(items.payload_json, '$.inputIntent') IS NOT 'queued_turn'
-              )
-            )
-          )
-      )
-      AND NOT EXISTS (
-        -- The text read once, not once per check.
-        SELECT 1 FROM (SELECT ${foldedMessageSearchText(sql)} AS text) AS message,
-          json_each(${substrings}) AS substring
-        WHERE instr(lower(message.text), json_extract(substring.value, '$.token')) = 0
-          AND NOT (
-            (${sql.literal(MESSAGE_HOLDS_ACCENTED_LATIN)})
-            AND message.text GLOB json_extract(substring.value, '$.accentInsensitive')
-          )
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM json_each(${shortSpellings}) AS token
-        WHERE NOT EXISTS (
-          SELECT 1 FROM json_each(token.value) AS spelling
-          WHERE instr(${foldedMessageSearchText(sql)}, spelling.value) > 0
-        )
-      )
+      AND ${shownMessageCondition(sql, { substrings, shortSpellings })}
     -- The index's own rowid, so FTS5 returns hits newest first and stops at
     -- the limit; ordering by the messages table's rowid sorts every hit.
     ORDER BY "messageRowid" DESC
     LIMIT ${MESSAGE_HIT_LIMIT}
   `;
 
+const threadMessageColumns = (sql: SqlClient.SqlClient) => sql`
+  messages.message_id AS "messageId",
+  messages.thread_id AS "threadId",
+  messages.role AS source,
+  COALESCE(json_extract(messages.payload_json, '$.createdBy'), 'user') AS "createdBy",
+  ${messageSearchText(sql)} AS text,
+  messages.created_at AS "messageCreatedAt"
+`;
+
+// Archived threads stay, so a settled coding thread can still be recalled.
+const scopedThreads = (sql: SqlClient.SqlClient, threadIds: string) => sql`
+  scoped AS MATERIALIZED (
+    SELECT threads.thread_id
+    FROM orchestration_v2_projection_threads AS threads
+    WHERE threads.thread_id IN (SELECT value FROM json_each(${threadIds}))
+      AND threads.deleted_at IS NULL
+  )
+`;
+
+// A Bot recalls neither its own compaction nor its memory consolidation prompts.
+const recalledMessageCondition = (
+  sql: SqlClient.SqlClient,
+  tokens: Pick<typeof MessageMatchRequest.Encoded, "substrings" | "shortSpellings">,
+) => sql`
+  lower(trim(json_extract(messages.payload_json, '$.text'), char(9, 10, 11, 12, 13, 32)))
+    <> '/compact'
+  AND substr(
+    ltrim(json_extract(messages.payload_json, '$.text'), char(9, 10, 11, 12, 13, 32)),
+    1,
+    ${BOT_DREAMING_MESSAGE_PREFIX.length}
+  ) IS NOT ${BOT_DREAMING_MESSAGE_PREFIX}
+  AND ${shownMessageCondition(sql, tokens)}
+`;
+
+// The messages of a Bot's threads that the search index holds, or that a scan
+// of those threads would index.
+export const threadIndexedHitsQuery = (
+  sql: SqlClient.SqlClient,
+  { match, substrings, shortSpellings, threadIds }: typeof ThreadMessagesRequest.Encoded,
+) =>
+  match === null
+    ? sql`
+      WITH ${scopedThreads(sql, threadIds)}
+      SELECT ${threadMessageColumns(sql)}
+      FROM scoped
+      INNER JOIN orchestration_v2_projection_messages AS messages
+        ON messages.thread_id = scoped.thread_id
+      WHERE ${indexedMessageCondition(sql)}
+        AND ${recalledMessageCondition(sql, { substrings, shortSpellings })}
+      ORDER BY messages.created_at DESC
+      LIMIT ${MESSAGE_HIT_LIMIT}
+    `
+    : sql`
+      WITH ${scopedThreads(sql, threadIds)}
+      SELECT ${threadMessageColumns(sql)}
+      FROM orchestration_v2_message_search
+      INNER JOIN orchestration_v2_projection_messages AS messages
+        ON messages.rowid = orchestration_v2_message_search.rowid
+      INNER JOIN scoped ON scoped.thread_id = messages.thread_id
+      WHERE orchestration_v2_message_search MATCH ${match}
+        AND ${nonPlaceholderMessageCondition(sql)}
+        AND ${recalledMessageCondition(sql, { substrings, shortSpellings })}
+      ORDER BY orchestration_v2_message_search.rowid DESC
+      LIMIT ${MESSAGE_HIT_LIMIT}
+    `;
+
+// The handoffs agents write into a Bot's threads, which the index leaves out.
+// Every token narrows them here, so unrelated handoffs cannot fill the limit.
+export const threadHandoffHitsQuery = (
+  sql: SqlClient.SqlClient,
+  { substrings, shortSpellings, threadIds }: typeof ThreadHandoffsRequest.Encoded,
+) => sql`
+  WITH ${scopedThreads(sql, threadIds)}
+  SELECT ${threadMessageColumns(sql)}
+  FROM scoped
+  INNER JOIN orchestration_v2_projection_messages AS messages
+    ON messages.thread_id = scoped.thread_id
+  WHERE messages.streaming = 0
+    AND messages.role = 'user'
+    AND COALESCE(json_extract(messages.payload_json, '$.createdBy'), 'user') = 'agent'
+    AND ${nonPlaceholderMessageCondition(sql)}
+    AND ${recalledMessageCondition(sql, { substrings, shortSpellings })}
+  ORDER BY messages.created_at DESC
+  LIMIT ${MESSAGE_HIT_LIMIT}
+`;
+
 const TitleCandidateRow = Schema.Struct({
   thread: Schema.fromJsonString(OrchestrationV2AppThreadJson),
   projectTitle: Schema.String,
   latestUserMessageAt: Schema.NullOr(IsoDateTime),
 });
+
+export interface ThreadMessageHit {
+  readonly messageId: MessageId;
+  readonly threadId: ThreadId;
+  readonly source: OrchestrationThreadSearchSource;
+  readonly createdBy: "user" | "agent";
+  readonly snippet: string;
+  readonly messageCreatedAt: IsoDateTime | null;
+  readonly quality: number;
+}
 
 export interface ThreadSearchHit {
   readonly threadId: ThreadId;
@@ -363,6 +485,15 @@ export class ThreadSearch extends Context.Service<
       readonly environmentLabel?: string | undefined;
       readonly messageThreadIds: ReadonlyArray<ThreadId>;
     }) => Effect.Effect<ReadonlyArray<ThreadId>, ThreadSearchError>;
+    /**
+     * Every matching message in `threadIds`, best match then newest first,
+     * including the handoffs agents write into a Bot's thread.
+     */
+    readonly searchThreadMessages: (input: {
+      readonly threadIds: ReadonlyArray<ThreadId>;
+      readonly query: string;
+      readonly limit?: number;
+    }) => Effect.Effect<{ readonly matches: ReadonlyArray<ThreadMessageHit> }, ThreadSearchError>;
   }
 >()("t3/orchestration-v2/ThreadSearch") {}
 
@@ -392,6 +523,18 @@ export const make = Effect.gen(function* () {
     Request: SearchRequest,
     Result: SearchRow,
     execute: (request) => messageHitsQuery(sql, request),
+  });
+
+  const threadIndexedRows = SqlSchema.findAll({
+    Request: ThreadMessagesRequest,
+    Result: ThreadMessageRow,
+    execute: (request) => threadIndexedHitsQuery(sql, request),
+  });
+
+  const threadHandoffRows = SqlSchema.findAll({
+    Request: ThreadHandoffsRequest,
+    Result: ThreadMessageRow,
+    execute: (request) => threadHandoffHitsQuery(sql, request),
   });
 
   const threadOpens = SqlSchema.findAll({
@@ -485,6 +628,10 @@ export const make = Effect.gen(function* () {
     `,
   });
 
+  const hasMessageIndex = sql`
+    SELECT 1 FROM sqlite_master WHERE name = 'orchestration_v2_message_search'
+  `.pipe(Effect.map((rows) => rows.length > 0));
+
   const read = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     sql.withTransaction(effect).pipe(
       NodeSqliteClient.readOnly,
@@ -527,10 +674,7 @@ export const make = Effect.gen(function* () {
       newer(left, right);
     const rows = yield* read(
       Effect.gen(function* () {
-        const index = yield* sql`
-          SELECT 1 FROM sqlite_master WHERE name = 'orchestration_v2_message_search'
-        `;
-        const messageSearch = buildMessageSearch(input.query, index.length > 0);
+        const messageSearch = buildMessageSearch(input.query, yield* hasMessageIndex);
         return messageSearch === null
           ? []
           : yield* searchRows({
@@ -714,7 +858,58 @@ export const make = Effect.gen(function* () {
     ];
   });
 
-  return ThreadSearch.of({ search, searchThreads, searchOlderSettled });
+  const searchThreadMessages: ThreadSearch["Service"]["searchThreadMessages"] = Effect.fn(
+    "ThreadSearch.searchThreadMessages",
+  )(function* (input) {
+    const threadIds = [...new Set(input.threadIds)];
+    if (threadIds.length === 0 || input.query.trim() === "") return { matches: [] };
+    const rows = yield* read(
+      Effect.gen(function* () {
+        const messageSearch = buildMessageSearch(input.query, yield* hasMessageIndex);
+        const handoffSearch = buildMessageSearch(input.query, false);
+        if (messageSearch === null || handoffSearch === null) return [];
+        const indexed = yield* threadIndexedRows({ ...messageSearch, threadIds });
+        const handoffs = yield* threadHandoffRows({
+          substrings: handoffSearch.substrings,
+          shortSpellings: handoffSearch.shortSpellings,
+          threadIds,
+        });
+        return [...indexed, ...handoffs];
+      }),
+    );
+    const matchMessage = messageMatcher(input.query);
+    const hits = new Map<MessageId, ThreadMessageHit>();
+    for (const row of rows) {
+      if (hits.has(row.messageId)) continue;
+      const text = row.text.replace(MARKDOWN_LINK, "$1");
+      const match = matchMessage(text);
+      if (match === null) continue;
+      hits.set(row.messageId, {
+        messageId: row.messageId,
+        threadId: row.threadId,
+        source: row.source,
+        createdBy: row.createdBy,
+        snippet: buildSearchSnippet(text, match.offset),
+        messageCreatedAt: row.messageCreatedAt,
+        quality: match.quality,
+      });
+    }
+    const limit = Math.min(
+      Math.max(input.limit ?? THREAD_MESSAGE_LIMIT.default, 1),
+      THREAD_MESSAGE_LIMIT.max,
+    );
+    return {
+      matches: [...hits.values()]
+        .toSorted(
+          (left, right) =>
+            right.quality - left.quality ||
+            (right.messageCreatedAt ?? "").localeCompare(left.messageCreatedAt ?? ""),
+        )
+        .slice(0, limit),
+    };
+  });
+
+  return ThreadSearch.of({ search, searchThreads, searchOlderSettled, searchThreadMessages });
 });
 
 export const layer = Layer.effect(ThreadSearch, make);

@@ -11,8 +11,10 @@ import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberMap from "effect/FiberMap";
+import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
+import * as BotStore from "../bots/BotStore.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { idleCompactionWindow } from "./IdleCompaction.ts";
@@ -29,9 +31,12 @@ export const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const settings = yield* ServerSettings.ServerSettingsService;
+  // BotDreamingService compacts Bot threads right after they consolidate their memory.
+  const bots = yield* Effect.serviceOption(BotStore.BotStore);
 
   const compactWhenDue = Effect.fn("IdleCompactionService.compactWhenDue")(
     function* (threadId: ThreadId, completedRunId: RunId) {
+      if (Option.isSome(bots) && Option.isSome(yield* bots.value.findByThreadId(threadId))) return;
       let runId = completedRunId;
       // Loops after the wait or a retarget: the thread may have moved on.
       while (true) {

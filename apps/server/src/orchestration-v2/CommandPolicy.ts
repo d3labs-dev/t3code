@@ -10,6 +10,7 @@ import {
   ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
+import { isServerBotDreamingMessage } from "@t3tools/shared/botDreaming";
 import { latestExecutedRun } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -97,10 +98,13 @@ export function resolveMessageDispatchIntent(
 ): MessageDispatchMode {
   const mode = resolveDeliveryIntent(projection, requestedMode, deliveryIntent);
   if (mode.type !== "steer_active") return mode;
-  // Compaction and sign-out cannot accept steers; queue follow-ups.
+  // Compaction, sign-out and a Bot's silent memory consolidation cannot accept steers; queue follow-ups.
   const target = projection.runs.find((run) => run.id === mode.targetRunId);
   const targetMessage = projection.messages.find((message) => message.id === target?.userMessageId);
-  if (targetMessage !== undefined && isNativeMaintenanceCommand(targetMessage)) {
+  if (
+    targetMessage !== undefined &&
+    (isNativeMaintenanceCommand(targetMessage) || isServerBotDreamingMessage(targetMessage))
+  ) {
     return { type: "queue_after_active" };
   }
   // A provider that can neither steer nor restart its turn takes the message after the turn.

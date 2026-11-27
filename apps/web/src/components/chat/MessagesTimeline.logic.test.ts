@@ -38,6 +38,7 @@ import {
   workEntryDisplayLabel,
 } from "./MessagesTimeline.logic";
 import { workEntryIconName } from "./TimelineWorkEntryRow.logic";
+import { BOT_DREAMING_PROMPT } from "@t3tools/shared/botDreaming";
 
 describe("resolveAssistantMessageCopyState", () => {
   it("copies the rendered representation of Codex directives", () => {
@@ -3154,6 +3155,68 @@ describe("v2 run and attempt history", () => {
       "working-indicator-row",
       "live-activity-row",
     ]);
+  });
+  it("hides Bot memory consolidation runs except their errors", () => {
+    const at = "2026-01-01T00:00:00Z";
+    const chatRun = RunId.make("chat");
+    const dreamRun = RunId.make("dream");
+    const message = (
+      id: string,
+      role: "user" | "assistant",
+      runId: RunId,
+      text = id,
+    ): TimelineEntry => ({
+      id,
+      kind: "message",
+      createdAt: at,
+      message: {
+        id: MessageId.make(id),
+        role,
+        text,
+        runId,
+        createdAt: at,
+        updatedAt: at,
+        streaming: false,
+      },
+    });
+    const work = (id: string, tone: "tool" | "error"): TimelineEntry => ({
+      id,
+      kind: "work",
+      createdAt: at,
+      entry: {
+        id,
+        createdAt: at,
+        runId: dreamRun,
+        label: id,
+        tone,
+        itemType: tone === "error" ? "error" : "file_change",
+      },
+    });
+    const rows = (timelineEntries: ReadonlyArray<TimelineEntry>) =>
+      deriveMessagesTimelineRows({
+        timelineEntries,
+        isWorking: false,
+        turnDiffSummaries: [],
+        supportsConversationRollback: false,
+        toolCallVisibility: "zen",
+      }).map((row) => row.id);
+    const chat = [message("user", "user", chatRun), message("final", "assistant", chatRun)];
+    const dream = [
+      message("dream", "user", dreamRun, BOT_DREAMING_PROMPT),
+      work("edit-memory", "tool"),
+      message("no-reply", "assistant", dreamRun, "NO_REPLY"),
+    ];
+
+    expect(rows([...chat, ...dream])).toEqual(["user", "final"]);
+    expect(rows([...chat, ...dream, work("dream-error", "error")])).toEqual([
+      "user",
+      "final",
+      "dream-error",
+    ]);
+    const steered = message("steered", "user", dreamRun, "Are you there?");
+    expect(rows([...chat, ...dream, steered])).toEqual(
+      expect.arrayContaining(["steered", "no-reply"]),
+    );
   });
   it("collapses only output from a superseded V2 attempt within the active logical run", () => {
     const runId = "run-steered" as never;

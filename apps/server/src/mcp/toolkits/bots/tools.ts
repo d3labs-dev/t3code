@@ -1,6 +1,6 @@
 import {
   BotCreateInput,
-  BotDocuments,
+  BotDocumentsPatch,
   BotExchange,
   BotId,
   BotListInput,
@@ -9,11 +9,17 @@ import {
   BotSlug,
   BotStatus,
   BotUpdateInput,
+  clampedPositiveInt,
+  IsoDateTime,
+  MessageId,
+  OrchestrationThreadSearchSource,
   OrchestratorMcpFailure,
+  ThreadId,
+  TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
-import { Tool, Toolkit } from "effect/ai";
+import { McpSchema, Tool, Toolkit } from "effect/ai";
 
 import * as BotService from "../../../bots/BotService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -36,7 +42,6 @@ const botSettings = Struct.omit(BotUpdateInput.fields, [
   "customMcpServers",
   "documents",
 ]);
-const botDocuments = Struct.map(BotDocuments.fields, Schema.optionalKey);
 
 const BotSaved = Schema.Struct({
   botId: BotId,
@@ -96,12 +101,12 @@ const BotMessageTool = Tool.make("bot_message", {
 const BotCreateTool = Tool.make("bot_create", {
   ...shared,
   description:
-    "Create a Bot. Its thread starts idle until messaged. `modelSelection` defaults to this thread's. `soul` and `memory` seed its SOUL.md and MEMORY.md.",
+    "Create a Bot. Its thread starts idle until messaged. `modelSelection` defaults to this thread's. `soul`, `now` and `memory` seed its SOUL.md, NOW.md and MEMORY.md.",
   parameters: Schema.Struct({
     name: BotCreateInput.fields.name,
     slug: BotCreateInput.fields.slug,
     ...Struct.omit(botSettings, ["name", "muted", "archived"]),
-    ...botDocuments,
+    ...BotDocumentsPatch.fields,
   }),
   success: BotSaved,
 })
@@ -111,16 +116,51 @@ const BotCreateTool = Tool.make("bot_create", {
 const BotUpdateTool = Tool.make("bot_update", {
   ...shared,
   description:
-    "Change a Bot found by `botId` or `slug`. Omitted fields stay. `soul` and `memory` replace its SOUL.md and MEMORY.md. `archived: true` hides it from the roster.",
+    "Change a Bot found by `botId` or `slug`. Omitted fields stay. `soul`, `now` and `memory` replace its SOUL.md, NOW.md and MEMORY.md. `archived: true` hides it from the roster.",
   parameters: Schema.Struct({
     botId: Schema.optionalKey(BotId),
     slug: Schema.optionalKey(BotSlug),
     ...botSettings,
-    ...botDocuments,
+    ...BotDocumentsPatch.fields,
   }),
   success: BotSaved,
 })
   .annotate(Tool.Title, "Update a Bot")
   .annotate(Tool.Destructive, true);
 
-export const BotsToolkit = Toolkit.make(BotListTool, BotMessageTool, BotCreateTool, BotUpdateTool);
+const BotSearchHistoryTool = Tool.make("bot_search_history", {
+  ...shared,
+  description: "Search this Bot's thread and the coding threads it messaged.",
+  parameters: Schema.Struct({
+    query: TrimmedNonEmptyString,
+    limit: Schema.optionalKey(clampedPositiveInt(50)),
+    includeCodingThreads: Schema.optionalKey(Schema.Boolean),
+  }),
+  success: Schema.Struct({
+    matches: Schema.Array(
+      Schema.Struct({
+        messageId: MessageId,
+        threadId: ThreadId,
+        isBotThread: Schema.Boolean,
+        source: OrchestrationThreadSearchSource,
+        createdBy: Schema.Literals(["user", "agent"]),
+        snippet: Schema.String,
+        messageCreatedAt: Schema.NullOr(IsoDateTime),
+        link: Schema.String,
+      }),
+    ),
+  }),
+})
+  .annotate(Tool.Title, "Search Bot history")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
+
+export const BotsToolkit = Toolkit.make(
+  BotListTool,
+  BotMessageTool,
+  BotCreateTool,
+  BotUpdateTool,
+  BotSearchHistoryTool,
+);

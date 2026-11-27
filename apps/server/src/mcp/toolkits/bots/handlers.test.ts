@@ -1,8 +1,10 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import {
+  BotExchangeId,
   BotSlug,
   EnvironmentId,
+  MessageId,
   ProjectId,
   ProviderInstanceId,
   RunId,
@@ -22,6 +24,7 @@ import * as BotStore from "../../../bots/BotStore.ts";
 import * as ServerConfig from "../../../config.ts";
 import * as ThreadLaunch from "../../../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
+import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -86,6 +89,20 @@ const withBotTools = <A, E>(
               Effect.sync(() => {
                 sent.push(input);
                 return { run: { id: RunId.make(`run:${sent.length}`) } } as never;
+              }),
+          }),
+          Layer.mock(ThreadSearch.ThreadSearch)({
+            searchThreadMessages: ({ threadIds, query }) =>
+              Effect.succeed({
+                matches: threadIds.map((threadId) => ({
+                  messageId: MessageId.make(`message:${threadId}`),
+                  threadId,
+                  source: "assistant" as const,
+                  createdBy: "agent" as const,
+                  snippet: query,
+                  messageCreatedAt: null,
+                  quality: 1,
+                })),
               }),
           }),
           Layer.mock(ThreadLaunch.ThreadLaunchService)({
@@ -206,6 +223,52 @@ it.effect("sends bot_message only as the calling Bot and reports the hop limit",
       expect(refused).toMatchObject({ code: "invalid_request" });
       expect(refused).toHaveProperty("message", expect.stringContaining("without a human message"));
       expect(sent).toHaveLength(1);
+    }),
+  ),
+);
+
+it.effect("searches a Bot's own thread and the coding threads it messaged, only from a Bot", () =>
+  withBotTools(({ toolkit, bots, store }) =>
+    Effect.gen(function* () {
+      const scout = (yield* bots.create({ name: "Scout", modelSelection: botModel })).bot;
+      const codingThreadId = ThreadId.make("thread:coding");
+      yield* store.insertExchange({
+        id: BotExchangeId.make("exchange:coding"),
+        kind: "coding_thread",
+        fromBotId: scout.id,
+        toBotId: null,
+        watchedThreadId: codingThreadId,
+        targetRunId: RunId.make("run:coding"),
+        hopCount: 0,
+        expectReply: true,
+        status: "pending",
+        summary: null,
+        createdAt: "2026-11-26T00:00:00.000Z",
+        resolvedAt: null,
+      });
+      const search = (input: { readonly includeCodingThreads?: boolean }, caller: ThreadId) =>
+        toolkit
+          .handle("bot_search_history", { query: "release plan", ...input })
+          .pipe(lastResult, asCaller(caller));
+
+      expect(yield* search({}, scout.threadId)).toEqual({
+        matches: [
+          expect.objectContaining({
+            threadId: scout.threadId,
+            isBotThread: true,
+            link: expect.stringContaining(scout.threadId),
+          }),
+          expect.objectContaining({
+            threadId: codingThreadId,
+            isBotThread: false,
+            link: expect.stringContaining(codingThreadId),
+          }),
+        ],
+      });
+      expect(yield* search({ includeCodingThreads: false }, scout.threadId)).toEqual({
+        matches: [expect.objectContaining({ threadId: scout.threadId, isBotThread: true })],
+      });
+      expect(yield* search({}, userThreadId)).toMatchObject({ code: "invalid_request" });
     }),
   ),
 );

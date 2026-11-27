@@ -42,7 +42,7 @@ export class BotFolders extends Context.Service<
     readonly root: string;
     readonly sharedDir: string;
     readonly folderFor: (botId: BotId) => string;
-    /** Creates `_shared/` and the bot's folder; returns the folder path. */
+    /** Creates `_shared/`, the bot's folder and its `notes/`; returns the folder path. */
     readonly ensure: (folderPath: string) => Effect.Effect<string, BotFolderError>;
     /** A missing document reads as empty. */
     readonly readDocuments: (folderPath: string) => Effect.Effect<BotDocuments, BotFolderError>;
@@ -69,6 +69,7 @@ export class BotFolders extends Context.Service<
 
 const DOCUMENT_FILES: Readonly<Record<DocumentName, string>> = {
   soul: "SOUL.md",
+  now: "NOW.md",
   memory: "MEMORY.md",
 };
 
@@ -80,8 +81,10 @@ const agentsFileContents = (bot: Pick<BotRecord, "name" | "role">) =>
     "",
     "Before you act, read these files in this folder:",
     "",
-    "- `SOUL.md`: who you are, how you work, and your standing rules.",
-    "- `MEMORY.md`: what you remember. Keep it current with durable facts, decisions and open follow-ups.",
+    "- `SOUL.md`: your identity, voice and standing rules.",
+    "- `NOW.md`: your hot working state: active coding threads, open commitments, pending decisions and next actions. Keep it concise (about 2 KB) and drop finished items.",
+    "- `MEMORY.md`: your curated long-term index of durable facts, preferences and decisions. Keep it under 4 KB and link to topic files in `notes/`.",
+    "- `notes/`: detailed per-project or per-topic notes. Read them on demand.",
     "",
     "`../_shared/` holds handoff files shared with the other Bots.",
     "",
@@ -124,7 +127,7 @@ const make = Effect.gen(function* () {
 
   const ensure: BotFolders["Service"]["ensure"] = Effect.fn("BotFolders.ensure")(
     function* (folderPath) {
-      for (const directory of [sharedDir, folderPath]) {
+      for (const directory of [sharedDir, folderPath, path.join(folderPath, "notes")]) {
         yield* fileSystem
           .makeDirectory(directory, { recursive: true })
           .pipe(
@@ -151,17 +154,18 @@ const make = Effect.gen(function* () {
   const readDocuments: BotFolders["Service"]["readDocuments"] = Effect.fn(
     "BotFolders.readDocuments",
   )(function* (folderPath) {
-    const [soul, memory] = yield* Effect.all([
+    const [soul, now, memory] = yield* Effect.all([
       readDocument(documentPath(folderPath, "soul")),
+      readDocument(documentPath(folderPath, "now")),
       readDocument(documentPath(folderPath, "memory")),
     ]);
-    return { soul, memory };
+    return { soul, now, memory };
   });
 
   const writeDocuments: BotFolders["Service"]["writeDocuments"] = Effect.fn(
     "BotFolders.writeDocuments",
   )(function* (folderPath, documents, mode) {
-    for (const name of ["soul", "memory"] as const) {
+    for (const name of ["soul", "now", "memory"] as const) {
       const contents = documents[name];
       if (contents === undefined) continue;
       const filePath = documentPath(folderPath, name);

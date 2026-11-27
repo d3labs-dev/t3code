@@ -60,6 +60,7 @@ import type {
   TurnItemId,
 } from "@t3tools/contracts";
 import { idleCompactionOf, isCompactionCommandMessage, RunId, ThreadId } from "@t3tools/contracts";
+import { isBotDreamingMessage } from "@t3tools/shared/botDreaming";
 import {
   classifyToolActivity,
   collectToolFilePaths,
@@ -2310,6 +2311,7 @@ interface ThreadFeedBuild {
   readonly checkpointSummaries: ReadonlyArray<ThreadCheckpointSummary> | undefined;
   readonly foldedAnswerRunIdByMessageId: ReadonlyMap<string, RunId | null>;
   readonly delegatedChildrenByRun: ReadonlyMap<RunId, ReadonlySet<string>>;
+  readonly dreamingRunIds: ReadonlySet<RunId>;
   readonly feed: ReadonlyArray<ThreadFeedEntry>;
   /** Grouping is empty before `row`: the rows before it produced `feed.slice(0, feedLength)`. */
   readonly restarts: ReadonlyArray<{ readonly row: number; readonly feedLength: number }>;
@@ -2422,8 +2424,12 @@ export function buildThreadFeed(
   // An answer that started a later run stays a normal message at that run's position.
   const foldedAnswerRunIdByMessageId = new Map<string, RunId | null>();
   const delegatedChildrenByRun = new Map<RunId, Set<string>>();
+  const dreamingRunIds = new Set<RunId>();
+  const conversationRunIds = new Set<RunId>();
   for (const { item } of visibleTurnItems) {
-    if (item.type === "user_input_request" && item.questionAnswer) {
+    if (item.type === "user_message" && item.runId !== null) {
+      (isBotDreamingMessage(item.text) ? dreamingRunIds : conversationRunIds).add(item.runId);
+    } else if (item.type === "user_input_request" && item.questionAnswer) {
       foldedAnswerRunIdByMessageId.set(`async-answer:${item.questionAnswer.requestId}`, item.runId);
     } else if (item.type === "subagent" && item.origin === "app_owned" && item.runId !== null) {
       const children = delegatedChildrenByRun.get(item.runId) ?? new Set<string>();
@@ -2431,6 +2437,8 @@ export function buildThreadFeed(
       delegatedChildrenByRun.set(item.runId, children);
     }
   }
+  // A run that also carries someone's message is a conversation, never hidden.
+  for (const runId of conversationRunIds) dreamingRunIds.delete(runId);
 
   const cache = options?.cache;
   const previous = cache?.feedBuild ?? null;
@@ -2442,7 +2450,8 @@ export function buildThreadFeed(
     previous.nodes === options?.nodes &&
     checkpointSummariesEqual(previous.checkpointSummaries, options?.checkpointSummaries) &&
     mapsEqual(previous.foldedAnswerRunIdByMessageId, foldedAnswerRunIdByMessageId) &&
-    setMapsEqual(previous.delegatedChildrenByRun, delegatedChildrenByRun)
+    setMapsEqual(previous.delegatedChildrenByRun, delegatedChildrenByRun) &&
+    setsEqual(previous.dreamingRunIds, dreamingRunIds)
   ) {
     const firstChanged = firstChangedIndex(previous.rows, visibleTurnItems);
     restartIndex = previous.restarts.length - 1;
@@ -2473,6 +2482,17 @@ export function buildThreadFeed(
     const item = row.item;
     if (turnItemIsWorkspacePreparation(item) && !item.deferredWork) continue;
     if (item.type === "todo_list" || item.type === "checkpoint") continue;
+    // Bot memory consolidation runs in the background: only its errors and pending requests show.
+    if (
+      item.runId !== null &&
+      dreamingRunIds.has(item.runId) &&
+      item.type !== "error" &&
+      !(
+        (item.type === "approval_request" || item.type === "user_input_request") &&
+        (item.status === "pending" || item.status === "waiting")
+      )
+    )
+      continue;
     if (
       item.type === "user_message" &&
       item.inputIntent === "queued_turn" &&
@@ -2670,6 +2690,7 @@ export function buildThreadFeed(
             checkpointSummaries: options?.checkpointSummaries,
             foldedAnswerRunIdByMessageId,
             delegatedChildrenByRun,
+            dreamingRunIds,
             feed,
             restarts,
           };

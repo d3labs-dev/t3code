@@ -10,6 +10,7 @@ import * as PullRequestWatchReactor from "./orchestration-v2/PullRequestWatchRea
 import * as DelegatedTaskQuestionReactor from "./orchestration-v2/DelegatedTaskQuestionReactor.ts";
 import * as BotFolders from "./bots/BotFolders.ts";
 import { layerBotHarnessResolver } from "./bots/BotHarnessProfile.ts";
+import * as BotDreamingService from "./bots/BotDreamingService.ts";
 import * as BotService from "./bots/BotService.ts";
 import * as BotStore from "./bots/BotStore.ts";
 // Effect wraps this raw Node HTTP server after its startup and write-error guards attach.
@@ -636,12 +637,16 @@ const layerThreadSettlementWorker = Layer.effectDiscard(
   ThreadSettlementService.make.pipe(Effect.flatMap((service) => service.start())),
 ).pipe(Layer.provide(layerPullRequestService), Layer.provide(ProjectionStoreV2.layer));
 
-const layerIdleCompactionWorker = Layer.effectDiscard(
-  IdleCompactionService.make.pipe(Effect.flatMap((service) => service.start())),
-).pipe(Layer.provide(ProjectionStoreV2.layer));
-
 // One store and folder cache for the Claude adapter's profile reads and BotService: layers memoize by reference.
 const layerBotStorage = Layer.mergeAll(BotStore.layer, BotFolders.layer);
+
+const layerIdleCompactionWorker = Layer.effectDiscard(
+  IdleCompactionService.make.pipe(Effect.flatMap((service) => service.start())),
+).pipe(Layer.provide(ProjectionStoreV2.layer), Layer.provide(layerBotStorage));
+
+const layerBotDreamingWorker = Layer.effectDiscard(
+  BotDreamingService.make.pipe(Effect.flatMap((service) => service.start())),
+).pipe(Layer.provide(ProjectionStoreV2.layer), Layer.provide(layerBotStorage));
 
 const layerBotService = BotService.layer.pipe(Layer.provide(layerBotStorage));
 
@@ -702,6 +707,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   HeldHooksWaker.layer,
   layerThreadSettlementWorker,
   layerIdleCompactionWorker,
+  layerBotDreamingWorker,
   StorageCleanup.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
   DatabaseStorage.layer.pipe(
     Layer.provide(ProjectionMaintenance.layer),

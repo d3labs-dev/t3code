@@ -6,6 +6,8 @@ import {
   botKey,
 } from "@t3tools/client-runtime/state/bots";
 import {
+  BOT_MEMORY_SOFT_CAP_BYTES,
+  BOT_NOW_SOFT_CAP_BYTES,
   BotId,
   type BotDocuments,
   type BotExchange,
@@ -68,13 +70,28 @@ const DOCUMENTS = [
     id: "soul",
     file: "SOUL.md",
     placeholder: "Who is this Bot? How should it think, talk and decide?",
+    softCapBytes: null,
+  },
+  {
+    id: "now",
+    file: "NOW.md",
+    placeholder: "Active threads, open commitments, and next actions (kept concise).",
+    softCapBytes: BOT_NOW_SOFT_CAP_BYTES,
   },
   {
     id: "memory",
     file: "MEMORY.md",
     placeholder: "What should this Bot remember between conversations?",
+    softCapBytes: BOT_MEMORY_SOFT_CAP_BYTES,
   },
-] as const satisfies ReadonlyArray<{ id: BotDocumentName; file: string; placeholder: string }>;
+] as const satisfies ReadonlyArray<{
+  id: BotDocumentName;
+  file: string;
+  placeholder: string;
+  softCapBytes: number | null;
+}>;
+
+const formatKilobytes = (bytes: number) => String(Math.ceil((bytes * 10) / 1024) / 10);
 
 function changedFields(bot: BotRecord, patch: BotRecordPatch): BotRecordPatch {
   const changes: Record<string, unknown> = {};
@@ -556,6 +573,7 @@ function BotSettingsSheetBody(props: {
                 DOCUMENTS.map((doc) => {
                   const value = documentDrafts[doc.id] ?? savedDocuments[doc.id];
                   const isDirty = dirtyDocuments.some((item) => item.id === doc.id);
+                  const bytes = new TextEncoder().encode(value).length;
                   return (
                     <View key={doc.id} className="gap-2">
                       <View className="flex-row items-center justify-between px-1">
@@ -565,11 +583,18 @@ function BotSettingsSheetBody(props: {
                         >
                           {doc.file}
                         </Text>
-                        {isDirty ? (
-                          <Text textRole="caption" className="text-warning-foreground">
-                            Unsaved
-                          </Text>
-                        ) : null}
+                        <View className="flex-row items-center gap-2">
+                          {doc.softCapBytes !== null && bytes > doc.softCapBytes ? (
+                            <Text textRole="caption" className="font-mono text-warning-foreground">
+                              {formatKilobytes(bytes)} / {formatKilobytes(doc.softCapBytes)} KB
+                            </Text>
+                          ) : null}
+                          {isDirty ? (
+                            <Text textRole="caption" className="text-warning-foreground">
+                              Unsaved
+                            </Text>
+                          ) : null}
+                        </View>
                       </View>
                       <TextInput
                         accessibilityLabel={doc.file}

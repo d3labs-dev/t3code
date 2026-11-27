@@ -20,6 +20,7 @@ import {
 import { deriveThreadCheckpointSummaries } from "@t3tools/client-runtime/state/thread-checkpoints";
 import { summarizeToolGroup } from "@t3tools/client-runtime/work-log/presentation";
 import { getReviewSectionIdForCheckpoint } from "../features/review/reviewModel";
+import { BOT_DREAMING_PROMPT } from "@t3tools/shared/botDreaming";
 import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -453,6 +454,64 @@ function assistantMessage(updatedAt = "2026-06-20T00:00:03.000Z") {
 }
 
 describe("buildThreadFeed", () => {
+  it("hides Bot memory consolidation runs except their errors", () => {
+    const dreamRunId = RunId.make("dream-run");
+    const dream: ReadonlyArray<OrchestrationV2TurnItem> = [
+      {
+        ...userMessage("2026-06-20T00:00:04.000Z"),
+        id: TurnItemId.make("dream-prompt"),
+        runId: dreamRunId,
+        messageId: MessageId.make("dream-prompt"),
+        createdBy: "agent",
+        creationSource: "server",
+        text: BOT_DREAMING_PROMPT,
+      },
+      {
+        ...command("2026-06-20T00:00:05.000Z"),
+        id: TurnItemId.make("dream-edit"),
+        runId: dreamRunId,
+      },
+      {
+        ...assistantMessage("2026-06-20T00:00:06.000Z"),
+        id: TurnItemId.make("dream-reply"),
+        runId: dreamRunId,
+        messageId: MessageId.make("dream-reply"),
+        text: "NO_REPLY",
+      },
+    ];
+    const failure: OrchestrationV2TurnItem = {
+      ...base("dream-failure", "2026-06-20T00:00:07.000Z", 3),
+      runId: dreamRunId,
+      type: "error",
+      status: "failed",
+      failure: { class: "provider_error", message: "Stopped.", code: null, retryable: false },
+    };
+    const feedIds = (items: ReadonlyArray<OrchestrationV2TurnItem>) =>
+      buildThreadFeed(items.map((item, index) => projected(item, index))).flatMap((entry) =>
+        entry.type === "activity-group"
+          ? entry.activities.map((activity) => activity.projectedItem.item.id)
+          : [entry.id],
+      );
+    const chat = [userMessage(), assistantMessage()];
+
+    expect(feedIds([...chat, ...dream])).toEqual(["message-user", "message-assistant"]);
+    expect(feedIds([...chat, ...dream, failure])).toEqual([
+      "message-user",
+      "message-assistant",
+      "dream-failure",
+    ]);
+    const steered: OrchestrationV2TurnItem = {
+      ...userMessage("2026-06-20T00:00:05.500Z"),
+      id: TurnItemId.make("steered-into-dream"),
+      runId: dreamRunId,
+      messageId: MessageId.make("steered-into-dream"),
+      text: "Are you there?",
+    };
+    expect(feedIds([...chat, ...dream, steered])).toEqual(
+      expect.arrayContaining(["dream-reply", "steered-into-dream"]),
+    );
+  });
+
   it("keeps async answers in question history instead of user bubbles", () => {
     const requestId = RuntimeRequestId.make("question");
     const question: OrchestrationV2TurnItem = {

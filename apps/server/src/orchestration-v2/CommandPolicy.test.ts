@@ -11,6 +11,7 @@ import {
   RunId,
   ThreadId,
 } from "@t3tools/contracts";
+import { BOT_DREAMING_PROMPT } from "@t3tools/shared/botDreaming";
 import * as Effect from "effect/Effect";
 
 import { ClaudeProviderCapabilitiesV2 } from "./Adapters/ClaudeAdapterV2.ts";
@@ -252,11 +253,18 @@ it("steers a Grok follow-up into its running turn without restarting it", () => 
   assert.isTrue(grok.turns.supportsActiveSteering);
 });
 
-it.each(["/compact", " /LOGOUT "])("queues a steer sent while %s runs", (text) => {
+it.each([
+  ["/compact", { text: "/compact" }],
+  [" /LOGOUT ", { text: " /LOGOUT " }],
+  [
+    "a Bot's memory consolidation",
+    { text: BOT_DREAMING_PROMPT, role: "user", createdBy: "agent", creationSource: "server" },
+  ],
+])("queues a steer sent while %s runs", (_, message) => {
   const projection = dispatchProjection(baseCapabilities);
   const maintenance = {
     ...projection,
-    messages: [{ id: userMessageId, text, attachments: [] }],
+    messages: [{ id: userMessageId, attachments: [], ...message }],
   } as unknown as OrchestrationV2ThreadProjection;
   for (const deliveryIntent of ["auto", "steer"] as const) {
     assert.deepEqual(

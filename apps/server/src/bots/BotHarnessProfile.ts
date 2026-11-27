@@ -1,5 +1,7 @@
 import {
   BOT_MAX_HOPS,
+  BOT_MEMORY_SOFT_CAP_BYTES,
+  BOT_NOW_SOFT_CAP_BYTES,
   type BotDocuments,
   BotError,
   type BotHarnessProfile,
@@ -22,8 +24,11 @@ export type BotRosterLine = Pick<BotRecord, "slug" | "name" | "role" | "isPrimar
 const STATIC_INSTRUCTIONS = `You are a persistent Bot in T3 Code: a long-lived agent with its own folder, memory and peer Bots. Your identity, folder paths, documents and the roster follow below.
 
 ## Your folder
-- \`SOUL.md\` in your folder defines who you are: identity, voice, goals and standing rules. Follow it. Change it only when the user asks you to change who you are.
-- \`MEMORY.md\` in your folder is your long-term memory. Its current contents are below. Record durable facts, decisions and open follow-ups there as you learn them, and prune stale entries so it stays short.
+- \`SOUL.md\` defines who you are: identity, voice, goals and standing rules. Follow it. Change it only when the user asks you to change who you are.
+- \`NOW.md\` is your hot working state: active coding threads, pending decisions, open commitments and exact next actions. Keep it under about 2 KB and remove items once they are done.
+- \`MEMORY.md\` is your curated long-term index of durable facts, preferences and decisions. Keep it under about 4 KB. Put detailed project or topic notes in \`notes/<topic>.md\` and link them from \`MEMORY.md\`, so you read details only when you need them.
+- The current contents of \`SOUL.md\`, \`NOW.md\` and \`MEMORY.md\` are below.
+- \`bot_search_history\` searches your earlier conversation history. Use it to recover exact past quotes, peer handoffs or coding thread updates.
 - The shared folder holds handoffs between Bots. Put files a peer needs there and tell the peer the path.
 
 ## Peer Bots
@@ -35,12 +40,36 @@ const STATIC_INSTRUCTIONS = `You are a persistent Bot in T3 Code: a long-lived a
 
 ## Coding work
 - Do coding work in a repository by launching a coding thread with \`t3_thread_launch\`, or by continuing one with \`t3_thread_send\`, rather than editing repositories from your folder.
-- You don't need to wait for that thread. When it finishes, fails or asks a question, a \`[Coding thread update: ...]\` message wakes you here with its result.`;
+- You don't need to wait for that thread. When it finishes, fails or asks a question, a \`[Coding thread update: ...]\` message wakes you here with its result.
+- For helper or subagent work, use \`delegate_task\` or your native subagents so they stay nested under this thread. Never use \`create_threads\` for subagent work, and keep \`t3_thread_launch\` for repository coding threads.`;
 
 const tableCell = (value: string) => value.replaceAll("|", "\\|").replace(/\s+/g, " ").trim();
 
 const documentSection = (title: string, contents: string) =>
   [`## ${title}`, contents.trim() === "" ? "(empty)" : contents.trim()].join("\n\n");
+
+const SOFT_CAPPED_DOCUMENTS = [
+  { name: "now", file: "NOW.md", capBytes: BOT_NOW_SOFT_CAP_BYTES },
+  { name: "memory", file: "MEMORY.md", capBytes: BOT_MEMORY_SOFT_CAP_BYTES },
+] as const;
+
+const housekeepingSection = (documents: BotDocuments) => {
+  const overCap = SOFT_CAPPED_DOCUMENTS.map((document) => ({
+    ...document,
+    bytes: Buffer.byteLength(documents[document.name], "utf8"),
+  })).filter(({ bytes, capBytes }) => bytes > capBytes);
+  if (overCap.length === 0) return [];
+  return [
+    [
+      "## Memory housekeeping",
+      "",
+      ...overCap.map(
+        ({ file, bytes, capBytes }) =>
+          `- \`${file}\` is ${bytes} bytes, over its ${capBytes}-byte soft cap. Prune finished or stale items and move details into \`notes/*.md\`.`,
+      ),
+    ].join("\n"),
+  ];
+};
 
 const buildBotHarnessProfile = (input: {
   readonly bot: BotRecord;
@@ -83,7 +112,9 @@ const buildBotHarnessProfile = (input: {
     dynamicContext: [
       identity,
       documentSection("SOUL.md", input.documents.soul),
+      documentSection("NOW.md", input.documents.now),
       documentSection("MEMORY.md", input.documents.memory),
+      ...housekeepingSection(input.documents),
       roster,
     ].join("\n\n"),
     tools: bot.tools,

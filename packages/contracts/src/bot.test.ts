@@ -3,11 +3,13 @@ import * as Schema from "effect/Schema";
 
 import {
   BotCodingThreadLink,
+  BotDocuments,
   BotError,
   BotListResult,
   BotMcpServerConfig,
   BotRecord,
   BotSlug,
+  BotUpdateInput,
   slugifyBotName,
 } from "./bot.ts";
 
@@ -19,6 +21,8 @@ const decodeLink = Schema.decodeUnknownSync(BotCodingThreadLink);
 const encodeLink = Schema.encodeSync(BotCodingThreadLink);
 const decodeListResult = Schema.decodeUnknownSync(BotListResult);
 const encodeListResult = Schema.encodeSync(BotListResult);
+const decodeDocuments = Schema.decodeUnknownSync(BotDocuments);
+const decodeUpdateInput = Schema.decodeUnknownSync(BotUpdateInput);
 const decodeError = Schema.decodeSync(BotError);
 const decodeUnknownError = Schema.decodeUnknownSync(BotError);
 
@@ -158,6 +162,22 @@ describe("BotListResult", () => {
       codingThreads: [link, { ...link, threadId: "thread-3", status: "paused" }],
     });
     expect(decoded.codingThreads.map(({ threadId }) => threadId)).toEqual(["thread-2"]);
+  });
+});
+
+describe("BotDocuments", () => {
+  it("decodes an older server's documents without NOW.md as an empty now", () => {
+    expect(decodeDocuments({ soul: "a", memory: "b" })).toEqual({
+      soul: "a",
+      now: "",
+      memory: "b",
+    });
+  });
+
+  it("leaves unpatched documents out of an update so NOW.md is not wiped", () => {
+    const { documents } = decodeUpdateInput({ botId: "bot-1", documents: { soul: "a" } });
+    expect(documents).toEqual({ soul: "a" });
+    expect(documents?.now).toBeUndefined();
   });
 });
 

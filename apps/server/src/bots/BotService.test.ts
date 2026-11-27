@@ -33,6 +33,7 @@ import * as Stream from "effect/Stream";
 import * as ServerConfig from "../config.ts";
 import * as ThreadLaunch from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
+import * as ThreadSearch from "../orchestration-v2/ThreadSearch.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as BotFolders from "./BotFolders.ts";
 import * as BotService from "./BotService.ts";
@@ -238,6 +239,7 @@ const makeHarness = Effect.gen(function* () {
         projectsLayer,
         launchLayer,
         threadsLayer,
+        Layer.mock(ThreadSearch.ThreadSearch)({}),
       ),
     ),
     Layer.provide(NodeServices.layer),
@@ -373,10 +375,16 @@ it.effect("creates bots with unique slugs, one primary, an idle thread and seede
         name: "Writer",
         modelSelection,
         isPrimary: true,
-        documents: { soul: "I write release notes." },
+        documents: { soul: "I write release notes.", now: "- Draft the 2.0 notes." },
       });
       assert.strictEqual(writer.documents.soul, "I write release notes.");
+      assert.strictEqual(writer.documents.now, "- Draft the 2.0 notes.");
       assert.include(writer.documents.memory, "# Memory");
+      assert.strictEqual(
+        yield* fileSystem.readFileString(path.join(writer.bot.folderPath, "NOW.md")),
+        "- Draft the 2.0 notes.",
+      );
+      assert.strictEqual((yield* bots.get({ botId: engineer.id })).documents.now, "");
       const roster = yield* bots.list({});
       assert.deepStrictEqual(
         roster.bots.map(({ bot, status }) => [bot.slug, bot.isPrimary, status]),
@@ -399,10 +407,11 @@ it.effect("creates bots with unique slugs, one primary, an idle thread and seede
         yield* fileSystem.readFileString(path.join(engineerFolder, "SOUL.md")),
         "Ships code",
       );
-      assert.include(
-        yield* fileSystem.readFileString(path.join(engineerFolder, "AGENTS.md")),
-        "`SOUL.md`",
-      );
+      const agentsFile = yield* fileSystem.readFileString(path.join(engineerFolder, "AGENTS.md"));
+      assert.include(agentsFile, "`SOUL.md`");
+      assert.include(agentsFile, "`NOW.md`");
+      assert.include(agentsFile, "`notes/`");
+      assert.isTrue(yield* fileSystem.exists(path.join(engineerFolder, "notes")));
       assert.isTrue(yield* fileSystem.exists(path.join(harness.baseDir, "bots", "_shared")));
     }),
   ),
@@ -554,7 +563,11 @@ it.effect(
           tools: ["Read", "Bash"],
           mcpServerNames: ["github", "linear"],
           customMcpServers: { linear: { type: "sse", url: "https://linear.internal/sse" } },
-          documents: { soul: "I ship small PRs.", memory: "- The repo uses vp." },
+          documents: {
+            soul: "I ship small PRs.",
+            now: "- Waiting on review of PR 42.",
+            memory: "- The repo uses vp.",
+          },
         })).bot;
         yield* bots.create({ name: "Reviewer", role: "Reviews PRs", modelSelection });
 
@@ -592,14 +605,35 @@ it.effect(
         assert.include(profile.staticInstructions, "bot_message");
         assert.include(profile.staticInstructions, "[From Bot: ...]");
         assert.include(profile.staticInstructions, "t3_thread_launch");
+        assert.include(profile.staticInstructions, "notes/<topic>.md");
+        assert.include(profile.staticInstructions, "bot_search_history");
         assert.include(profile.dynamicContext, `- Folder: ${engineer.folderPath}`);
-        assert.include(profile.dynamicContext, "I ship small PRs.");
-        assert.include(profile.dynamicContext, "- The repo uses vp.");
+        const soulAt = profile.dynamicContext.indexOf("I ship small PRs.");
+        const nowAt = profile.dynamicContext.indexOf("## NOW.md\n\n- Waiting on review of PR 42.");
+        const memoryAt = profile.dynamicContext.indexOf("- The repo uses vp.");
+        assert.isTrue(soulAt !== -1 && soulAt < nowAt && nowAt < memoryAt);
+        assert.notInclude(profile.dynamicContext, "## Memory housekeeping");
         assert.include(
           profile.dynamicContext,
           "| engineer (you, primary) | Engineer | Ships code |",
         );
         assert.include(profile.dynamicContext, "| reviewer | Reviewer | Reviews PRs |");
+
+        const housekeepingFor = (documents: { now?: string; memory?: string }) =>
+          bots.update({ botId: engineer.id, documents }).pipe(
+            Effect.andThen(bots.resolveHarnessProfile(engineer.threadId)),
+            Effect.map((resolved) => Option.getOrThrow(resolved).dynamicContext),
+            Effect.map((context) => context.slice(context.indexOf("## Memory housekeeping"))),
+          );
+        // 1,025 two-byte characters: under the cap in characters, over it in UTF-8 bytes.
+        const nowOverCap = yield* housekeepingFor({ now: "é".repeat(1_025) });
+        assert.match(nowOverCap, /^## Memory housekeeping\n\n- `NOW\.md` is 2050 bytes/);
+        assert.notInclude(nowOverCap, "`MEMORY.md`");
+        const bothOverCap = yield* housekeepingFor({ memory: "x".repeat(4_097) });
+        assert.include(bothOverCap, "`NOW.md` is 2050 bytes");
+        assert.include(bothOverCap, "`MEMORY.md` is 4097 bytes, over its 4096-byte soft cap");
+        const underCap = yield* housekeepingFor({ now: "", memory: "x".repeat(4_096) });
+        assert.notInclude(underCap, "Memory housekeeping");
       }),
     ),
 );

@@ -25,6 +25,7 @@ import {
   type BotStatus,
   type BotUpdateInput,
   CommandId,
+  isCompactionCommandMessage,
   MessageId,
   type OrchestrationV2ConversationMessage,
   type OrchestrationV2DomainEvent,
@@ -36,6 +37,7 @@ import {
   slugifyBotName,
 } from "@t3tools/contracts";
 import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
+import { isBotDreamingMessage } from "@t3tools/shared/botDreaming";
 import { latestRootProviderFailure } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -49,11 +51,16 @@ import * as Stream from "effect/Stream";
 
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
+import * as ThreadSearch from "../orchestration-v2/ThreadSearch.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as BotFolders from "./BotFolders.ts";
 import { resolveBotHarnessProfile } from "./BotHarnessProfile.ts";
 import * as BotStore from "./BotStore.ts";
+
+export type BotHistoryMatch = Omit<ThreadSearch.ThreadMessageHit, "quality"> & {
+  readonly isBotThread: boolean;
+};
 
 export class BotService extends Context.Service<
   BotService,
@@ -76,6 +83,13 @@ export class BotService extends Context.Service<
     readonly listExchanges: (
       input: BotListExchangesInput,
     ) => Effect.Effect<BotListExchangesResult, BotError>;
+    /** Searches the Bot's own thread and, unless excluded, the coding threads it supervises. */
+    readonly searchHistory: (input: {
+      readonly botId: BotId;
+      readonly query: string;
+      readonly limit?: number | undefined;
+      readonly includeCodingThreads?: boolean | undefined;
+    }) => Effect.Effect<{ readonly matches: ReadonlyArray<BotHistoryMatch> }, BotError>;
     /** None for any thread that is not a bot's. */
     readonly resolveHarnessProfile: (
       threadId: ThreadId,
@@ -159,6 +173,7 @@ const make = Effect.gen(function* () {
   const projects = yield* ProjectService.ProjectService;
   const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
   const threads = yield* ThreadManagementService.ThreadManagementService;
+  const threadSearch = yield* ThreadSearch.ThreadSearch;
   // Sliding: a slow subscriber only needs to know the roster changed since its last read.
   const changes = yield* PubSub.sliding<void>(1);
   const notifyChanged = PubSub.publish(changes, undefined).pipe(Effect.asVoid);
@@ -597,6 +612,33 @@ const make = Effect.gen(function* () {
     return { exchanges };
   });
 
+  const searchHistory: BotService["Service"]["searchHistory"] = Effect.fn(
+    "BotService.searchHistory",
+  )(function* (input) {
+    const bot = yield* requireBot(input.botId);
+    const codingThreadIds =
+      input.includeCodingThreads === false
+        ? []
+        : (yield* store
+            .listCodingThreadLinks({ includeArchived: true })
+            .pipe(Effect.mapError(failed("Couldn't list the Bot's coding threads."))))
+            .filter((link) => link.botId === bot.id)
+            .map((link) => link.threadId);
+    const { matches } = yield* threadSearch
+      .searchThreadMessages({
+        threadIds: [bot.threadId, ...codingThreadIds],
+        query: input.query,
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      })
+      .pipe(Effect.mapError(failed("Couldn't search the Bot's history.")));
+    return {
+      matches: matches.map(({ quality: _quality, ...match }) => ({
+        ...match,
+        isBotThread: match.threadId === bot.threadId,
+      })),
+    };
+  });
+
   const resolveHarnessProfile: BotService["Service"]["resolveHarnessProfile"] = (threadId) =>
     resolveBotHarnessProfile(threadId).pipe(
       Effect.provideService(BotStore.BotStore, store),
@@ -721,6 +763,7 @@ const make = Effect.gen(function* () {
   // The reactor sees every domain event; these handlers stay untraced and return before any read
   // for the common events they ignore.
   const onUserMessage = Effect.fnUntraced(function* (message: OrchestrationV2ConversationMessage) {
+    if (isBotDreamingMessage(message.text) || isCompactionCommandMessage(message)) return;
     if (message.createdBy === "user" && message.senderThreadId === undefined) {
       const bot = yield* store.findByThreadId(message.threadId);
       if (Option.isSome(bot) && bot.value.hopCount !== 0) {
@@ -857,6 +900,7 @@ const make = Effect.gen(function* () {
     delete: deleteBot,
     sendMessage,
     listExchanges,
+    searchHistory,
     resolveHarnessProfile,
     startReactor,
   });

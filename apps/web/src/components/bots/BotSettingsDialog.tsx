@@ -2,6 +2,8 @@ import { useAtomValue } from "@effect/atom-react";
 import { type ScopedBotEntry, botKey } from "@t3tools/client-runtime/state/bots";
 import {
   BOT_DEFAULT_TOOLS,
+  BOT_MEMORY_SOFT_CAP_BYTES,
+  BOT_NOW_SOFT_CAP_BYTES,
   type BotDocuments,
   type BotMcpServerConfig,
   type BotRecord,
@@ -28,6 +30,7 @@ import { requestConfirmDialog } from "../../confirmDialog";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { botsEnvironment, useBotDetail, useBotsIndex } from "../../state/bots";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { cn } from "../../lib/utils";
 import { runtimeModeConfig, runtimeModeOptions } from "../chat/runtimeModeConfig";
 import { SettingsGroup } from "../settings/SettingsGroup";
 import { SettingsRow } from "../settings/settingsLayout";
@@ -87,13 +90,28 @@ const DOCUMENTS = [
     id: "soul",
     file: "SOUL.md",
     placeholder: "Who is this Bot? How should it think, talk and decide?",
+    softCapBytes: null,
+  },
+  {
+    id: "now",
+    file: "NOW.md",
+    placeholder: "Active threads, open commitments, and next actions (kept concise).",
+    softCapBytes: BOT_NOW_SOFT_CAP_BYTES,
   },
   {
     id: "memory",
     file: "MEMORY.md",
     placeholder: "What should this Bot remember between conversations?",
+    softCapBytes: BOT_MEMORY_SOFT_CAP_BYTES,
   },
-] as const satisfies ReadonlyArray<{ id: BotDocumentName; file: string; placeholder: string }>;
+] as const satisfies ReadonlyArray<{
+  id: BotDocumentName;
+  file: string;
+  placeholder: string;
+  softCapBytes: number | null;
+}>;
+
+const formatKilobytes = (bytes: number) => String(Math.ceil((bytes * 10) / 1024) / 10);
 
 const SYSTEM_PROMPT_MODES: Record<BotSystemPromptMode, string> = {
   custom: "Custom (lightweight)",
@@ -521,38 +539,54 @@ function SoulSection(props: {
   return (
     <div className="flex flex-col gap-5">
       <BotFolderPath path={props.folderPath} />
-      {DOCUMENTS.map((document) => (
-        <div key={document.id} className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor={`bot-settings-${document.id}`}
-              className="font-mono text-xs font-medium text-muted-foreground"
-            >
-              {document.file}
-            </label>
-            {props.dirty.includes(document.id) ? (
-              <span className="flex items-center gap-1 text-2xs text-warning-foreground">
-                <span className="size-1.5 rounded-full bg-warning" aria-hidden />
-                Unsaved
-              </span>
-            ) : null}
+      {DOCUMENTS.map((document) => {
+        const value = props.drafts[document.id] ?? props.saved?.[document.id] ?? "";
+        const bytes = new TextEncoder().encode(value).length;
+        return (
+          <div key={document.id} className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor={`bot-settings-${document.id}`}
+                className="font-mono text-xs font-medium text-muted-foreground"
+              >
+                {document.file}
+              </label>
+              {props.dirty.includes(document.id) ? (
+                <span className="flex items-center gap-1 text-2xs text-warning-foreground">
+                  <span className="size-1.5 rounded-full bg-warning" aria-hidden />
+                  Unsaved
+                </span>
+              ) : null}
+              {document.softCapBytes !== null && props.saved !== null ? (
+                <span
+                  className={cn(
+                    "ms-auto font-mono text-2xs tabular-nums",
+                    bytes > document.softCapBytes
+                      ? "text-warning-foreground"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {formatKilobytes(bytes)} / {formatKilobytes(document.softCapBytes)} KB
+                </span>
+              ) : null}
+            </div>
+            {props.loadError !== null ? (
+              <p className="text-xs text-destructive">
+                Could not load {document.file}: {props.loadError}
+              </p>
+            ) : (
+              <Textarea
+                id={`bot-settings-${document.id}`}
+                rows={document.id === "soul" ? 12 : 8}
+                placeholder={props.saved === null ? "Loading…" : document.placeholder}
+                disabled={!props.editable}
+                value={value}
+                onChange={(event) => props.onChange(document.id, event.currentTarget.value)}
+              />
+            )}
           </div>
-          {props.loadError !== null ? (
-            <p className="text-xs text-destructive">
-              Could not load {document.file}: {props.loadError}
-            </p>
-          ) : (
-            <Textarea
-              id={`bot-settings-${document.id}`}
-              rows={document.id === "soul" ? 12 : 8}
-              placeholder={props.saved === null ? "Loading…" : document.placeholder}
-              disabled={!props.editable}
-              value={props.drafts[document.id] ?? props.saved?.[document.id] ?? ""}
-              onChange={(event) => props.onChange(document.id, event.currentTarget.value)}
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

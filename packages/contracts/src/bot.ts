@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 
@@ -24,11 +25,7 @@ const BOT_FALLBACK_SLUG = "bot";
 
 export const BotSlug = Schema.String.check(
   Schema.isPattern(/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/),
-)
-  .pipe(Schema.brand("BotSlug"))
-  .annotate({
-    description: "Lowercase letters, digits and inner hyphens, at most 40 characters.",
-  });
+).pipe(Schema.brand("BotSlug"));
 export type BotSlug = typeof BotSlug.Type;
 
 export function slugifyBotName(name: string): BotSlug {
@@ -160,8 +157,12 @@ export const BotHarnessProfile = Schema.Struct({
 });
 export type BotHarnessProfile = typeof BotHarnessProfile.Type;
 
+export const BOT_NOW_SOFT_CAP_BYTES = 2_048;
+export const BOT_MEMORY_SOFT_CAP_BYTES = 4_096;
+
 export const BotDocuments = Schema.Struct({
   soul: Schema.String,
+  now: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(""))),
   memory: Schema.String,
 });
 export type BotDocuments = typeof BotDocuments.Type;
@@ -225,7 +226,11 @@ export const BotDetailResult = Schema.Struct({
 });
 export type BotDetailResult = typeof BotDetailResult.Type;
 
-const BotDocumentsPatch = BotDocuments.mapFields(Struct.map(Schema.optionalKey));
+export const BotDocumentsPatch = Schema.Struct({
+  soul: Schema.optionalKey(Schema.String),
+  now: Schema.optionalKey(Schema.String),
+  memory: Schema.optionalKey(Schema.String),
+});
 
 export const BotCreateInput = Schema.Struct({
   ...Struct.mapOmit(BotEditableFields, ["name", "modelSelection"], Schema.optionalKey),
