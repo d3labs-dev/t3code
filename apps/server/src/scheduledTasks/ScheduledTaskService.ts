@@ -30,11 +30,13 @@ import {
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import * as Clock from "effect/Clock";
 import * as Digest from "effect/crypto/Digest";
 import * as Mac from "effect/crypto/Mac";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Base64 from "effect/encoding/Base64";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Exit from "effect/Exit";
 import * as Duration from "effect/Duration";
@@ -75,9 +77,17 @@ import {
   encodePendingTask,
   decodePendingRequest,
   dedupeError,
+  webhookDedupe,
 } from "./webhookDedupe.ts";
 import { describeFailedWebhookFilter, findFailedWebhookFilter } from "./webhookFilter.ts";
-import { constantTimeEquals, verifyWebhookSignature } from "./webhookVerification.ts";
+import { McpEventRequestError, type McpEventPublisher } from "./McpEventClient.ts";
+import * as McpEventSubscriptions from "./McpEventSubscriptions.ts";
+import {
+  STANDARD_WEBHOOK_SECRET_PREFIX,
+  constantTimeEquals,
+  verifyStandardWebhook,
+  verifyWebhookSignature,
+} from "./webhookVerification.ts";
 
 export const WEBHOOK_ROUTE_PREFIX = "/api/hooks";
 const isScheduledTaskError = Schema.is(ScheduledTaskError);
@@ -104,6 +114,8 @@ const LEGACY_DELIVERY_OUTCOMES: ReadonlySet<string> = new Set([
 
 interface WebhookOrigin {
   readonly relayHookBaseUrl: string | null;
+  /** This server's own loopback origin, for MCP servers on the same machine. */
+  readonly localOrigin: string | null;
 }
 
 const ENDPOINT_KEY = /^[0-9a-f]{16}$/;
@@ -123,9 +135,22 @@ export function relayHookBaseUrl(input: {
 export class ScheduledTaskWebhookOrigin extends Context.Reference<Effect.Effect<WebhookOrigin>>(
   "t3/scheduledTasks/ScheduledTaskWebhookOrigin",
   {
-    defaultValue: () => Effect.succeed({ relayHookBaseUrl: null }),
+    defaultValue: () => Effect.succeed({ relayHookBaseUrl: null, localOrigin: null }),
   },
 ) {}
+
+const noBots = () =>
+  Effect.fail(new McpEventRequestError({ message: "MCP event tasks need a Bot's thread." }));
+
+/** Reaches the MCP servers of the Bots whose threads event tasks run in. */
+export class ScheduledTaskMcpEventPublisher extends Context.Reference<McpEventPublisher>(
+  "t3/scheduledTasks/ScheduledTaskMcpEventPublisher",
+  { defaultValue: () => ({ resolve: noBots, subscribe: noBots, unsubscribe: noBots }) },
+) {}
+
+/** Webhook and MCP event tasks run when their hook URL receives a request. */
+const usesHook = (schedule: Pick<ScheduledTask["schedule"], "type">) =>
+  schedule.type === "webhook" || schedule.type === "mcp_event";
 
 class WebhookDeliverySkipped extends Schema.TaggedError<WebhookDeliverySkipped>()(
   "WebhookDeliverySkipped",
@@ -158,6 +183,9 @@ export type WebhookDeliveryOutcome =
   | "filtered"
   | "not_found"
   | "blocked_by_policy"
+  | "verification"
+  | "control"
+  | "stale_subscription"
   | "error";
 
 export type WebhookTriggerResult =
@@ -174,7 +202,27 @@ export type WebhookTriggerResult =
       readonly _tag: "rate_limited";
       readonly outcome: "rate_limited" | "queue_full";
     }
-  | { readonly _tag: "expired" };
+  | { readonly _tag: "expired" }
+  /** An MCP server checking an event task's hook before it subscribes it. */
+  | { readonly _tag: "challenge"; readonly challenge: string }
+  /** An MCP server's notice about the subscription itself, which starts no run. */
+  | { readonly _tag: "acknowledged" }
+  /** A delivery from a subscription the task has replaced. */
+  | { readonly _tag: "gone" };
+
+/** Notices an MCP server sends about a subscription; an event has no `type`. */
+const decodeMcpEventControl = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Union([
+      Schema.Struct({ type: Schema.Literal("verification"), challenge: Schema.String }),
+      Schema.Struct({ type: Schema.Literal("gap") }),
+      Schema.Struct({
+        type: Schema.Literal("terminated"),
+        error: Schema.optional(Schema.Struct({ message: Schema.String })),
+      }),
+    ]),
+  ),
+);
 
 const webhookFilters = (filters: ReadonlyArray<ScheduledTaskWebhookFilter> | undefined) =>
   filters?.length ? { filters } : {};
@@ -379,17 +427,29 @@ function webhookPath(taskId: string, token: string): string {
   return `${WEBHOOK_ROUTE_PREFIX}/${encodeURIComponent(taskId)}/${token}`;
 }
 
+function relayHookUrl(taskId: string, token: string, origin: WebhookOrigin | null) {
+  const base = origin?.relayHookBaseUrl ?? null;
+  return base === null ? null : `${base}/${encodeURIComponent(taskId)}/${token}`;
+}
+
 function webhookEndpoint(
   row: Pick<ScheduledTaskRow, "task_id" | "webhook_token" | "webhook_secret">,
   origin: WebhookOrigin | null,
 ): ScheduledTask["webhook"] {
   if (row.webhook_token === null) return undefined;
-  const base = origin?.relayHookBaseUrl ?? null;
   return {
     path: webhookPath(row.task_id, row.webhook_token),
-    url: base === null ? null : `${base}/${encodeURIComponent(row.task_id)}/${row.webhook_token}`,
+    url: relayHookUrl(row.task_id, row.webhook_token, origin),
     hasSecret: row.webhook_secret !== null,
   };
+}
+
+/** Where an MCP server delivers a task's events: through T3 Connect when set up, else loopback. */
+function mcpEventDeliveryUrl(taskId: string, token: string, origin: WebhookOrigin): string | null {
+  return (
+    relayHookUrl(taskId, token, origin) ??
+    (origin.localOrigin === null ? null : `${origin.localOrigin}${webhookPath(taskId, token)}`)
+  );
 }
 
 // Runs per task row; list and lookup operations already own the span.
@@ -483,6 +543,7 @@ export const layer = Layer.effect(
     const secretRequests = yield* SecretRequests.SecretRequests;
     const scheduler = yield* Scheduler.Scheduler;
     const readWebhookOrigin = yield* ScheduledTaskWebhookOrigin;
+    const mcpEventPublisher = yield* ScheduledTaskMcpEventPublisher;
     const managedPolicy = yield* ManagedPolicy.ManagedPolicy;
     const webhookPolicyOrganization = ManagedPolicy.deniedBy(managedPolicy, "webhookTasks");
     // Existing webhook tasks stay stored but report why they do not run.
@@ -491,7 +552,7 @@ export const layer = Layer.effect(
         ? undefined
         : managedPolicyDeniedMessage(webhookPolicyOrganization, "webhook tasks");
     const withPolicy = (task: ScheduledTask): ScheduledTask =>
-      webhookPolicyBlock !== undefined && task.schedule.type === "webhook"
+      webhookPolicyBlock !== undefined && usesHook(task.schedule)
         ? { ...task, blockedByPolicy: webhookPolicyBlock }
         : task;
     const webhookPermits = yield* Ref.make<ReadonlyMap<ScheduledTaskId, Semaphore.Semaphore>>(
@@ -520,6 +581,18 @@ export const layer = Layer.effect(
       Effect.andThen(PubSub.publish(changesPubSub, undefined)),
       Effect.asVoid,
     );
+    const mcpEvents = yield* McpEventSubscriptions.make({
+      publisher: mcpEventPublisher,
+      notifyChanged: PubSub.publish(changesPubSub, undefined).pipe(Effect.asVoid),
+    });
+    // Runs per task row; list and lookup operations already own the span.
+    const present = Effect.fnUntraced(function* (task: ScheduledTask) {
+      return withPolicy(
+        task.schedule.type === "mcp_event" && task.enabled
+          ? { ...task, subscription: yield* mcpEvents.state(task) }
+          : task,
+      );
+    });
 
     const selectAllRows = () =>
       sql<ScheduledTaskRow>`
@@ -558,7 +631,7 @@ export const layer = Layer.effect(
       const origin = yield* readWebhookOrigin;
       return yield* Effect.forEach(
         rows,
-        (row) => decodeRow(row, origin).pipe(Effect.map(withPolicy)),
+        (row) => decodeRow(row, origin).pipe(Effect.flatMap(present)),
         { concurrency: 1 },
       );
     });
@@ -601,7 +674,7 @@ export const layer = Layer.effect(
       );
       const row = rows[0];
       if (row === undefined) return null;
-      return withPolicy(yield* decodeRow(row, yield* readWebhookOrigin));
+      return yield* present(yield* decodeRow(row, yield* readWebhookOrigin));
     });
 
     const findWebhookCredentials = (id: ScheduledTaskId) =>
@@ -620,6 +693,46 @@ export const layer = Layer.effect(
       Effect.map((bytes) => Buffer.from(bytes).toString("base64url")),
       Effect.mapError((cause) => taskError("Could not generate webhook token.", { cause })),
     );
+
+    const newStandardWebhookSecret = random.randomBytes(32).pipe(
+      Effect.map((bytes) => `${STANDARD_WEBHOOK_SECRET_PREFIX}${Base64.encode(bytes)}`),
+      Effect.mapError((cause) => taskError("Could not generate event signing secret.", { cause })),
+    );
+
+    /** Subscribes an enabled event task at its MCP server, or ends the subscription of any other. */
+    const syncMcpEvents = (id: ScheduledTaskId) =>
+      mcpEvents
+        .sync(
+          id,
+          Effect.gen(function* () {
+            const task = yield* findTask(id);
+            if (
+              task === null ||
+              !task.enabled ||
+              task.schedule.type !== "mcp_event" ||
+              webhookPolicyBlock !== undefined
+            ) {
+              return null;
+            }
+            const credentials = yield* findWebhookCredentials(id);
+            if (credentials?.token == null || credentials.secret === null) return null;
+            return {
+              task: {
+                id: task.id,
+                createdAt: task.createdAt,
+                threadId: task.threadId,
+                schedule: task.schedule,
+              },
+              url: mcpEventDeliveryUrl(id, credentials.token, yield* readWebhookOrigin),
+              secret: credentials.secret,
+            };
+          }),
+        )
+        .pipe(
+          Effect.catch((cause) =>
+            Effect.logWarning("Could not sync an MCP event subscription.", { taskId: id, cause }),
+          ),
+        );
 
     const loadTask = Effect.fn("ScheduledTaskService.loadTask")(function* (id: ScheduledTaskId) {
       const task = yield* findTask(id);
@@ -1001,7 +1114,7 @@ export const layer = Layer.effect(
           const reason =
             active.createdAt !== task.createdAt
               ? "The task was replaced before this delivery ran."
-              : active.schedule.type !== "webhook"
+              : active.schedule.type !== task.schedule.type
                 ? "The task's trigger changed before this delivery ran."
                 : webhookPolicyBlock !== undefined
                   ? webhookPolicyBlock
@@ -1363,6 +1476,21 @@ export const layer = Layer.effect(
 
     yield* scheduler.register("scheduled-tasks", runDueTasks());
 
+    // The first pass subscribes every enabled event task again, since subscriptions live only in
+    // memory; later passes refresh or retry the due ones.
+    const resumedMcpEvents = yield* Ref.make(false);
+    const refreshMcpEvents = Effect.fn("ScheduledTaskService.refreshMcpEvents")(function* () {
+      const ids = (yield* Ref.get(resumedMcpEvents))
+        ? yield* mcpEvents.due(yield* Clock.currentTimeMillis)
+        : (yield* sql<{ task_id: ScheduledTaskId }>`
+            SELECT task_id FROM scheduled_tasks
+            WHERE enabled = 1 AND json_extract(schedule_json, '$.type') = 'mcp_event'
+          `.pipe(NodeSqliteClient.readOnly)).map((row) => row.task_id);
+      yield* Ref.set(resumedMcpEvents, true);
+      yield* Effect.forEach(ids, syncMcpEvents, { concurrency: 4, discard: true });
+    });
+    yield* scheduler.register("mcp-event-subscriptions", refreshMcpEvents());
+
     const list: ScheduledTaskService["Service"]["list"] = () =>
       listRows().pipe(
         Effect.map((tasks) => ({
@@ -1412,7 +1540,7 @@ export const layer = Layer.effect(
       "ScheduledTaskService.upsert",
     )(function* (input) {
       // A webhook task the policy blocks can still be edited while it is off.
-      if (input.enabled && input.schedule.type === "webhook" && webhookPolicyBlock !== undefined) {
+      if (input.enabled && usesHook(input.schedule) && webhookPolicyBlock !== undefined) {
         return yield* taskError(
           webhookPolicyBlock,
           input.id === undefined ? {} : { taskId: input.id },
@@ -1449,6 +1577,17 @@ export const layer = Layer.effect(
       // An unchanged destination is not rechecked, so a task on an archived thread stays editable.
       if (threadId !== null && threadId !== existingTask?.threadId) {
         yield* requireDestinationThread(threadId, input.projectId, id);
+      }
+      if (input.schedule.type === "mcp_event") {
+        if (threadId === null) {
+          return yield* taskError(
+            "An MCP event task runs in a Bot's thread. Create it from that thread.",
+            { taskId: id },
+          );
+        }
+        yield* mcpEventPublisher
+          .resolve({ threadId, server: input.schedule.server })
+          .pipe(Effect.mapError((error) => taskError(error.message, { taskId: id })));
       }
       // Refused on save rather than at run time; a disabled task can still be saved, so one
       // stored above the ceiling can be turned off before its mode is lowered. A task bound to a
@@ -1490,9 +1629,22 @@ export const layer = Layer.effect(
                     : undefined),
               ),
             }
-          : input.schedule.type === "once"
-            ? { type: "once", runAt: iso(DateTime.makeUnsafe(input.schedule.runAt)) }
-            : input.schedule;
+          : input.schedule.type === "mcp_event"
+            ? {
+                type: "mcp_event",
+                server: input.schedule.server,
+                event: input.schedule.event,
+                arguments: input.schedule.arguments ?? {},
+                ...webhookFilters(
+                  input.schedule.filters ??
+                    (existingTask?.schedule.type === "mcp_event"
+                      ? existingTask.schedule.filters
+                      : undefined),
+                ),
+              }
+            : input.schedule.type === "once"
+              ? { type: "once", runAt: iso(DateTime.makeUnsafe(input.schedule.runAt)) }
+              : input.schedule;
       const webhook =
         input.schedule.type === "webhook"
           ? yield* Effect.gen(function* () {
@@ -1518,7 +1670,10 @@ export const layer = Layer.effect(
               // A ref, when given, is the only source: a plain secret sent
               // alongside it must not replace what a replayed save stored.
               const provided = signature?.secretRef === undefined ? signature?.secret : fromRef;
-              const secret = signature == null ? null : (provided ?? existing?.secret ?? null);
+              // An event task's secret signs its MCP server's deliveries, not this sender's.
+              const storedSecret =
+                existingTask?.schedule.type === "webhook" ? (existing?.secret ?? null) : null;
+              const secret = signature == null ? null : (provided ?? storedSecret);
               const secretChanged =
                 signature == null || provided !== undefined || existing === null;
               if (signature != null && secret === null) {
@@ -1528,7 +1683,17 @@ export const layer = Layer.effect(
               }
               return { token, secret, secretChanged };
             })
-          : { token: null, secret: null, secretChanged: true };
+          : input.schedule.type === "mcp_event"
+            ? yield* Effect.gen(function* () {
+                const existing = existingTask === null ? null : yield* findWebhookCredentials(id);
+                const token = existing?.token ?? (yield* newWebhookToken);
+                const kept =
+                  existingTask?.schedule.type === "mcp_event" ? (existing?.secret ?? null) : null;
+                return kept === null
+                  ? { token, secret: yield* newStandardWebhookSecret, secretChanged: true }
+                  : { token, secret: kept, secretChanged: false };
+              })
+            : { token: null, secret: null, secretChanged: true };
       // A folder that is not a Git repository, Scratch included, cannot hold a worktree.
       const workspaceStrategy: ScheduledTask["workspaceStrategy"] =
         input.workspaceStrategy.type === "worktree" &&
@@ -1574,6 +1739,9 @@ export const layer = Layer.effect(
         webhook,
       );
       yield* notifyChanged;
+      if (schedule.type === "mcp_event" || existingTask?.schedule.type === "mcp_event") {
+        yield* syncMcpEvents(id);
+      }
       return { task: (yield* findTask(id)) ?? task };
     });
 
@@ -1582,11 +1750,7 @@ export const layer = Layer.effect(
     )(function* (input) {
       const existing = yield* loadTask(input.id);
       if (existing.enabled === input.enabled) return { task: existing };
-      if (
-        input.enabled &&
-        existing.schedule.type === "webhook" &&
-        webhookPolicyBlock !== undefined
-      ) {
+      if (input.enabled && usesHook(existing.schedule) && webhookPolicyBlock !== undefined) {
         return yield* taskError(webhookPolicyBlock, { taskId: input.id });
       }
       const modeDenial =
@@ -1621,9 +1785,10 @@ export const layer = Layer.effect(
         return yield* taskError("Schedule task not found.", { taskId: input.id });
       }
       yield* notifyChanged;
-      return {
-        task: { ...existing, enabled: input.enabled, nextRunAt: next, updatedAt: iso(now) },
-      };
+      const toggled = { ...existing, enabled: input.enabled, nextRunAt: next, updatedAt: iso(now) };
+      if (existing.schedule.type !== "mcp_event") return { task: toggled };
+      yield* syncMcpEvents(input.id);
+      return { task: (yield* findTask(input.id)) ?? toggled };
     });
 
     const forgetWebhookTask = (id: ScheduledTaskId) =>
@@ -1662,6 +1827,7 @@ export const layer = Layer.effect(
       deleteRow(input.id).pipe(
         Effect.andThen(forgetWebhookTask(input.id)),
         Effect.andThen(notifyChanged),
+        Effect.andThen(syncMcpEvents(input.id)),
         Effect.as({ id: input.id }),
       );
 
@@ -1691,6 +1857,7 @@ export const layer = Layer.effect(
         discard: true,
       });
       if (removed.length > 0) yield* notifyChanged;
+      yield* Effect.forEach(removed, ({ task_id }) => syncMcpEvents(task_id), { discard: true });
     });
 
     const moveThreadTasks: ScheduledTaskService["Service"]["moveThreadTasks"] = Effect.fn(
@@ -1715,6 +1882,11 @@ export const layer = Layer.effect(
       const task = yield* loadTask(input.id);
       if (task.schedule.type === "webhook") {
         return yield* taskError("Webhook tasks run when their URL receives a request.", {
+          taskId: input.id,
+        });
+      }
+      if (task.schedule.type === "mcp_event") {
+        return yield* taskError("MCP event tasks run when their server delivers an event.", {
           taskId: input.id,
         });
       }
@@ -2161,7 +2333,7 @@ export const layer = Layer.effect(
       const task = yield* decodeRow(row);
       yield* Effect.annotateCurrentSpan({ "scheduled_task.id": task.id });
       const schedule = task.schedule;
-      if (schedule.type !== "webhook") return yield* notFound;
+      if (schedule.type !== "webhook" && schedule.type !== "mcp_event") return yield* notFound;
 
       const now = yield* localNow;
       // Anyone can reach the tunnel directly and set the relay's header, so
@@ -2265,8 +2437,32 @@ export const layer = Layer.effect(
             yield* observe("disabled");
             return { _tag: "disabled" as const };
           }
-          const signature = schedule.signature;
-          if (signature !== null) {
+          const signature = schedule.type === "webhook" ? schedule.signature : null;
+          const signatureVerified = schedule.type === "mcp_event" || signature !== null;
+          if (schedule.type === "mcp_event") {
+            const check =
+              row.webhook_secret === null
+                ? "invalid"
+                : yield* verifyStandardWebhook({
+                    secret: row.webhook_secret,
+                    headers: request.headers,
+                    body: request.body,
+                    receivedAtSeconds: Math.floor(DateTime.toEpochMillis(receivedAt) / 1000),
+                  }).pipe(Effect.provideService(Mac.Mac, mac));
+            if (check === "stale") {
+              yield* log("expired", {
+                signatureVerified: true,
+                error: "The signed timestamp is over 5 minutes from when the request arrived.",
+              });
+              yield* observe("expired");
+              return { _tag: "expired" as const };
+            }
+            if (check === "invalid") {
+              yield* log("rejected_signature");
+              yield* observe("rejected_signature");
+              return { _tag: "rejected_signature" as const };
+            }
+          } else if (signature !== null) {
             const verified =
               row.webhook_secret !== null &&
               (yield* verifyWebhookSignature({
@@ -2281,13 +2477,14 @@ export const layer = Layer.effect(
               return { _tag: "rejected_signature" as const };
             }
           }
-          const maxAgeMinutes = schedule.maxDeliveryAgeMinutes ?? null;
+          const maxAgeMinutes =
+            schedule.type === "webhook" ? (schedule.maxDeliveryAgeMinutes ?? null) : null;
           if (
             maxAgeMinutes !== null &&
             DateTime.toEpochMillis(now) - DateTime.toEpochMillis(receivedAt) >
               maxAgeMinutes * 60_000
           ) {
-            yield* log("expired", { signatureVerified: signature !== null });
+            yield* log("expired", { signatureVerified });
             yield* observe("expired");
             return { _tag: "expired" as const };
           }
@@ -2301,11 +2498,40 @@ export const layer = Layer.effect(
             });
           });
 
+          if (schedule.type === "mcp_event") {
+            const control = decodeMcpEventControl(request.bodyText);
+            if (Option.isSome(control) && control.value.type === "verification") {
+              yield* refundRejectionSlot;
+              yield* observe("verification");
+              return yield* releaseClaim({
+                _tag: "challenge" as const,
+                challenge: control.value.challenge,
+              });
+            }
+            if (!(yield* mcpEvents.isCurrent(task.id, request.headers["x-mcp-subscription-id"]))) {
+              yield* refundRejectionSlot;
+              yield* observe("stale_subscription");
+              return yield* releaseClaim({ _tag: "gone" as const });
+            }
+            if (Option.isSome(control)) {
+              if (control.value.type === "terminated") {
+                const reason = control.value.error?.message;
+                yield* mcpEvents.terminated(
+                  task.id,
+                  `The MCP server ended the subscription${reason === undefined ? "." : `: ${reason}`}`,
+                );
+              }
+              yield* refundRejectionSlot;
+              yield* observe("control");
+              return yield* releaseClaim({ _tag: "acknowledged" as const });
+            }
+          }
+
           const failedFilter = findFailedWebhookFilter(schedule.filters ?? [], request);
           if (failedFilter !== null) {
             if (yield* takeFilteredLogSlot(task.id, DateTime.toEpochMillis(now))) {
               yield* log("filtered", {
-                signatureVerified: signature !== null,
+                signatureVerified,
                 error: describeFailedWebhookFilter(failedFilter),
               });
             }
@@ -2319,8 +2545,9 @@ export const layer = Layer.effect(
           }
 
           const runWindow = (yield* Ref.get(webhookRateWindows)).get(task.id);
+          const dedupe = webhookDedupe(schedule);
           if (
-            schedule.dedupe === undefined &&
+            dedupe === undefined &&
             (runWindow?.accepted.filter((entry) => DateTime.toEpochMillis(now) - entry.at < 60_000)
               .length ?? 0) >= WEBHOOK_RATE_LIMIT_PER_MINUTE
           ) {
@@ -2361,7 +2588,7 @@ export const layer = Layer.effect(
               ),
             );
           const deduped =
-            schedule.dedupe === undefined
+            dedupe === undefined
               ? "run"
               : yield* admit(
                   Effect.gen(function* () {
@@ -2382,7 +2609,7 @@ export const layer = Layer.effect(
                         (yield* takeDedupeLogSlot(task.id, DateTime.toEpochMillis(now))))
                     )
                       yield* log(outcome === "pending" ? "accepted" : outcome, {
-                        signatureVerified: signature !== null,
+                        signatureVerified,
                       });
                     return outcome;
                   }),
@@ -2417,7 +2644,7 @@ export const layer = Layer.effect(
           // it is free.
           if (rendered.prompt.trim().length > PROVIDER_SEND_TURN_MAX_INPUT_CHARS) {
             yield* log("dispatch_failed", {
-              signatureVerified: signature !== null,
+              signatureVerified,
               missing: rendered.missing,
               renderedPrompt: rendered.prompt,
               error: PROMPT_TOO_LONG,
@@ -2465,10 +2692,10 @@ export const layer = Layer.effect(
               ).pipe(Effect.provideService(SqlClient.SqlClient, sql));
               if (outcome === "duplicate") {
                 if (yield* takeDedupeLogSlot(task.id, DateTime.toEpochMillis(now)))
-                  yield* log("duplicate", { signatureVerified: signature !== null });
+                  yield* log("duplicate", { signatureVerified });
               } else
                 yield* log("accepted", {
-                  signatureVerified: signature !== null,
+                  signatureVerified,
                   missing: rendered.missing,
                   renderedPrompt: rendered.prompt,
                 });

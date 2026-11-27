@@ -14,6 +14,20 @@ function key(template: string | undefined, request: WebhookRequest): string {
     : NodeCrypto.createHash("sha256").update(rendered.prompt).digest("hex");
 }
 
+// Standard Webhooks retries repeat the `webhook-id` an MCP server signed.
+const MCP_EVENT_DEDUPE: WebhookDedupe = { replayKey: "{{headers.webhook-id}}" };
+
+type WebhookDedupe = NonNullable<
+  Extract<ScheduledTask["schedule"], { readonly type: "webhook" }>["dedupe"]
+>;
+
+export const webhookDedupe = (schedule: ScheduledTask["schedule"]): WebhookDedupe | undefined =>
+  schedule.type === "webhook"
+    ? schedule.dedupe
+    : schedule.type === "mcp_event"
+      ? MCP_EVENT_DEDUPE
+      : undefined;
+
 export const releaseWebhookReplay = Effect.fn("ScheduledTaskService.releaseWebhookReplay")(
   function* (deliveryId: string) {
     const sql = yield* SqlClient.SqlClient;
@@ -53,7 +67,7 @@ export const acceptWebhookDedupe = Effect.fn("ScheduledTaskService.acceptWebhook
   replaceDeliveryRequest: (ownerId: string) => Effect.Effect<void, ScheduledTaskError>,
 ) {
   const sql = yield* SqlClient.SqlClient;
-  const dedupe = task.schedule.type === "webhook" ? task.schedule.dedupe : undefined;
+  const dedupe = webhookDedupe(task.schedule);
   if (dedupe === undefined) return "run" as const;
   const replayKey = key(dedupe.replayKey, request);
   if (yield* hasReplayKey(task.id, replayKey, now)) return "duplicate" as const;
@@ -100,10 +114,7 @@ export const acceptImmediateWebhookDedupe = Effect.fn(
   now: number,
   reserve: Effect.Effect<void, "first_rejected" | "rejected" | "queue_full" | ScheduledTaskError>,
 ) {
-  const replayKey = key(
-    task.schedule.type === "webhook" ? task.schedule.dedupe?.replayKey : undefined,
-    request,
-  );
+  const replayKey = key(webhookDedupe(task.schedule)?.replayKey, request);
   if (yield* hasReplayKey(task.id, replayKey, now)) return "duplicate" as const;
   yield* reserve;
   yield* claimReplayKey(task.id, replayKey, deliveryId, now);

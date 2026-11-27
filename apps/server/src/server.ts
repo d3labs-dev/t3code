@@ -9,6 +9,7 @@ import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReact
 import * as PullRequestWatchReactor from "./orchestration-v2/PullRequestWatchReactor.ts";
 import * as DelegatedTaskQuestionReactor from "./orchestration-v2/DelegatedTaskQuestionReactor.ts";
 import * as BotFolders from "./bots/BotFolders.ts";
+import * as BotMcpEventPublisher from "./bots/BotMcpEventPublisher.ts";
 import { layerBotHarnessResolver } from "./bots/BotHarnessProfile.ts";
 import * as BotDreamingService from "./bots/BotDreamingService.ts";
 import * as BotHeartbeatService from "./bots/BotHeartbeatService.ts";
@@ -591,17 +592,25 @@ const layerCloudManagedEndpointRuntime = Layer.mergeAll(
   ),
 );
 
+// One store and folder cache for the Claude adapter's profile reads and BotService: layers memoize by reference.
+const layerBotStorage = Layer.mergeAll(BotStore.layer, BotFolders.layer);
+
 const layerScheduledTaskWebhookOrigin = Layer.effect(
   ScheduledTaskWebhookOrigin,
   Effect.gen(function* () {
     const secrets = yield* ServerSecretStore.ServerSecretStore;
+    const { address } = yield* HttpServer.HttpServer;
+    const localOrigin =
+      typeof address === "string" || !("port" in address)
+        ? null
+        : `http://${loopbackUrlHostForAddress(address)}:${address.port}`;
     return Effect.gen(function* () {
       const [relayUrl, tunnelConfig] = yield* Effect.all([
         secrets.get(RELAY_URL_SECRET),
         secrets.get(CLOUD_ENDPOINT_RUNTIME_CONFIG),
       ]).pipe(Effect.orElseSucceed(() => [Option.none(), Option.none()] as const));
       if (Option.isNone(relayUrl) || Option.isNone(tunnelConfig)) {
-        return { relayHookBaseUrl: null };
+        return { relayHookBaseUrl: null, localOrigin };
       }
       const config = decodeRuntimeConfig(new TextDecoder().decode(tunnelConfig.value));
       return {
@@ -609,6 +618,7 @@ const layerScheduledTaskWebhookOrigin = Layer.effect(
           relayUrl: new TextDecoder().decode(relayUrl.value),
           tunnelName: Option.isSome(config) ? config.value.tunnelName : undefined,
         }),
+        localOrigin,
       };
     });
   }),
@@ -617,6 +627,7 @@ const layerScheduledTaskWebhookOrigin = Layer.effect(
 const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   Layer.provide(UsageLimitSources.layerResetFallback),
   Layer.provide(layerScheduledTaskWebhookOrigin),
+  Layer.provide(BotMcpEventPublisher.layer.pipe(Layer.provide(layerBotStorage))),
   Layer.provide(ProviderUsageAnalytics.layer),
   Layer.provide(layerCheckpointStore),
   Layer.provide(layerGitWorkflow),
@@ -637,9 +648,6 @@ const layerOrchestrationApplication = Layer.merge(
 const layerThreadSettlementWorker = Layer.effectDiscard(
   ThreadSettlementService.make.pipe(Effect.flatMap((service) => service.start())),
 ).pipe(Layer.provide(layerPullRequestService), Layer.provide(ProjectionStoreV2.layer));
-
-// One store and folder cache for the Claude adapter's profile reads and BotService: layers memoize by reference.
-const layerBotStorage = Layer.mergeAll(BotStore.layer, BotFolders.layer);
 
 const layerIdleCompactionWorker = Layer.effectDiscard(
   IdleCompactionService.make.pipe(Effect.flatMap((service) => service.start())),
