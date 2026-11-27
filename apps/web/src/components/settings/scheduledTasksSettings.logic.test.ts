@@ -5,9 +5,9 @@ import {
   type ServerConfig,
   ProviderInstanceId,
   ScheduledTaskId,
-  type ScheduledTask,
   ThreadId,
 } from "@t3tools/contracts";
+import type { FormScheduledTask } from "@t3tools/client-runtime/scheduled-task-mcp-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type {
@@ -142,7 +142,7 @@ describe("scheduled task settings scope", () => {
   });
 });
 
-const legacyTask: ScheduledTask = {
+const legacyTask: FormScheduledTask = {
   id: ScheduledTaskId.make("legacy-task"),
   title: "Review issues",
   prompt: "Review open issues",
@@ -246,7 +246,7 @@ describe("one-time scheduled tasks", () => {
 
 describe("webhook scheduled tasks", () => {
   const signature = { header: "x-signature", encoding: "base64", prefix: "" } as const;
-  const webhookTask: ScheduledTask = {
+  const webhookTask: FormScheduledTask = {
     ...legacyTask,
     schedule: { type: "webhook", signature },
     webhook: { path: "/api/hooks/legacy-task/token", url: null, hasSecret: true },
