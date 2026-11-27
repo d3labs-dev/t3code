@@ -4354,7 +4354,9 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               ) {
                 return "message:assistant-progress";
               }
-              if (parseBotHandoffMessage(entry.message) !== null) return "message:bot-handoff";
+              if (entry.message.role === "user" && parseBotHandoffMessage(entry.message) !== null) {
+                return "message:bot-handoff";
+              }
               const { attribution } = resolveUserMessagePresentation(entry.message);
               return attribution === "automation" || attribution === "agent"
                 ? `message:${attribution}`
