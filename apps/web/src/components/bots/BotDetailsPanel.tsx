@@ -163,12 +163,14 @@ function BotDetailsHeader(props: {
           ) : null}
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-2xs">
-          <span className={cn("truncate text-muted-foreground", !bot.role.trim() && "font-mono")}>
-            {bot.role.trim() || `@${bot.slug}`}
-          </span>
-          <span className="text-muted-foreground/50" aria-hidden>
-            ·
-          </span>
+          {bot.role.trim() !== "" ? (
+            <>
+              <span className="truncate text-muted-foreground">{bot.role.trim()}</span>
+              <span className="text-muted-foreground/50" aria-hidden>
+                ·
+              </span>
+            </>
+          ) : null}
           {bot.archivedAt !== null ? (
             <span className="shrink-0 text-muted-foreground">Archived</span>
           ) : status === "idle" ? (

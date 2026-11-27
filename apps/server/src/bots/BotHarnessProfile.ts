@@ -111,7 +111,7 @@ export const resolveBotHarnessProfile = Effect.fn("BotHarnessProfile.resolve")(f
   const [documents, roster, mcpServers, authSettings] = yield* Effect.all(
     [
       folders
-        .readDocuments(bot.slug)
+        .readDocuments(bot.folderPath)
         .pipe(Effect.mapError(failed("Couldn't read the Bot's documents."))),
       store.list({ includeArchived: false }).pipe(Effect.mapError(failed("Couldn't list Bots."))),
       folders.resolveMcpServers(bot.mcpServerNames, bot.customMcpServers),

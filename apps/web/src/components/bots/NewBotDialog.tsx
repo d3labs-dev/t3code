@@ -3,7 +3,6 @@ import {
   type BotCreateInput,
   type EnvironmentId,
   type ModelSelection,
-  slugifyBotName,
 } from "@t3tools/contracts";
 import { ChevronRightIcon, ShuffleIcon } from "lucide-react";
 import { useRef, useState } from "react";
@@ -132,7 +131,6 @@ function NewBotForm(props: {
   ].sort((left, right) => left.localeCompare(right));
   const groupSuggestions = existingGroups.length > 0 ? existingGroups : SUGGESTED_GROUPS;
   const name = draft.name.trim();
-  const slug = slugifyBotName(name || "bot");
   const update = (patch: Partial<NewBotDraft>) => setDraft((current) => ({ ...current, ...patch }));
   const mcpCount = draft.mcpServerNames.length;
   const optionsSummary = [
@@ -240,9 +238,6 @@ function NewBotForm(props: {
                 className="h-7 w-full rounded-md bg-transparent px-3 text-center text-xs text-muted-foreground outline-none transition-colors placeholder:text-muted-foreground/55 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none"
               />
             </div>
-            <span className="max-w-full truncate font-mono text-2xs text-muted-foreground/80">
-              ~/.t3/bots/{slug}
-            </span>
           </div>
           <BotIdentityPicker
             icon={draft.icon}

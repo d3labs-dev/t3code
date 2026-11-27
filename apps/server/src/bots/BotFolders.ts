@@ -2,9 +2,9 @@ import {
   type BotAvailableMcpServer,
   type BotDocuments,
   type BotHarnessProfile,
+  type BotId,
   BotMcpServerConfig,
   type BotRecord,
-  type BotSlug,
   TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
@@ -26,7 +26,7 @@ type BotMcpServers = Readonly<Record<string, BotMcpServerConfig>>;
 type DocumentName = keyof BotDocuments;
 
 export class BotFolderError extends Schema.TaggedError<BotFolderError>()("BotFolderError", {
-  operation: Schema.Literals(["ensure", "rename", "read-document", "write-document"]),
+  operation: Schema.Literals(["ensure", "read-document", "write-document"]),
   path: Schema.String,
   cause: Schema.Defect(),
 }) {
@@ -38,26 +38,23 @@ export class BotFolderError extends Schema.TaggedError<BotFolderError>()("BotFol
 export class BotFolders extends Context.Service<
   BotFolders,
   {
-    /** `<baseDir>/bots`: one folder per bot slug, plus `_shared/`. */
+    /** `<baseDir>/bots`: one immutable folder per bot id, plus `_shared/`. */
     readonly root: string;
     readonly sharedDir: string;
-    readonly folderFor: (slug: BotSlug) => string;
-    readonly exists: (slug: BotSlug) => Effect.Effect<boolean>;
-    /** Creates `_shared/` and the bot's folder; returns the bot's folder. */
-    readonly ensure: (slug: BotSlug) => Effect.Effect<string, BotFolderError>;
-    /** Moves a bot's folder to a new slug; refuses to overwrite an existing folder. */
-    readonly rename: (from: BotSlug, to: BotSlug) => Effect.Effect<string, BotFolderError>;
+    readonly folderFor: (botId: BotId) => string;
+    /** Creates `_shared/` and the bot's folder; returns the folder path. */
+    readonly ensure: (folderPath: string) => Effect.Effect<string, BotFolderError>;
     /** A missing document reads as empty. */
-    readonly readDocuments: (slug: BotSlug) => Effect.Effect<BotDocuments, BotFolderError>;
+    readonly readDocuments: (folderPath: string) => Effect.Effect<BotDocuments, BotFolderError>;
     /** `seed` writes only documents that do not exist yet, so a kept folder keeps its memory. */
     readonly writeDocuments: (
-      slug: BotSlug,
+      folderPath: string,
       documents: Partial<BotDocuments>,
       mode: "replace" | "seed",
     ) => Effect.Effect<void, BotFolderError>;
     /** Points providers that read AGENTS.md, not Claude's harness profile, at the bot's files. */
     readonly writeAgentsFile: (
-      bot: Pick<BotRecord, "slug" | "name" | "role">,
+      bot: Pick<BotRecord, "folderPath" | "name" | "role">,
     ) => Effect.Effect<void, BotFolderError>;
     /** Names and transports only: configs can hold credentials. */
     readonly listAvailableMcpServers: Effect.Effect<ReadonlyArray<BotAvailableMcpServer>>;
@@ -110,9 +107,9 @@ const make = Effect.gen(function* () {
 
   const root = path.resolve(config.baseDir, "bots");
   const sharedDir = path.join(root, "_shared");
-  const folderFor = (slug: BotSlug) => path.join(root, slug);
-  const documentPath = (slug: BotSlug, name: DocumentName) =>
-    path.join(folderFor(slug), DOCUMENT_FILES[name]);
+  const folderFor = (botId: BotId) => path.join(root, botId);
+  const documentPath = (folderPath: string, name: DocumentName) =>
+    path.join(folderPath, DOCUMENT_FILES[name]);
   const claudeConfigPath = path.join(homeDirectory, ".claude.json");
   const claudeSettingsPath = path.join(homeDirectory, ".claude", "settings.json");
 
@@ -125,46 +122,18 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  const exists: BotFolders["Service"]["exists"] = (slug) =>
-    fileSystem.exists(folderFor(slug)).pipe(Effect.orElseSucceed(() => false));
-
-  const ensure: BotFolders["Service"]["ensure"] = Effect.fn("BotFolders.ensure")(function* (slug) {
-    const folder = folderFor(slug);
-    for (const directory of [sharedDir, folder]) {
-      yield* fileSystem
-        .makeDirectory(directory, { recursive: true })
-        .pipe(
-          Effect.mapError(
-            (cause) => new BotFolderError({ operation: "ensure", path: directory, cause }),
-          ),
-        );
-    }
-    return folder;
-  });
-
-  const rename: BotFolders["Service"]["rename"] = Effect.fn("BotFolders.rename")(
-    function* (from, to) {
-      const target = folderFor(to);
-      if (from === to) return yield* ensure(to);
-      const source = folderFor(from);
-      if (!(yield* fileSystem.exists(source).pipe(Effect.orElseSucceed(() => false)))) {
-        return yield* ensure(to);
+  const ensure: BotFolders["Service"]["ensure"] = Effect.fn("BotFolders.ensure")(
+    function* (folderPath) {
+      for (const directory of [sharedDir, folderPath]) {
+        yield* fileSystem
+          .makeDirectory(directory, { recursive: true })
+          .pipe(
+            Effect.mapError(
+              (cause) => new BotFolderError({ operation: "ensure", path: directory, cause }),
+            ),
+          );
       }
-      if (yield* fileSystem.exists(target).pipe(Effect.orElseSucceed(() => false))) {
-        return yield* new BotFolderError({
-          operation: "rename",
-          path: target,
-          cause: new Error(`Target folder already exists: ${target}`),
-        });
-      }
-      yield* fileSystem
-        .rename(source, target)
-        .pipe(
-          Effect.mapError(
-            (cause) => new BotFolderError({ operation: "rename", path: target, cause }),
-          ),
-        );
-      return target;
+      return folderPath;
     },
   );
 
@@ -181,21 +150,21 @@ const make = Effect.gen(function* () {
 
   const readDocuments: BotFolders["Service"]["readDocuments"] = Effect.fn(
     "BotFolders.readDocuments",
-  )(function* (slug) {
+  )(function* (folderPath) {
     const [soul, memory] = yield* Effect.all([
-      readDocument(documentPath(slug, "soul")),
-      readDocument(documentPath(slug, "memory")),
+      readDocument(documentPath(folderPath, "soul")),
+      readDocument(documentPath(folderPath, "memory")),
     ]);
     return { soul, memory };
   });
 
   const writeDocuments: BotFolders["Service"]["writeDocuments"] = Effect.fn(
     "BotFolders.writeDocuments",
-  )(function* (slug, documents, mode) {
+  )(function* (folderPath, documents, mode) {
     for (const name of ["soul", "memory"] as const) {
       const contents = documents[name];
       if (contents === undefined) continue;
-      const filePath = documentPath(slug, name);
+      const filePath = documentPath(folderPath, name);
       if (
         mode === "seed" &&
         (yield* fileSystem.exists(filePath).pipe(Effect.orElseSucceed(() => false)))
@@ -207,7 +176,7 @@ const make = Effect.gen(function* () {
   });
 
   const writeAgentsFile: BotFolders["Service"]["writeAgentsFile"] = (bot) =>
-    writeFile(path.join(folderFor(bot.slug), "AGENTS.md"), agentsFileContents(bot)).pipe(
+    writeFile(path.join(bot.folderPath, "AGENTS.md"), agentsFileContents(bot)).pipe(
       Effect.withSpan("BotFolders.writeAgentsFile"),
     );
 
@@ -292,9 +261,7 @@ const make = Effect.gen(function* () {
     root,
     sharedDir,
     folderFor,
-    exists,
     ensure,
-    rename,
     readDocuments,
     writeDocuments,
     writeAgentsFile,
