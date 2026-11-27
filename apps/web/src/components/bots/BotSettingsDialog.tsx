@@ -338,7 +338,7 @@ function ProfileSection(props: {
           <BotField label="Role" htmlFor="bot-settings-role">
             <Input
               id="bot-settings-role"
-              placeholder="Triages work and delegates coding tasks"
+              placeholder="Chief of Staff, Designer, Engineering Lead"
               disabled={!editable}
               value={shown.role}
               onChange={(event) => set({ role: event.currentTarget.value })}

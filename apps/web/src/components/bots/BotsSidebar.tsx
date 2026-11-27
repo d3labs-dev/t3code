@@ -13,9 +13,7 @@ import {
   BellOffIcon,
   ChevronRightIcon,
   CornerDownRightIcon,
-  PaletteIcon,
   PlusIcon,
-  SearchIcon,
   Settings2Icon,
   StarIcon,
 } from "lucide-react";
@@ -27,16 +25,7 @@ import { botsEnvironment, useBotsIndex } from "../../state/bots";
 import { useQuietThreadShell } from "../../state/entities";
 import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
 import { Button } from "../ui/button";
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuTrigger,
-} from "../ui/menu";
-import { SidebarContent, SidebarGroup, SidebarInput } from "../ui/sidebar";
+import { SidebarContent, SidebarGroup } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BOT_STATUS_LABEL, BotAvatar } from "./BotAvatar";
 import {
@@ -46,7 +35,6 @@ import {
   useToggleBotMuted,
   useUpdateBot,
 } from "./botActions";
-import { BOT_VISUAL_STYLES, DEFAULT_BOT_AVATAR_SHAPE } from "./botAvatars";
 import { BotModeSwitcher } from "./BotModeSwitcher";
 import { useBotsUiStore } from "./botsUiStore";
 
@@ -63,120 +51,30 @@ const CODING_LINK_DOT_CLASS: Record<BotExchangeStatus, string> = {
 const ROW_CLASS =
   "flex w-full min-w-0 cursor-pointer items-center text-left outline-none transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-[active=true]:bg-sidebar-row-selected motion-reduce:transition-none";
 
-function matchesQuery({ bot }: ScopedBotEntry, query: string): boolean {
-  if (query === "") return true;
-  return [bot.name, bot.role, bot.slug, bot.groupName ?? ""].some((field) =>
-    field.toLowerCase().includes(query),
-  );
-}
-
 function isSameThread(left: ScopedThreadRef | null, right: ScopedThreadRef): boolean {
   return left?.environmentId === right.environmentId && left.threadId === right.threadId;
 }
 
 export function BotsSidebar() {
-  const [query, setQuery] = useState("");
   return (
     <>
-      <SidebarContent fixedHeader={<BotsSidebarHeader query={query} onQueryChange={setQuery} />}>
-        <BotsSidebarBody query={query.trim().toLowerCase()} />
+      <SidebarContent fixedHeader={<BotsSidebarHeader />}>
+        <BotsSidebarBody />
       </SidebarContent>
       <SidebarChromeFooter />
     </>
   );
 }
 
-function BotsSidebarHeader(props: {
-  readonly query: string;
-  readonly onQueryChange: (query: string) => void;
-}) {
-  const visualStyle = useBotsUiStore((state) => state.visualStyle);
-  const setVisualStyle = useBotsUiStore((state) => state.setVisualStyle);
-  const openNewBotDialog = useBotsUiStore((state) => state.openNewBotDialog);
+function BotsSidebarHeader() {
   return (
     <SidebarGroup className="z-[1]">
-      <div className="flex min-w-0 flex-col gap-2">
-        <BotModeSwitcher />
-        <div className="flex min-w-0 items-center gap-1">
-          <div className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-sidebar-border/60 bg-sidebar-control-surface/35 px-2">
-            <SearchIcon className="size-3.5 shrink-0 text-sidebar-muted-foreground" aria-hidden />
-            <SidebarInput
-              aria-label="Filter Bots"
-              placeholder="Filter Bots"
-              value={props.query}
-              onChange={(event) => props.onQueryChange(event.currentTarget.value)}
-            />
-          </div>
-          <Menu>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <MenuTrigger
-                    render={<Button size="icon-xs" variant="ghost-muted" aria-label="Bot finish" />}
-                  />
-                }
-              >
-                <PaletteIcon aria-hidden />
-              </TooltipTrigger>
-              <TooltipPopup>Bot finish</TooltipPopup>
-            </Tooltip>
-            <MenuPopup align="end">
-              <MenuGroup>
-                <MenuGroupLabel>Finish</MenuGroupLabel>
-                <MenuRadioGroup
-                  value={visualStyle}
-                  onValueChange={(value) => {
-                    const next = BOT_VISUAL_STYLES.find((style) => style.id === value);
-                    if (next) setVisualStyle(next.id);
-                  }}
-                >
-                  {BOT_VISUAL_STYLES.map((style) => (
-                    <MenuRadioItem key={style.id} value={style.id}>
-                      <span className="flex items-center gap-2">
-                        <BotAvatar
-                          icon={DEFAULT_BOT_AVATAR_SHAPE.id}
-                          color="theme"
-                          size="sm"
-                          visualStyle={style.id}
-                        />
-                        {style.label}
-                      </span>
-                    </MenuRadioItem>
-                  ))}
-                </MenuRadioGroup>
-              </MenuGroup>
-            </MenuPopup>
-          </Menu>
-          <NewBotIconButton onClick={openNewBotDialog} />
-        </div>
-      </div>
+      <BotModeSwitcher />
     </SidebarGroup>
   );
 }
 
-function NewBotIconButton(props: { readonly onClick: () => void }) {
-  const canCreate = useCanCreateBot(useDefaultBotEnvironmentId());
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            size="icon-xs"
-            variant="ghost-muted"
-            aria-label="New Bot"
-            disabled={!canCreate}
-            onClick={props.onClick}
-          />
-        }
-      >
-        <PlusIcon aria-hidden />
-      </TooltipTrigger>
-      <TooltipPopup>New Bot</TooltipPopup>
-    </Tooltip>
-  );
-}
-
-function BotsSidebarBody(props: { readonly query: string }) {
+function BotsSidebarBody() {
   const index = useBotsIndex();
   const openNewBotDialog = useBotsUiStore((state) => state.openNewBotDialog);
   const canCreate = useCanCreateBot(useDefaultBotEnvironmentId());
@@ -194,9 +92,7 @@ function BotsSidebarBody(props: { readonly query: string }) {
       </SidebarGroup>
     );
   }
-  const { primary, groups } = groupBotsForSidebar(
-    activeBots.filter((entry) => matchesQuery(entry, props.query)),
-  );
+  const { primary, groups } = groupBotsForSidebar(activeBots);
   const showGroupHeaders = groups.some((group) => group.name !== null);
   return (
     <SidebarGroup>
@@ -211,9 +107,6 @@ function BotsSidebarBody(props: { readonly query: string }) {
             links={index.codingThreadsByBotKey}
           />
         ))}
-        {primary === null && groups.length === 0 ? (
-          <p className="px-2 text-xs text-sidebar-muted-foreground">No Bots match this filter.</p>
-        ) : null}
         <Button
           size="sm"
           variant="ghost-muted"
@@ -385,11 +278,12 @@ function BotEntry(props: {
   const openThread = useOpenThreadInMode();
   const routeRef = useThreadRouteRef();
   const active = isSameThread(routeRef, scopeThreadRef(environmentId, bot.threadId));
+  const role = bot.role.trim();
   const subtitle =
     status === "idle"
-      ? bot.role || "No role yet"
-      : bot.role
-        ? `${BOT_STATUS_LABEL[status]} · ${bot.role}`
+      ? role || null
+      : role
+        ? `${BOT_STATUS_LABEL[status]} · ${role}`
         : BOT_STATUS_LABEL[status];
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
@@ -432,7 +326,9 @@ function BotEntry(props: {
                 />
               ) : null}
             </span>
-            <span className="truncate text-2xs text-sidebar-muted-foreground">{subtitle}</span>
+            {subtitle !== null ? (
+              <span className="truncate text-2xs text-sidebar-muted-foreground">{subtitle}</span>
+            ) : null}
           </span>
         </button>
         <div className="absolute inset-y-0 end-1.5 flex items-center gap-0.5">

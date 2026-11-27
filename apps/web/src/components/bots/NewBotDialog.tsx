@@ -101,6 +101,8 @@ function NewBotForm(props: {
   readonly onClose: () => void;
 }) {
   const openThread = useOpenThreadInMode();
+  const visualStyle = useBotsUiStore((state) => state.visualStyle);
+  const setVisualStyle = useBotsUiStore((state) => state.setVisualStyle);
   const connectedIds = useConnectedEnvironmentIds();
   const { environments } = useEnvironments();
   const index = useBotsIndex();
@@ -199,7 +201,7 @@ function NewBotForm(props: {
       />
       <WizardPanel>
         <div className="flex flex-col gap-5">
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-1.5">
             <div className="relative flex w-full justify-center rounded-2xl bg-muted/30 py-7">
               <BotAvatar icon={draft.icon} color={draft.color} size="xl" />
               <div className="absolute end-2 bottom-2">
@@ -221,21 +223,32 @@ function NewBotForm(props: {
                 </Tooltip>
               </div>
             </div>
-            <input
-              autoFocus
-              aria-label="Bot name"
-              placeholder="Name your Bot"
-              value={draft.name}
-              onChange={(event) => update({ name: event.currentTarget.value })}
-              className="h-10 w-full max-w-xs rounded-lg bg-transparent px-3 text-center text-lg font-semibold text-foreground outline-none transition-colors placeholder:font-medium placeholder:text-muted-foreground/60 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none"
-            />
-            <span className="max-w-full truncate font-mono text-2xs text-muted-foreground">
+            <div className="flex w-full max-w-xs flex-col items-center gap-0.5 pt-1">
+              <input
+                autoFocus
+                aria-label="Bot name"
+                placeholder="Name your Bot"
+                value={draft.name}
+                onChange={(event) => update({ name: event.currentTarget.value })}
+                className="h-9 w-full rounded-lg bg-transparent px-3 text-center text-lg font-semibold text-foreground outline-none transition-colors placeholder:font-medium placeholder:text-muted-foreground/60 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none"
+              />
+              <input
+                aria-label="Bot role"
+                placeholder="Role (e.g. Chief of Staff, Designer)"
+                value={draft.role}
+                onChange={(event) => update({ role: event.currentTarget.value })}
+                className="h-7 w-full rounded-md bg-transparent px-3 text-center text-xs text-muted-foreground outline-none transition-colors placeholder:text-muted-foreground/55 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none"
+              />
+            </div>
+            <span className="max-w-full truncate font-mono text-2xs text-muted-foreground/80">
               ~/.t3/bots/{slug}
             </span>
           </div>
           <BotIdentityPicker
             icon={draft.icon}
             color={draft.color}
+            visualStyle={visualStyle}
+            onVisualStyleChange={setVisualStyle}
             disabled={saving}
             onIconChange={(icon) => update({ icon })}
             onColorChange={(color) => update({ color })}
@@ -243,7 +256,7 @@ function NewBotForm(props: {
           <Collapsible>
             <CollapsibleTrigger className="group/more flex w-full items-center gap-2 rounded-xl border border-border/60 px-3 py-2.5 text-left outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none">
               <span className="shrink-0 text-sm font-medium text-foreground">
-                Role, model & tools
+                Model, group & tools
               </span>
               <span className="ms-auto min-w-0 truncate text-xs text-muted-foreground">
                 {optionsSummary}
@@ -255,14 +268,6 @@ function NewBotForm(props: {
             </CollapsibleTrigger>
             <CollapsiblePanel>
               <div className="flex flex-col gap-4 px-0.5 pt-4">
-                <BotField label="Role" htmlFor="new-bot-role">
-                  <Input
-                    id="new-bot-role"
-                    placeholder="Triages work and delegates coding tasks"
-                    value={draft.role}
-                    onChange={(event) => update({ role: event.currentTarget.value })}
-                  />
-                </BotField>
                 <BotField label="Group" htmlFor="new-bot-group">
                   <Input
                     id="new-bot-group"

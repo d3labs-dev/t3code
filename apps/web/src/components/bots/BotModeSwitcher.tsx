@@ -3,8 +3,8 @@ import { useBotsIndex } from "../../state/bots";
 import { type BotsSidebarMode, useBotsUiStore } from "./botsUiStore";
 
 const MODES = [
-  { id: "threads", label: "Threads" },
   { id: "bots", label: "Bots" },
+  { id: "threads", label: "Threads" },
 ] as const satisfies ReadonlyArray<{ id: BotsSidebarMode; label: string }>;
 
 function useActiveBotWork(): number {

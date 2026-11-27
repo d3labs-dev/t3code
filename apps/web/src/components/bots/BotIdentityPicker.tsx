@@ -426,7 +426,7 @@ export function BotIdentityPicker({
       {source === "upload" ? null : (
         <ColorRow color={color} disabled={disabled} onColorChange={onColorChange} />
       )}
-      {onVisualStyleChange ? (
+      {onVisualStyleChange && source !== "upload" ? (
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Avatar finish</span>
           <ToggleGroup

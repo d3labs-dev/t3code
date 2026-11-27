@@ -163,7 +163,9 @@ function BotDetailsHeader(props: {
           ) : null}
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-2xs">
-          <span className="truncate font-mono text-muted-foreground">@{bot.slug}</span>
+          <span className={cn("truncate text-muted-foreground", !bot.role.trim() && "font-mono")}>
+            {bot.role.trim() || `@${bot.slug}`}
+          </span>
           <span className="text-muted-foreground/50" aria-hidden>
             ·
           </span>

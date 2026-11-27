@@ -49,7 +49,7 @@ function toggleKey(record: Record<string, boolean>, key: string): Record<string,
 export const useBotsUiStore = create<BotsUiState>()(
   persist(
     (set) => ({
-      sidebarMode: "threads",
+      sidebarMode: "bots",
       visualStyle: parseBotVisualStyle(undefined),
       collapsedGroups: {},
       expandedBotThreads: {},

@@ -121,7 +121,7 @@ export function BotAvatar({
   readonly icon: string;
   readonly color: string;
   readonly size?: BotAvatarSize;
-  /** Defaults to the finish chosen in the Bots sidebar. */
+  /** Defaults to the finish chosen in the Bot designer. */
   readonly visualStyle?: BotVisualStyle;
   readonly status?: BotStatus | null;
   readonly muted?: boolean;
