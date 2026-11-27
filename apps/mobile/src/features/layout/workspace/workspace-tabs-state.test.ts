@@ -64,6 +64,7 @@ describe("workspace root navigation", () => {
 
   it("keeps the registered defaults while customization is unavailable", () => {
     expect(resolveWorkspaceTabOrder(undefined)).toEqual([
+      "bots",
       "threads",
       "pullRequests",
       "issues",
@@ -259,6 +260,7 @@ vi.mock("../../../components/ui/ScreenContent", () => ({
 vi.mock("../../../components/ui/useAndroidControlSizing", () => ({
   useAndroidControlSizing: () => ({ fabClearance: 64, scale: 1, fabSize: 56 }),
 }));
+vi.mock("../../bots/BotsScreen", () => ({ BotsScreen: () => null }));
 vi.mock("../../home/HomeRouteScreen", () => ({ HomeRouteScreen: () => null }));
 vi.mock("../../pull-requests/PullRequestFilterMenuContext", () => ({
   PullRequestFilterMenuProvider: ({ children }: { children: ReactNode }) =>

@@ -7,8 +7,10 @@ import { useMemo, useState } from "react";
 import { Platform } from "react-native";
 
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import { withoutBotsModeThreads } from "@t3tools/client-runtime/state/bots";
 import { pickableProjectGroups } from "@t3tools/client-runtime/state/project-grouping";
 
+import { useBotsIndex } from "../../state/bots";
 import { useProjects } from "../../state/entities";
 import { steadyNavigationThreadShellsAtom } from "../../state/threads";
 import { useLaunchingThreads, usePendingNewTasks } from "../../state/use-pending-new-tasks";
@@ -49,8 +51,13 @@ export function HomeRouteScreen() {
   const projects = useProjects();
   // Stop rebuilding the streaming thread list while Thread covers Home.
   const visible = useHomeRouteVisible();
-  const threads = useLaunchingThreads(
+  const botsIndex = useBotsIndex();
+  const rawThreads = useLaunchingThreads(
     useAtomValueWhileVisible(steadyNavigationThreadShellsAtom, visible),
+  );
+  const threads = useMemo(
+    () => withoutBotsModeThreads(rawThreads, botsIndex),
+    [rawThreads, botsIndex],
   );
   const { environments: workspaceEnvironments, state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
@@ -222,6 +229,7 @@ export function HomeRouteScreen() {
           searchQuery={searchQuery}
           selectedEnvironmentId={selectedEnvironmentId}
           selectedProjectKey={selectedProjectKey}
+          supervisorByThreadKey={botsIndex.supervisorByCodingThreadKey}
           threads={threads}
           visible={visible}
         />

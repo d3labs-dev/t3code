@@ -12,6 +12,7 @@ import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
+import type { ScopedCodingThreadSupervisor } from "@t3tools/client-runtime/state/bots";
 import { pickableProjectGroups } from "@t3tools/client-runtime/state/project-grouping";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
 import { type EnvironmentId, type SidebarProjectGroupingMode } from "@t3tools/contracts";
@@ -108,6 +109,7 @@ interface HomeScreenProps {
   readonly visible: boolean;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+  readonly supervisorByThreadKey?: ReadonlyMap<string, ScopedCodingThreadSupervisor>;
   readonly pendingTasks: ReadonlyArray<PendingNewTask>;
   readonly catalogState: WorkspaceState;
   readonly savedConnectionsById: Readonly<Record<string, SavedRemoteConnection>>;
@@ -537,6 +539,10 @@ export function HomeScreen(props: HomeScreenProps) {
         snoozeWakeLabelText={item.snoozeWakeLabelText}
         timeLabel={item.timeLabel}
         showTrailingDivider={item.showTrailingDivider}
+        supervisedByBot={
+          props.supervisorByThreadKey?.get(scopedThreadKey(thread.environmentId, thread.id))
+            ?.botEntry ?? null
+        }
         project={projectByKey.get(scopedProjectKey(thread.environmentId, thread.projectId)) ?? null}
         providerInstance={resolveProviderInstance(thread)}
         providers={providersByEnvironmentId.get(thread.environmentId)}
@@ -602,6 +608,7 @@ export function HomeScreen(props: HomeScreenProps) {
     savedConnectionsById: props.savedConnectionsById,
     searchQuery: props.searchQuery,
     selectedThreadKey,
+    supervisorByThreadKey: props.supervisorByThreadKey,
     threadSearchMatchByKey,
     workingShelfEnabled,
   };

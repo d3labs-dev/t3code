@@ -35,11 +35,13 @@ export function WorkspaceTabToolbarButtons() {
           identifier={`workspace-tab-${tab}`}
           accessibilityLabel={WORKSPACE_TAB_LABELS[tab]}
           icon={
-            tab === "pullRequests"
-              ? { type: "image", source: PULL_REQUEST_ICON, tinted: true }
-              : tab === "issues"
-                ? { type: "image", source: ISSUE_ICON, tinted: true }
-                : NAVIGATION_TAB_ICONS[tab]
+            tab === "bots"
+              ? "face.smiling"
+              : tab === "pullRequests"
+                ? { type: "image", source: PULL_REQUEST_ICON, tinted: true }
+                : tab === "issues"
+                  ? { type: "image", source: ISSUE_ICON, tinted: true }
+                  : NAVIGATION_TAB_ICONS[tab]
           }
           tintColor={selected === tab ? selectedTint : undefined}
           onPress={() => selectTab(tab)}

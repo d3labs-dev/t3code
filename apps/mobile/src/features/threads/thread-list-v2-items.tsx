@@ -16,6 +16,7 @@ import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useVisibleSecondClock } from "./use-visible-second-clock";
 import type { ThreadMoveDestination } from "./threadOrder";
+import type { ScopedBotEntry } from "@t3tools/client-runtime/state/bots";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -43,6 +44,7 @@ import type { ThreadListProvider } from "../../state/thread-list-environments";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Menu } from "../../components/ui/Menu";
+import { BotAvatar } from "../bots/BotAvatar";
 import { EnvironmentMachineSymbol } from "../../components/EnvironmentMachineSymbol";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import {
@@ -661,6 +663,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly timeLabel: string;
   readonly snoozePresetMinute: string;
   readonly project: EnvironmentProject | null;
+  readonly supervisedByBot?: ScopedBotEntry | null;
   readonly providers: ReadonlyArray<ThreadListProvider> | undefined;
   readonly providerInstance: ThreadRowProviderInstance | null;
   readonly environmentLabel: string | null;
@@ -1363,6 +1366,32 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         ) : (
           <View className="flex-1" />
         )}
+        {props.supervisedByBot ? (
+          <View
+            className={cn(
+              "max-w-32 shrink-0 flex-row items-center gap-1 rounded-full px-1.5 py-0.5",
+              selected ? "bg-primary-foreground/15" : "bg-subtle",
+            )}
+          >
+            <BotAvatar
+              icon={props.supervisedByBot.bot.icon}
+              color={props.supervisedByBot.bot.color}
+              size="xs"
+              muted={props.supervisedByBot.bot.muted}
+            />
+            <Text
+              className={cn(
+                "shrink text-2xs font-t3-medium",
+                selected
+                  ? selectedThreadRowColors.mutedForegroundClassName
+                  : rowAppearance.tertiaryForegroundClassName,
+              )}
+              numberOfLines={1}
+            >
+              via {props.supervisedByBot.bot.name}
+            </Text>
+          </View>
+        ) : null}
         {pr ? (
           <Pressable
             // Padding cancelled by negative margin grows the touch target into

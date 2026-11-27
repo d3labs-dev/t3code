@@ -96,6 +96,7 @@ import { resolveMergeBackTargetThreadId } from "@t3tools/client-runtime/state/th
 import { resolveLatestMergeBackRun } from "@t3tools/client-runtime/state/thread-workflows";
 import { threadEnvironment } from "../../state/threads";
 import { EMPTY_ENVIRONMENT_THREAD_STATE } from "@t3tools/client-runtime/state/threads";
+import { useBotForThread, useSupervisorForThread } from "../../state/bots";
 import { useProjects } from "../../state/entities";
 import {
   projectThreadContentPresentation,
@@ -131,6 +132,7 @@ import { useStartSideChat } from "./useStartSideChat";
 import { useThreadStatusAnnouncements } from "./useThreadStatusAnnouncements";
 import type { ThreadInspectorMode, ThreadInspectorTarget } from "./thread-inspector-navigation";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
+import { useOpenLinkedThread } from "./useOpenLinkedThread";
 
 function firstRouteParam(value: string | string[] | undefined): string | null {
   const first = Array.isArray(value) ? value[0] : value;
@@ -369,6 +371,13 @@ function ThreadRouteContent(
     selectedEnvironmentConnection,
   } = useThreadSelection();
   useRememberThreadProject(selectedThreadProject);
+  const openLinkedThread = useOpenLinkedThread();
+  const threadScopeRef =
+    selectedThread === null
+      ? null
+      : scopeThreadRef(selectedThread.environmentId, selectedThread.id);
+  const botEntry = useBotForThread(threadScopeRef);
+  const botSupervisor = useSupervisorForThread(threadScopeRef);
   const canOperateThread = useEnvironmentScope(
     selectedThread?.environmentId ?? null,
     AuthOrchestrationOperateScope,
@@ -1019,6 +1028,16 @@ function ThreadRouteContent(
               <ThreadHeader
                 title={selectedThread.title}
                 subtitle={threadStatusLabel ?? headerSubtitle}
+                botEntry={botEntry}
+                onOpenBotSettings={
+                  botEntry
+                    ? () =>
+                        navigation.navigate("BotSettings", {
+                          environmentId: String(botEntry.environmentId),
+                          botId: String(botEntry.bot.id),
+                        })
+                    : undefined
+                }
                 gitControls={threadGitControlProps}
                 hasThreadCwd={selectedThreadCwd !== null}
                 inspectorMode={inspectorMode}
@@ -1026,6 +1045,16 @@ function ThreadRouteContent(
                 onReturnToThread={props.onReturnToThread}
               />
             )
+          }
+          botSupervisor={botSupervisor}
+          onOpenSupervisorBot={
+            botSupervisor
+              ? () =>
+                  openLinkedThread({
+                    environmentId: String(botSupervisor.botEntry.environmentId),
+                    threadId: String(botSupervisor.botEntry.bot.threadId),
+                  })
+              : undefined
           }
           canOperateThread={canOperateThread}
           selectedThread={selectedThreadWithDraftSettings ?? selectedThread}

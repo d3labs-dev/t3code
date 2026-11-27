@@ -23,6 +23,7 @@ import { WorkspaceTabToolbarButtons } from "./WorkspaceSectionToolbar";
 import { useWorkspaceCompose } from "./useWorkspaceCompose";
 
 const SEARCH_LABELS = {
+  bots: "Search bots",
   threads: "Search threads",
   pullRequests: "Search pull requests",
   issues: "Search issues",

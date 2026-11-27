@@ -8,6 +8,7 @@ import { useAndroidControlSizing } from "../../../components/ui/useAndroidContro
 import { FLOATING_TABS } from "./floating-workspace-tabs";
 import { View } from "react-native";
 import { ScreenContent } from "../../../components/ui/ScreenContent";
+import { BotsScreen } from "../../bots/BotsScreen";
 import { PullRequestsScreen } from "../../pull-requests/PullRequestsScreen";
 import { ListSearchToolbar } from "./ListSearchToolbar.android";
 import { IssuesScreen } from "../../issues/IssuesScreen";
@@ -45,7 +46,11 @@ export function AndroidWorkspaceSidebar() {
         tabs={NAVIGATION_TAB_ORDER}
         selected={workspace.state.selectedTab}
         renderTab={(tab) =>
-          tab === "threads" ? (
+          tab === "bots" ? (
+            <WorkspaceTabsContext value={context}>
+              <BotsScreen sidebar />
+            </WorkspaceTabsContext>
+          ) : tab === "threads" ? (
             <AndroidHomeFabLayout sidebar disabled={coveredByPage} onStartNewTask={startNewTask}>
               <WorkspaceThreadSidebar />
             </AndroidHomeFabLayout>

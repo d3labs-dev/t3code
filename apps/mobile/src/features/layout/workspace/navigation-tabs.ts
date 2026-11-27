@@ -21,6 +21,7 @@ export const WORKSPACE_TAB_LABELS = {
 };
 
 export const NAVIGATION_TAB_ICONS = {
+  bots: "robot",
   threads: "text.bubble",
   pullRequests: PullRequestGlyph.pullRequest,
   issues: "git.issue",

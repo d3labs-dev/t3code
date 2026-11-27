@@ -189,11 +189,14 @@ function keyedPage<Route extends RouteLike>(route: Route): Route & { readonly ke
 
 function detailRoute(
   state: { readonly routes: readonly RouteLike[] },
-  tab: "threads" | "pullRequests" | "issues",
+  tab: "bots" | "threads" | "pullRequests" | "issues",
   selections: WorkspaceSelections,
   check: WorkspaceSelectionCheck,
   seedPullRequest?: (identity: Omit<PullRequestSelection, "key">) => object,
 ): RouteLike | undefined {
+  if (tab === "bots") {
+    return undefined;
+  }
   if (tab === "threads") {
     const draft = selections.threadsDraft;
     if (draft) {

@@ -13,6 +13,7 @@ export function WorkspaceEmptyDetail(props: {
   readonly onStartNewTask?: () => void;
   readonly onAddConnection?: () => void;
 }) {
+  const bots = props.tab === "bots";
   const pullRequests = props.tab === "pullRequests";
   const issues = props.tab === "issues";
   const settings = props.tab === "settings";
@@ -54,24 +55,28 @@ export function WorkspaceEmptyDetail(props: {
             <Text className="text-center text-xl font-t3-bold">
               {settings
                 ? "Select a setting"
-                : pullRequests
-                  ? "Select a pull request"
-                  : issues
-                    ? "Select an issue"
-                    : "Select a thread"}
+                : bots
+                  ? "Select a Bot"
+                  : pullRequests
+                    ? "Select a pull request"
+                    : issues
+                      ? "Select an issue"
+                      : "Select a thread"}
             </Text>
             <Text className="text-center text-base text-foreground-muted">
               {settings
                 ? "Choose a page from the sidebar."
-                : pullRequests
-                  ? "Choose a pull request from the sidebar to review it."
-                  : issues
-                    ? "Choose an issue from the sidebar to read it."
-                    : Platform.OS === "android"
-                      ? "Choose a thread from the sidebar or start a new thread."
-                      : "Choose a thread from the sidebar or start a new task."}
+                : bots
+                  ? "Choose a Bot from the sidebar or create a new one."
+                  : pullRequests
+                    ? "Choose a pull request from the sidebar to review it."
+                    : issues
+                      ? "Choose an issue from the sidebar to read it."
+                      : Platform.OS === "android"
+                        ? "Choose a thread from the sidebar or start a new thread."
+                        : "Choose a thread from the sidebar or start a new task."}
             </Text>
-            {props.onStartNewTask && !pullRequests && !issues && !settings ? (
+            {props.onStartNewTask && !bots && !pullRequests && !issues && !settings ? (
               Platform.OS === "android" ? (
                 <NewThreadButton extended className="mt-2" onPress={props.onStartNewTask} />
               ) : (

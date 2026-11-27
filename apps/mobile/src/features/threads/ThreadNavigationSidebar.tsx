@@ -6,6 +6,7 @@ import {
   useAppearancePreferences,
   useAndroidFloatingTabs,
 } from "../settings/appearance/AppearancePreferencesProvider";
+import { withoutBotsModeThreads } from "@t3tools/client-runtime/state/bots";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -24,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
+import { useBotsIndex } from "../../state/bots";
 import { useProjects } from "../../state/entities";
 import { steadyNavigationThreadShellsAtom } from "../../state/threads";
 import { useThreadSearch } from "../../state/queries";
@@ -127,7 +129,12 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   const insets = useSafeAreaInsets();
   const { fabClearance, fabSize } = useAndroidControlSizing();
   const projects = useProjects();
-  const threads = useAtomValue(steadyNavigationThreadShellsAtom);
+  const botsIndex = useBotsIndex();
+  const rawThreads = useAtomValue(steadyNavigationThreadShellsAtom);
+  const threads = useMemo(
+    () => withoutBotsModeThreads(rawThreads, botsIndex),
+    [rawThreads, botsIndex],
+  );
   const selectedThreadKey = useSidebarRowThreadKey(props.selectedThreadKey);
   const { environments: workspaceEnvironments, state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
@@ -358,6 +365,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     projectTitleByProjectKey,
     savedConnectionsById,
     listEnvironments,
+    supervisorByCodingThreadKey: botsIndex.supervisorByCodingThreadKey,
     threadSearchMatchByKey,
     workingShelfEnabled,
   };
@@ -422,6 +430,11 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
             snoozePresetMinute={item.snoozePresetMinute ?? ""}
             snoozeWakeLabelText={item.snoozeWakeLabelText}
             timeLabel={item.timeLabel}
+            supervisedByBot={
+              botsIndex.supervisorByCodingThreadKey.get(
+                scopedThreadKey(thread.environmentId, thread.id),
+              )?.botEntry ?? null
+            }
             project={projectByKey.get(scopeKey) ?? null}
             providerInstance={resolveProviderInstance(thread)}
             providers={providersByEnvironmentId.get(thread.environmentId)}

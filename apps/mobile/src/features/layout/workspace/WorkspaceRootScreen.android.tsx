@@ -11,6 +11,7 @@ import { AppBar } from "../../../components/ui/AppBar";
 import { WorkspaceEmptyDetail } from "../WorkspaceEmptyDetail";
 import { ScreenContent } from "../../../components/ui/ScreenContent";
 import { useAndroidControlSizing } from "../../../components/ui/useAndroidControlSizing";
+import { BotsScreen } from "../../bots/BotsScreen";
 import { HomeRouteScreen } from "../../home/HomeRouteScreen";
 import { PullRequestsScreen } from "../../pull-requests/PullRequestsScreen";
 import { ListSearchToolbar } from "./ListSearchToolbar.android";
@@ -47,7 +48,7 @@ function WorkspaceRoot() {
       ? workspace.bottomClearance
       : floatingTabsEnabled
         ? insets.bottom + FLOATING_TABS.bottom + FLOATING_TABS.edge + fabSize
-        : workspace.state.selectedTab === "threads"
+        : workspace.state.selectedTab === "threads" || workspace.state.selectedTab === "bots"
           ? fabClearance + 16
           : 16,
   };
@@ -94,7 +95,17 @@ function WorkspaceRoot() {
                 tabs={TABS}
                 selected={tab}
                 renderTab={(tab) =>
-                  tab === "threads" ? (
+                  tab === "bots" ? (
+                    layout.usesSplitView ? (
+                      <>
+                        <NativeStackScreenOptions options={{ headerShown: false }} />
+                        <AppBar embedded title="Bots" />
+                        <WorkspaceEmptyDetail tab="bots" />
+                      </>
+                    ) : (
+                      <BotsScreen />
+                    )
+                  ) : tab === "threads" ? (
                     <HomeRouteScreen />
                   ) : tab === "usage" ? (
                     <WorkspacePageFrame width={workspacePageWidth ?? null}>

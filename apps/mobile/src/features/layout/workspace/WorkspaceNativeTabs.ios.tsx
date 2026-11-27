@@ -239,11 +239,13 @@ export function WorkspaceNativeTabs(props: {
                   contentReady: mountedSlots.has(slot),
                   icon: settings
                     ? { type: "sfSymbol", name: "gearshape" }
-                    : tab === "pullRequests"
-                      ? { type: "templateSource", templateSource: PULL_REQUEST_ICON }
-                      : tab === "issues"
-                        ? { type: "templateSource", templateSource: ISSUE_ICON }
-                        : { type: "sfSymbol", name: NAVIGATION_TAB_ICONS[tab] },
+                    : tab === "bots"
+                      ? { type: "sfSymbol", name: "face.smiling" }
+                      : tab === "pullRequests"
+                        ? { type: "templateSource", templateSource: PULL_REQUEST_ICON }
+                        : tab === "issues"
+                          ? { type: "templateSource", templateSource: ISSUE_ICON }
+                          : { type: "sfSymbol", name: NAVIGATION_TAB_ICONS[tab] },
                   selectedIcon:
                     !settings && tab === "threads"
                       ? { type: "sfSymbol", name: "text.bubble.fill" }

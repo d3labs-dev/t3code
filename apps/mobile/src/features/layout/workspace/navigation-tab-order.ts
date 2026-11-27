@@ -1,4 +1,4 @@
-export const NAVIGATION_TAB_ORDER = ["threads", "pullRequests", "issues", "usage"] as const;
+export const NAVIGATION_TAB_ORDER = ["bots", "threads", "pullRequests", "issues", "usage"] as const;
 export type NavigationTab = (typeof NAVIGATION_TAB_ORDER)[number];
 
 const SHARED_SLOT_TABS = ["pullRequests", "issues"] as const;
@@ -24,6 +24,7 @@ export function navigationCustomizationAvailable(
 }
 
 export const NAVIGATION_TAB_LABELS: Readonly<Record<NavigationTab, string>> = {
+  bots: "Bots",
   threads: "Threads",
   pullRequests: "Pulls",
   issues: "Issues",

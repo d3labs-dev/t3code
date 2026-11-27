@@ -51,6 +51,7 @@ export function initialWorkspaceTabsState(
     selectedTab,
     selectionRevision: 0,
     tabs: {
+      bots: emptyTab(),
       threads: emptyTab(),
       pullRequests: emptyTab(),
       issues: emptyTab(),

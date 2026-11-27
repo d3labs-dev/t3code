@@ -25,6 +25,7 @@ import {
   useNativeColumnLayoutMetrics,
   useNativeLayoutMetrics,
 } from "../../../native/native-layout-metrics";
+import { BotsScreen } from "../../bots/BotsScreen";
 import { HomeRouteScreen } from "../../home/HomeRouteScreen";
 import { WorkspaceConnectionTitle } from "../../home/WorkspaceConnectionTitle";
 import { useAdaptiveWorkspaceLayout } from "../AdaptiveWorkspaceLayout";
@@ -166,6 +167,8 @@ function WorkspaceRootContent() {
             <WorkspaceSettingsList />
           ) : enabled.length === 0 ? (
             <WorkspaceNoTabs />
+          ) : state.selectedTab === "bots" ? (
+            <BotsScreen />
           ) : state.selectedTab === "threads" ? (
             <HomeRouteScreen />
           ) : state.selectedTab === "pullRequests" ? (

@@ -201,6 +201,8 @@ import { WorkspaceMutationIdProvider } from "./WorkspaceMutationIdProvider";
 import { useThreadTurnSubagents } from "./ThreadAgentsSheet";
 import { ComposerQueuedEditBanner } from "./ComposerQueuedEdit";
 import { useThreadQueuedCount } from "./ThreadQueueControl";
+import type { ScopedCodingThreadSupervisor } from "@t3tools/client-runtime/state/bots";
+import { BotSupervisedBar } from "../bots/BotSupervisedBar";
 import { ThreadGuestShareBar } from "./ThreadGuestShareBar";
 import { ThreadSideChatsRow } from "./ThreadSideChatsRow";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
@@ -211,6 +213,8 @@ import type { OrchestrationV2ProviderSession } from "@t3tools/contracts";
 
 export interface ThreadDetailScreenProps {
   readonly header?: React.ReactNode;
+  readonly botSupervisor?: ScopedCodingThreadSupervisor | null;
+  readonly onOpenSupervisorBot?: () => void;
   readonly draftMode?: {
     /** viewportHeight excludes the composer so draft chrome can resize it without feedback. */
     readonly content: (
@@ -1617,6 +1621,12 @@ function ThreadDetailBody(
                       threadRef={props.selectedThreadDetailRef}
                       canOperateThread={props.canOperateThread}
                     />
+                    {props.botSupervisor && props.onOpenSupervisorBot ? (
+                      <BotSupervisedBar
+                        supervisor={props.botSupervisor}
+                        onOpenBot={props.onOpenSupervisorBot}
+                      />
+                    ) : null}
                     {props.draftMode ? null : (
                       <ThreadSideChatsRow
                         environmentId={props.environmentId}

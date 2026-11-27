@@ -54,7 +54,9 @@ import {
   nativeInspectorColumnWidth,
 } from "../../lib/layout";
 import type { ThreadListFilters } from "../../persistence/mobile-preferences";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { appAtomRegistry } from "../../state/atom-registry";
+import { botsIndexAtom } from "../../state/bots";
 import { useProjects } from "../../state/entities";
 import { environmentThreadShells } from "../../state/threads";
 import { withKnownPullRequestSummary } from "../../state/use-thread-pr";
@@ -573,7 +575,19 @@ function AdaptiveWorkspaceLayoutContent(
       setFileInspectorPreferredVisible(false);
       setInspectorSheetRoute(null);
       if (layout.variant === "medium") setPrimarySidebarVisible(false);
-      workspace?.dispatch({ type: "select", tab: workspaceTabOf(detail.name) });
+      const targetTab =
+        detail.name === "Thread" &&
+        detail.params?.environmentId &&
+        detail.params?.threadId &&
+        appAtomRegistry.get(botsIndexAtom).botByThreadKey.has(
+          scopedThreadKey({
+            environmentId: EnvironmentId.make(detail.params.environmentId),
+            threadId: ThreadId.make(detail.params.threadId),
+          }),
+        )
+          ? "bots"
+          : workspaceTabOf(detail.name);
+      workspace?.dispatch({ type: "select", tab: targetTab });
       startOpeningDetail(detail);
       navigation.dispatch(selectWorkspaceDetail(detail, sheet));
     });
