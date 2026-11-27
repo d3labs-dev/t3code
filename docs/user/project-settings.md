@@ -172,6 +172,21 @@ returns. Leave it off if you don't want request bodies stored outside your
 machine. To skip requests that waited too long, set **Skip requests older
 than** on the task.
 
+## MCP event automations
+
+A Bot can subscribe to events that one of its MCP servers publishes, such as a
+new chat message, so each event starts a turn in the Bot's thread. Ask the Bot
+in its thread, for example "watch group chats from executor"; it creates the
+task with `schedule_task` and can change or remove it the same way. The server
+must use streamable HTTP and support MCP events.
+
+The server delivers to this environment's T3 Connect URL when a managed tunnel
+is set up, and otherwise to its local address, which only an MCP server on the
+same machine can reach. Each delivery is signed, and unsigned or stale requests
+are rejected. The task list shows whether the subscription is active and the
+last error. You can pause, resume or delete an event task there, and see its
+**Deliveries**; edit it by asking the Bot.
+
 ## Defaults and inheritance
 
 Threads contains the model and workspace for new threads. Browser controls agent browser
