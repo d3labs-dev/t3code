@@ -139,6 +139,7 @@ build_in_container() {
   docker build --quiet --tag "$image" \
     --build-arg "NODE_VERSION=$(jq -r .engines.node "$repo_root/package.json")" \
     --build-arg "VITE_PLUS_VERSION=$(sed -nE 's/^  vite-plus: ([0-9][^ ]*)$/\1/p' "$repo_root/pnpm-workspace.yaml")" \
+    --build-arg "PNPM_VERSION=$(jq -r '.packageManager | sub("^pnpm@"; "")' "$repo_root/package.json")" \
     --file "$repo_root/scripts/custom-nightly-linux.Dockerfile" "$repo_root/scripts"
   docker run --rm \
     --user "$(id -u):$(id -g)" \

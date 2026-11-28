@@ -4,6 +4,7 @@ FROM ubuntu:24.04
 
 ARG NODE_VERSION
 ARG VITE_PLUS_VERSION
+ARG PNPM_VERSION
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
@@ -12,7 +13,7 @@ RUN apt-get update \
 
 RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
   | tar -xJ -C /usr/local --strip-components=1 \
-  && npm install -g "vite-plus@${VITE_PLUS_VERSION}"
+  && npm install -g "vite-plus@${VITE_PLUS_VERSION}" "pnpm@${PNPM_VERSION}"
 
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH
 RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable \
