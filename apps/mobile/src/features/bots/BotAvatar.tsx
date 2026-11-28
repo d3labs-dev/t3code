@@ -8,6 +8,7 @@ import {
 } from "@t3tools/client-runtime/bot-avatar";
 import type { BotStatus } from "@t3tools/contracts";
 import { Image } from "expo-image";
+import { msg } from "gt-react-native";
 import { View } from "react-native";
 import Svg, { G, Path, Rect } from "react-native-svg";
 
@@ -43,10 +44,10 @@ const STATUS_DOT_PX: Record<BotAvatarSize, number> = {
 };
 
 export const BOT_STATUS_LABEL: Record<BotStatus, string> = {
-  idle: "Idle",
-  working: "Working",
-  waiting: "Waiting",
-  error: "Error",
+  idle: msg("Idle", { $context: "Bot status" }),
+  working: msg("Working", { $context: "Bot status" }),
+  waiting: msg("Waiting", { $context: "Bot status" }),
+  error: msg("Error", { $context: "Bot status" }),
 };
 
 function BotFace(props: {

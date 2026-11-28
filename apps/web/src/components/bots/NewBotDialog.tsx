@@ -6,6 +6,7 @@ import {
   type EnvironmentId,
   type ModelSelection,
 } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { ChevronRightIcon, ShuffleIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -60,6 +61,7 @@ const EMPTY_DRAFT: NewBotDraft = {
 };
 
 export function NewBotDialog() {
+  const gt = useGT();
   const open = useBotsUiStore((state) => state.newBotDialogOpen);
   const close = useBotsUiStore((state) => state.closeNewBotDialog);
   const defaultEnvironmentId = useDefaultBotEnvironmentId();
@@ -68,10 +70,13 @@ export function NewBotDialog() {
       <WizardPopup>
         {defaultEnvironmentId === null ? (
           <>
-            <WizardHeader title="New Bot" description="Connect an environment to create a Bot." />
+            <WizardHeader
+              title={gt("New Bot")}
+              description={gt("Connect an environment to create a Bot.")}
+            />
             <WizardFooter>
               <Button variant="outline" onClick={close}>
-                Close
+                <T>Close</T>
               </Button>
             </WizardFooter>
           </>
@@ -87,6 +92,7 @@ function NewBotForm(props: {
   readonly defaultEnvironmentId: EnvironmentId;
   readonly onClose: () => void;
 }) {
+  const gt = useGT();
   const openThread = useOpenThreadInMode();
   const visualStyle = useBotsUiStore((state) => state.visualStyle);
   const setVisualStyle = useBotsUiStore((state) => state.setVisualStyle);
@@ -114,7 +120,9 @@ function NewBotForm(props: {
   const mcpCount = draft.mcpServerNames.length;
   const optionsSummary = [
     model.label,
-    mcpCount === 0 ? null : `${mcpCount} ${mcpCount === 1 ? "MCP" : "MCPs"}`,
+    mcpCount === 0
+      ? null
+      : gt("{count, plural, one {{count} MCP} other {{count} MCPs}}", { count: mcpCount }),
   ]
     .filter((part) => part !== null)
     .join(" · ");
@@ -147,7 +155,7 @@ function NewBotForm(props: {
     submitting.current = false;
     setSaving(false);
     if (result._tag === "Failure") {
-      reportBotFailure("Could not create Bot", result);
+      reportBotFailure(gt("Could not create Bot"), result);
       return;
     }
     props.onClose();
@@ -163,8 +171,8 @@ function NewBotForm(props: {
       }}
     >
       <WizardHeader
-        title="New Bot"
-        description="A long-lived agent with its own folder, memory and thread."
+        title={gt("New Bot")}
+        description={gt("A long-lived agent with its own folder, memory and thread.")}
       />
       <WizardPanel>
         <div className="flex flex-col gap-5">
@@ -179,29 +187,31 @@ function NewBotForm(props: {
                         type="button"
                         size="icon-xs"
                         variant="ghost-muted"
-                        aria-label="Randomize look"
+                        aria-label={gt("Randomize look")}
                         onClick={randomize}
                       />
                     }
                   >
                     <ShuffleIcon aria-hidden />
                   </TooltipTrigger>
-                  <TooltipPopup>Randomize</TooltipPopup>
+                  <TooltipPopup>
+                    <T>Randomize</T>
+                  </TooltipPopup>
                 </Tooltip>
               </div>
             </div>
             <div className="flex w-full max-w-xs flex-col items-center gap-0.5 pt-1">
               <input
                 autoFocus
-                aria-label="Bot name"
-                placeholder="Name your Bot"
+                aria-label={gt("Bot name")}
+                placeholder={gt("Name your Bot")}
                 value={draft.name}
                 onChange={(event) => update({ name: event.currentTarget.value })}
                 className="h-9 w-full rounded-lg bg-transparent px-3 text-center text-lg font-semibold text-foreground outline-none transition-colors placeholder:font-medium placeholder:text-muted-foreground/60 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none"
               />
               <input
-                aria-label="Bot role"
-                placeholder="Role (e.g. Chief of Staff, Designer)"
+                aria-label={gt("Bot role")}
+                placeholder={gt("Role (e.g. Chief of Staff, Designer)")}
                 value={draft.role}
                 onChange={(event) => update({ role: event.currentTarget.value })}
                 className="h-7 w-full rounded-md bg-transparent px-3 text-center text-xs text-muted-foreground outline-none transition-colors placeholder:text-muted-foreground/55 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none"
@@ -220,7 +230,7 @@ function NewBotForm(props: {
           <Collapsible>
             <CollapsibleTrigger className="group/more flex w-full items-center gap-2 rounded-xl border border-border/60 px-3 py-2.5 text-left outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none">
               <span className="shrink-0 text-sm font-medium text-foreground">
-                Model, group & tools
+                <T>Model, group & tools</T>
               </span>
               <span className="ms-auto min-w-0 truncate text-xs text-muted-foreground">
                 {optionsSummary}
@@ -232,10 +242,10 @@ function NewBotForm(props: {
             </CollapsibleTrigger>
             <CollapsiblePanel>
               <div className="flex flex-col gap-4 px-0.5 pt-4">
-                <BotField label="Group" htmlFor="new-bot-group">
+                <BotField label={gt("Group", { $context: "Bot group" })} htmlFor="new-bot-group">
                   <Input
                     id="new-bot-group"
-                    placeholder="Ungrouped"
+                    placeholder={gt("Ungrouped")}
                     value={draft.groupName}
                     onChange={(event) => update({ groupName: event.currentTarget.value })}
                   />
@@ -256,7 +266,7 @@ function NewBotForm(props: {
                   </div>
                 </BotField>
                 {connectedIds.length > 1 ? (
-                  <BotField label="Environment">
+                  <BotField label={gt("Environment")}>
                     <Select
                       value={environmentId}
                       onValueChange={(value) => {
@@ -264,7 +274,7 @@ function NewBotForm(props: {
                         if (next) setChosenEnvironmentId(next);
                       }}
                     >
-                      <SelectTrigger aria-label="Environment">
+                      <SelectTrigger aria-label={gt("Environment")}>
                         <SelectValue>
                           {environments.find((entry) => entry.environmentId === environmentId)
                             ?.label ?? environmentId}
@@ -280,7 +290,7 @@ function NewBotForm(props: {
                     </Select>
                   </BotField>
                 ) : null}
-                <BotField label="Model">
+                <BotField label={gt("Model")}>
                   <div>
                     <BotModelPicker
                       environmentId={environmentId}
@@ -292,7 +302,7 @@ function NewBotForm(props: {
                     />
                   </div>
                 </BotField>
-                <BotField label="MCP servers">
+                <BotField label={gt("MCP servers")}>
                   <BotMcpServerChecklist
                     available={availableMcpServers}
                     selected={draft.mcpServerNames}
@@ -300,10 +310,14 @@ function NewBotForm(props: {
                     onChange={(mcpServerNames) => update({ mcpServerNames })}
                   />
                 </BotField>
-                <BotField label="Starter SOUL.md" htmlFor="new-bot-soul" hint="Optional.">
+                <BotField
+                  label={gt("Starter {fileName}", { fileName: "SOUL.md" })}
+                  htmlFor="new-bot-soul"
+                  hint={gt("Optional.")}
+                >
                   <Textarea
                     id="new-bot-soul"
-                    placeholder="Who is this Bot? How should it think, talk and decide?"
+                    placeholder={gt("Who is this Bot? How should it think, talk and decide?")}
                     rows={5}
                     value={draft.soul}
                     onChange={(event) => update({ soul: event.currentTarget.value })}
@@ -316,13 +330,13 @@ function NewBotForm(props: {
       </WizardPanel>
       <WizardFooter>
         <Button type="button" variant="outline" onClick={props.onClose}>
-          Cancel
+          <T>Cancel</T>
         </Button>
         <Button
           type="submit"
           disabled={!canCreate || saving || name === "" || model.selection === null}
         >
-          {saving ? "Creating…" : "Create Bot"}
+          {saving ? gt("Creating…") : gt("Create Bot")}
         </Button>
       </WizardFooter>
     </form>

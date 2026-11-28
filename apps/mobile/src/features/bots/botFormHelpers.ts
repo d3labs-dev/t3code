@@ -7,8 +7,10 @@ import {
 import { type BotVisualStyle, DEFAULT_BOT_VISUAL_STYLE } from "@t3tools/client-runtime/bot-avatar";
 import type { EnvironmentId, ModelSelection } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
+import { msg } from "gt-react-native";
 
 import * as Dialog from "../../components/ui/Dialog";
+import { m } from "../../i18n/messages";
 import { buildModelOptions, type ModelOption } from "../../lib/modelOptions";
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { mobilePreferencesAtom, saveMobilePreferences } from "../../state/preferences";
@@ -33,7 +35,7 @@ export function reportBotCommandFailure(
 ): void {
   if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
     const error = squashAtomCommandFailure(result);
-    Dialog.alert(title, error instanceof Error ? error.message : "Try again.");
+    Dialog.alert(title, error instanceof Error ? error.message : m(msg("Try again.")));
   }
 }
 

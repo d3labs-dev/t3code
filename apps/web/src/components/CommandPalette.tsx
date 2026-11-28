@@ -1842,7 +1842,7 @@ function OpenCommandPaletteDialog(props: {
         "rotation",
         "studio",
       ],
-      title: "Customize background",
+      title: gt("Customize background"),
       icon: <ImageIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: "backgroundEditor.toggle",
       run: async () => {
@@ -1855,7 +1855,7 @@ function OpenCommandPaletteDialog(props: {
     kind: "action",
     value: "action:sidebar-mode",
     searchTerms: ["bots", "threads", "sidebar", "mode", "switch", "agents"],
-    title: sidebarMode === "bots" ? "Switch to Threads" : "Switch to Bots",
+    title: sidebarMode === "bots" ? gt("Switch to Threads") : gt("Switch to Bots"),
     icon: <BotIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       useBotsUiStore.getState().toggleSidebarMode();
@@ -1866,7 +1866,7 @@ function OpenCommandPaletteDialog(props: {
     kind: "action",
     value: "action:new-bot",
     searchTerms: ["new bot", "create bot", "add bot", "agent"],
-    title: "New Bot",
+    title: gt("New Bot"),
     icon: <BotIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       useBotsUiStore.getState().openNewBotDialog();

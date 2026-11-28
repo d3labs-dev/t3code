@@ -3,6 +3,7 @@ import {
   type ScopedCodingThreadSupervisor,
 } from "@t3tools/client-runtime/state/bots";
 import * as Haptics from "expo-haptics";
+import { T, useGT, useMessages, Var } from "gt-react-native";
 import { Pressable, View } from "react-native";
 
 import { SymbolView } from "../../components/ui/AppSymbol";
@@ -17,12 +18,14 @@ export function BotSupervisedBar(props: {
   const { botEntry, link } = props.supervisor;
   const { bot } = botEntry;
   const watching = link.status === "pending";
+  const gt = useGT();
+  const resolve = useMessages();
 
   return (
     <View className="px-4 pb-2">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Supervised by ${bot.name}. Open ${bot.name}`}
+        accessibilityLabel={gt("Supervised by {name}. Open {name}", { name: bot.name })}
         onPress={() => {
           void Haptics.selectionAsync();
           props.onOpenBot();
@@ -31,7 +34,12 @@ export function BotSupervisedBar(props: {
       >
         <BotAvatar icon={bot.icon} color={bot.color} size="xs" status={botEntry.status} />
         <Text className="min-w-0 flex-1 text-xs text-foreground-muted" numberOfLines={1}>
-          Supervised by <Text className="text-xs font-t3-semibold text-foreground">{bot.name}</Text>
+          <T>
+            Supervised by{" "}
+            <Text className="text-xs font-t3-semibold text-foreground">
+              <Var>{bot.name}</Var>
+            </Text>
+          </T>
         </Text>
         <View
           className={cn(
@@ -51,7 +59,7 @@ export function BotSupervisedBar(props: {
               watching ? "text-primary-text" : "text-foreground-muted",
             )}
           >
-            {BOT_EXCHANGE_STATUS_LABEL.coding_thread[link.status]}
+            {resolve(BOT_EXCHANGE_STATUS_LABEL.coding_thread[link.status])}
           </Text>
         </View>
         <SymbolView name="arrow.up.right" size={12} tintColorClassName="accent-foreground-muted" />

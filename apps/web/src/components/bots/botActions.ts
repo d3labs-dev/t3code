@@ -14,7 +14,9 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
+import { msg } from "gt-react";
 
+import { m } from "../../i18n/messages";
 import { botsEnvironment } from "../../state/bots";
 import { useConnectedEnvironmentIds, usePrimaryEnvironmentId } from "../../state/environments";
 import { readEnvironmentScope } from "../../state/session";
@@ -75,7 +77,7 @@ export function useUpdateBot() {
   return async (
     environmentId: EnvironmentId,
     input: BotUpdateInput,
-    failureTitle = "Could not update Bot",
+    failureTitle = m(msg("Could not update Bot")),
   ): Promise<boolean> => {
     if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return false;
     const result = await updateBot({ environmentId, input });
@@ -90,6 +92,6 @@ export function useToggleBotMuted() {
     update(
       environmentId,
       { botId: bot.id, muted: !bot.muted },
-      bot.muted ? "Could not unmute Bot" : "Could not mute Bot",
+      bot.muted ? m(msg("Could not unmute Bot")) : m(msg("Could not mute Bot")),
     );
 }

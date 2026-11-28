@@ -137,7 +137,7 @@ function describeSchedule(
   locale: string,
 ): string {
   if (task.schedule.type === "webhook") return resolve(msg("On webhook"));
-  if (task.schedule.type === "mcp_event") return mcpEventScheduleLabel(task.schedule);
+  if (task.schedule.type === "mcp_event") return mcpEventScheduleLabel(task.schedule, resolve);
   if (task.schedule.type === "once") {
     const runAt = new Date(task.schedule.runAt);
     return resolve(
@@ -1716,7 +1716,7 @@ function EnvironmentTasks({
                   : task.subscription
                     ? gt("{schedule} · {subscription}", {
                         schedule: describeSchedule(task, tasks.data?.timeZone, m, locale),
-                        subscription: mcpEventSubscriptionLabel(task.subscription),
+                        subscription: mcpEventSubscriptionLabel(task.subscription, m),
                       })
                     : task.nextRunAt
                       ? gt("{schedule} · {nextRun}", {

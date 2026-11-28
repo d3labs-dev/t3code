@@ -280,7 +280,9 @@ export const ChatHeader = memo(function ChatHeader({
                 onClick={() => setSidebarMode("bots")}
                 className="inline-flex cursor-pointer items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
-                <WorkspaceBreadcrumbText>Bots</WorkspaceBreadcrumbText>
+                <WorkspaceBreadcrumbText>
+                  <T>Bots</T>
+                </WorkspaceBreadcrumbText>
               </button>
             </WorkspaceBreadcrumbItem>
             <WorkspaceBreadcrumbSeparator>
@@ -431,7 +433,7 @@ export const ChatHeader = memo(function ChatHeader({
                 <Button
                   size="icon-xs"
                   variant="ghost-muted"
-                  aria-label="Bot settings"
+                  aria-label={gt("Bot settings")}
                   onClick={() =>
                     openBotSettings({
                       environmentId: activeBot.environmentId,
@@ -440,14 +442,14 @@ export const ChatHeader = memo(function ChatHeader({
                   }
                 />
               }
-              label="Bot settings"
+              label={gt("Bot settings")}
             >
               <Settings2Icon aria-hidden />
             </SharedTooltipTrigger>
           ) : null}
           {renamingTitle === null && activeBot !== null && activeBot.bot.archivedAt !== null ? (
             <Badge variant="outline" size="sm">
-              Archived
+              <T>Archived</T>
             </Badge>
           ) : null}
           {renamingTitle === null && activeThreadLinkOrigin ? (

@@ -59,7 +59,7 @@ function taskScheduleLine(
       {task.blockedByPolicy !== undefined ? (
         ` · ${task.blockedByPolicy}`
       ) : task.enabled && task.subscription !== undefined ? (
-        ` · ${mcpEventSubscriptionLabel(task.subscription).toLowerCase()}`
+        ` · ${mcpEventSubscriptionLabel(task.subscription, resolve).toLowerCase()}`
       ) : task.enabled && task.nextRunAt !== null ? (
         <>
           {" · "}

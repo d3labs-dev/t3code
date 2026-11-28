@@ -5,6 +5,7 @@ import type {
   ModelSelection,
   ProviderInstanceId,
 } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { LockIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -121,6 +122,7 @@ export function BotMcpServerChecklist(props: {
   readonly disabled?: boolean;
   readonly onChange: (names: ReadonlyArray<string>) => void;
 }) {
+  const gt = useGT();
   const discovered = props.available.filter((server) => server.name !== BOT_BUILTIN_MCP_SERVER);
   // Names a Bot already uses stay listed after their server leaves this environment's config.
   const missing = props.selected.filter(
@@ -139,7 +141,9 @@ export function BotMcpServerChecklist(props: {
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">
           {BOT_BUILTIN_MCP_SERVER}
         </span>
-        <span className="text-2xs text-muted-foreground">Always on</span>
+        <span className="text-2xs text-muted-foreground">
+          <T>Always on</T>
+        </span>
       </div>
       {[
         ...discovered.map((server) => ({ name: server.name, transport: server.transport })),
@@ -156,13 +160,13 @@ export function BotMcpServerChecklist(props: {
           />
           <span className="min-w-0 flex-1 truncate text-foreground">{server.name}</span>
           <span className="text-2xs text-muted-foreground">
-            {server.transport ?? "Not configured"}
+            {server.transport ?? gt("Not configured")}
           </span>
         </label>
       ))}
       {discovered.length === 0 && missing.length === 0 ? (
         <p className="px-1.5 text-2xs text-muted-foreground">
-          No other MCP servers are configured on this environment.
+          <T>No other MCP servers are configured on this environment.</T>
         </p>
       ) : null}
     </div>

@@ -14,6 +14,7 @@ import {
   type EditorId,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
+import { T, useGT, useMessages, Var } from "gt-react";
 import {
   BellIcon,
   BellOffIcon,
@@ -78,6 +79,7 @@ export function BotDetailsPanel({
   readonly showOpenInPicker: boolean;
   readonly openInShortcutEnabled: boolean;
 }) {
+  const gt = useGT();
   const index = useBotsIndex();
   const openBotSettings = useBotsUiStore((state) => state.openBotSettings);
   const links = index.codingThreadsByBotKey.get(botKey(entry.environmentId, entry.bot.id)) ?? [];
@@ -88,7 +90,7 @@ export function BotDetailsPanel({
       <BotDetailsHeader entry={entry} onOpenSettings={openSettings} />
       <ThreadDetailsSection
         headingId="bot-details-workspace-heading"
-        title="Workspace"
+        title={gt("Workspace")}
         separated={false}
         showHeading={false}
       >
@@ -106,13 +108,16 @@ export function BotDetailsPanel({
           <ThreadDetailsControl variant="ghost" onClick={openSettings}>
             <Settings2Icon className={THREAD_DETAILS_PANEL_ICON_CLASS} aria-hidden />
             <span className={cn("min-w-0 flex-1 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
-              Bot settings
+              <T>Bot settings</T>
             </span>
           </ThreadDetailsControl>
         </div>
       </ThreadDetailsSection>
       {links.length > 0 ? (
-        <ThreadDetailsSection headingId="bot-details-coding-threads-heading" title="Coding threads">
+        <ThreadDetailsSection
+          headingId="bot-details-coding-threads-heading"
+          title={gt("Coding threads")}
+        >
           <ul className="m-0 max-h-56 list-none overflow-y-auto p-0">
             {links.map((scoped) => (
               <li key={`${scoped.environmentId}:${scoped.link.threadId}`}>
@@ -132,6 +137,8 @@ function BotDetailsHeader(props: {
   readonly entry: ScopedBotEntry;
   readonly onOpenSettings: () => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const { entry } = props;
   const { bot, status, environmentId } = entry;
   const canUpdate = useAtomValue(botsEnvironment.updateBot.permissionAtom(environmentId));
@@ -145,7 +152,7 @@ function BotDetailsHeader(props: {
           {bot.isPrimary ? (
             <StarIcon
               className="size-3 shrink-0 fill-current text-muted-foreground/70"
-              aria-label="Primary Bot"
+              aria-label={gt("Primary Bot")}
             />
           ) : null}
         </span>
@@ -159,10 +166,14 @@ function BotDetailsHeader(props: {
             </>
           ) : null}
           {bot.archivedAt !== null ? (
-            <span className="shrink-0 text-muted-foreground">Archived</span>
+            <span className="shrink-0 text-muted-foreground">
+              <T>Archived</T>
+            </span>
           ) : status === "idle" ? (
             <span className="shrink-0 text-muted-foreground">
-              {bot.muted ? "Muted" : BOT_STATUS_LABEL.idle}
+              {bot.muted
+                ? gt("Muted", { $context: "Bot notifications are off" })
+                : resolve(BOT_STATUS_LABEL.idle)}
             </span>
           ) : (
             <span
@@ -172,7 +183,7 @@ function BotDetailsHeader(props: {
               )}
             >
               <span className={cn("size-1.5 rounded-full", STATUS_DOT_CLASS[status])} aria-hidden />
-              {BOT_STATUS_LABEL[status]}
+              {resolve(BOT_STATUS_LABEL[status])}
             </span>
           )}
         </span>
@@ -184,7 +195,11 @@ function BotDetailsHeader(props: {
               size="icon-xs"
               variant="ghost"
               part="icon"
-              aria-label={bot.muted ? `Unmute ${bot.name}` : `Mute ${bot.name}`}
+              aria-label={
+                bot.muted
+                  ? gt("Unmute {name}", { name: bot.name })
+                  : gt("Mute {name}", { name: bot.name })
+              }
               disabled={!canUpdate}
               onClick={() => void toggleMuted(entry)}
             >
@@ -196,7 +211,11 @@ function BotDetailsHeader(props: {
             </ThreadDetailsControl>
           }
         />
-        <TooltipPopup>{bot.muted ? "Unmute" : "Mute"}</TooltipPopup>
+        <TooltipPopup>
+          {bot.muted
+            ? gt("Unmute", { $context: "Bot notifications" })
+            : gt("Mute", { $context: "Bot notifications" })}
+        </TooltipPopup>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger
@@ -205,20 +224,23 @@ function BotDetailsHeader(props: {
               size="icon-xs"
               variant="ghost"
               part="icon"
-              aria-label="Bot settings"
+              aria-label={gt("Bot settings")}
               onClick={props.onOpenSettings}
             >
               <SettingsIcon className="size-3.5" aria-hidden />
             </ThreadDetailsControl>
           }
         />
-        <TooltipPopup>Bot settings</TooltipPopup>
+        <TooltipPopup>
+          <T>Bot settings</T>
+        </TooltipPopup>
       </Tooltip>
     </div>
   );
 }
 
 function CodingThreadLinkRow({ scoped }: { readonly scoped: ScopedCodingThreadLink }) {
+  const gt = useGT();
   const { environmentId, link } = scoped;
   const shell = useQuietThreadShell(scopeThreadRef(environmentId, link.threadId));
   const openThread = useOpenThreadInMode();
@@ -228,7 +250,7 @@ function CodingThreadLinkRow({ scoped }: { readonly scoped: ScopedCodingThreadLi
       onClick={() => openThread("threads", environmentId, link.threadId)}
     >
       <CornerDownRightIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} aria-hidden />
-      <span className="min-w-0 flex-1 truncate">{shell?.title ?? "Thread not loaded"}</span>
+      <span className="min-w-0 flex-1 truncate">{shell?.title ?? gt("Thread not loaded")}</span>
       <Badge size="sm" variant={EXCHANGE_STATUS_VARIANT[link.status]}>
         {BOT_EXCHANGE_STATUS_LABEL.coding_thread[link.status]}
       </Badge>
@@ -237,6 +259,7 @@ function CodingThreadLinkRow({ scoped }: { readonly scoped: ScopedCodingThreadLi
 }
 
 function BotExchangesSection({ entry }: { readonly entry: ScopedBotEntry }) {
+  const gt = useGT();
   const exchanges = useBotExchanges(entry.environmentId, entry.bot.id);
   const index = useBotsIndex();
   const nameOf = (botId: BotExchange["fromBotId"] | null) =>
@@ -251,7 +274,7 @@ function BotExchangesSection({ entry }: { readonly entry: ScopedBotEntry }) {
   return (
     <ThreadDetailsSection
       headingId="bot-details-exchanges-heading"
-      title="Bot exchanges"
+      title={gt("Bot exchanges")}
       actions={
         <Tooltip>
           <TooltipTrigger
@@ -260,7 +283,7 @@ function BotExchangesSection({ entry }: { readonly entry: ScopedBotEntry }) {
                 size="icon-xs"
                 variant="ghost"
                 part="icon"
-                aria-label="Refresh exchanges"
+                aria-label={gt("Refresh exchanges")}
                 disabled={exchanges.isPending}
                 onClick={exchanges.refresh}
               >
@@ -268,13 +291,17 @@ function BotExchangesSection({ entry }: { readonly entry: ScopedBotEntry }) {
               </ThreadDetailsControl>
             }
           />
-          <TooltipPopup>Refresh</TooltipPopup>
+          <TooltipPopup>
+            <T>Refresh</T>
+          </TooltipPopup>
         </Tooltip>
       }
     >
       {exchanges.error !== null ? (
         <p className="px-2.5 text-2xs text-destructive">
-          Could not load exchanges: {exchanges.error}
+          <T>
+            Could not load exchanges: <Var>{exchanges.error}</Var>
+          </T>
         </p>
       ) : (
         <ul className="m-0 flex max-h-64 list-none flex-col gap-1 overflow-y-auto p-0">
@@ -283,10 +310,14 @@ function BotExchangesSection({ entry }: { readonly entry: ScopedBotEntry }) {
             const peer = nameOf(outgoing ? exchange.toBotId : exchange.fromBotId);
             const title =
               exchange.kind === "coding_thread"
-                ? "Coding thread"
+                ? gt("Coding thread")
                 : outgoing
-                  ? `To ${peer ?? "another Bot"}`
-                  : `From ${peer ?? "another Bot"}`;
+                  ? peer === null
+                    ? gt("To another Bot")
+                    : gt("To {name}", { name: peer })
+                  : peer === null
+                    ? gt("From another Bot")
+                    : gt("From {name}", { name: peer });
             return (
               <li key={exchange.id} className="flex min-w-0 gap-2.5 rounded-lg px-2.5 py-1.5">
                 {exchange.kind === "coding_thread" ? (
@@ -316,7 +347,7 @@ function BotExchangesSection({ entry }: { readonly entry: ScopedBotEntry }) {
                   ) : null}
                   <span className="flex items-center gap-1.5 text-2xs text-muted-foreground tabular-nums">
                     <span>
-                      hop {exchange.hopCount}/{BOT_MAX_HOPS}
+                      {gt("hop {hop}/{maxHops}", { hop: exchange.hopCount, maxHops: BOT_MAX_HOPS })}
                     </span>
                     <span aria-hidden>·</span>
                     <RelativeTime timestamp={exchange.createdAt} />

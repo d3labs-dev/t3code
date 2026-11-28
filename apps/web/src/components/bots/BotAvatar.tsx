@@ -7,6 +7,7 @@ import {
   resolveBotAvatarGlyph,
 } from "@t3tools/client-runtime/bot-avatar";
 import type { BotStatus } from "@t3tools/contracts";
+import { msg } from "gt-react";
 
 import { cn } from "../../lib/utils";
 import { botAvatarPaint } from "./botAvatarPaint";
@@ -45,10 +46,10 @@ const BOT_STATUS_DOT_CLASS: Record<Exclude<BotStatus, "idle">, string> = {
 };
 
 export const BOT_STATUS_LABEL: Record<BotStatus, string> = {
-  idle: "Idle",
-  working: "Working",
-  waiting: "Waiting",
-  error: "Error",
+  idle: msg("Idle", { $context: "Bot status" }),
+  working: msg("Working", { $context: "Bot status" }),
+  waiting: msg("Waiting", { $context: "Bot status" }),
+  error: msg("Error", { $context: "Bot status" }),
 };
 
 function BotFace(props: {

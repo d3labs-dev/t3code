@@ -7,6 +7,7 @@ import {
   groupBotsForSidebar,
 } from "@t3tools/client-runtime/state/bots";
 import type { BotExchangeStatus, ScopedThreadRef } from "@t3tools/contracts";
+import { T, useGT, useMessages } from "gt-react";
 import {
   ArchiveRestoreIcon,
   BellIcon,
@@ -115,7 +116,7 @@ function BotsSidebarBody() {
           onClick={openNewBotDialog}
         >
           <PlusIcon aria-hidden />
-          New Bot
+          <T>New Bot</T>
         </Button>
         {archivedSection}
       </div>
@@ -140,7 +141,9 @@ function ArchivedBotsSection(props: { readonly bots: ReadonlyArray<ScopedBotEntr
           )}
           aria-hidden
         />
-        <span className="min-w-0 truncate">Archived</span>
+        <span className="min-w-0 truncate">
+          <T>Archived</T>
+        </span>
         <span className="tabular-nums opacity-70">{props.bots.length}</span>
       </button>
       {expanded ? (
@@ -157,6 +160,7 @@ function ArchivedBotsSection(props: { readonly bots: ReadonlyArray<ScopedBotEntr
 }
 
 function ArchivedBotRow({ entry }: { readonly entry: ScopedBotEntry }) {
+  const gt = useGT();
   const { bot, environmentId } = entry;
   const canUpdate = useAtomValue(botsEnvironment.updateBot.permissionAtom(environmentId));
   const update = useUpdateBot();
@@ -165,7 +169,7 @@ function ArchivedBotRow({ entry }: { readonly entry: ScopedBotEntry }) {
   const [restoring, setRestoring] = useState(false);
   const restore = async () => {
     setRestoring(true);
-    await update(environmentId, { botId: bot.id, archived: false }, "Could not restore Bot");
+    await update(environmentId, { botId: bot.id, archived: false }, gt("Could not restore Bot"));
     setRestoring(false);
   };
   return (
@@ -184,12 +188,12 @@ function ArchivedBotRow({ entry }: { readonly entry: ScopedBotEntry }) {
       <Button
         size="xs"
         variant="ghost-muted"
-        aria-label={`Restore ${bot.name}`}
+        aria-label={gt("Restore {name}", { name: bot.name })}
         disabled={!canUpdate || restoring}
         onClick={() => void restore()}
       >
         <ArchiveRestoreIcon aria-hidden />
-        Restore
+        <T>Restore</T>
       </Button>
     </div>
   );
@@ -204,15 +208,19 @@ function BotsEmptyState(props: { readonly canCreate: boolean; readonly onCreate:
         <BotAvatar icon="cat" color="#e68940" size="md" />
       </div>
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-sidebar-foreground">Meet your Bots</p>
+        <p className="text-sm font-medium text-sidebar-foreground">
+          <T>Meet your Bots</T>
+        </p>
         <p className="text-xs text-sidebar-muted-foreground">
-          Bots are agents with a soul, a memory and their own folder. They take on work, start
-          coding threads and keep watch while those run.
+          <T>
+            Bots are agents with a soul, a memory and their own folder. They take on work, start
+            coding threads and keep watch while those run.
+          </T>
         </p>
       </div>
       <Button size="sm" disabled={!props.canCreate} onClick={props.onCreate}>
         <PlusIcon aria-hidden />
-        Create your first Bot
+        <T>Create your first Bot</T>
       </Button>
     </div>
   );
@@ -224,6 +232,7 @@ function BotGroup(props: {
   readonly showHeader: boolean;
   readonly links: ReadonlyMap<string, ReadonlyArray<ScopedCodingThreadLink>>;
 }) {
+  const gt = useGT();
   const groupKey = props.name === null ? UNGROUPED_KEY : `group:${props.name}`;
   const collapsed = useBotsUiStore((state) => state.collapsedGroups[groupKey] === true);
   const toggleGroupCollapsed = useBotsUiStore((state) => state.toggleGroupCollapsed);
@@ -243,7 +252,7 @@ function BotGroup(props: {
             )}
             aria-hidden
           />
-          <span className="min-w-0 truncate">{props.name ?? "Ungrouped"}</span>
+          <span className="min-w-0 truncate">{props.name ?? gt("Ungrouped")}</span>
           <span className="tabular-nums opacity-70">{props.bots.length}</span>
         </button>
       ) : null}
@@ -265,6 +274,8 @@ function BotEntry(props: {
   readonly links: ReadonlyMap<string, ReadonlyArray<ScopedCodingThreadLink>>;
   readonly featured: boolean;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const { entry, featured } = props;
   const { bot, status, environmentId } = entry;
   const key = botKey(environmentId, bot.id);
@@ -283,8 +294,8 @@ function BotEntry(props: {
     status === "idle"
       ? role || null
       : role
-        ? `${BOT_STATUS_LABEL[status]} · ${role}`
-        : BOT_STATUS_LABEL[status];
+        ? `${resolve(BOT_STATUS_LABEL[status])} · ${role}`
+        : resolve(BOT_STATUS_LABEL[status]);
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <div className="group/bot-row relative min-w-0">
@@ -316,13 +327,13 @@ function BotEntry(props: {
               {bot.isPrimary ? (
                 <StarIcon
                   className="size-3 shrink-0 fill-current text-warning"
-                  aria-label="Primary Bot"
+                  aria-label={gt("Primary Bot")}
                 />
               ) : null}
               {bot.muted ? (
                 <BellOffIcon
                   className="size-3 shrink-0 text-sidebar-muted-foreground"
-                  aria-label="Muted"
+                  aria-label={gt("Muted", { $context: "Bot notifications are off" })}
                 />
               ) : null}
             </span>
@@ -339,14 +350,16 @@ function BotEntry(props: {
                   <Button
                     size="icon-micro"
                     variant="ghost-muted"
-                    aria-label={`${bot.name} settings`}
+                    aria-label={gt("{name} settings", { name: bot.name })}
                     onClick={() => openBotSettings({ environmentId, botId: bot.id })}
                   />
                 }
               >
                 <Settings2Icon aria-hidden />
               </TooltipTrigger>
-              <TooltipPopup>Bot settings</TooltipPopup>
+              <TooltipPopup>
+                <T>Bot settings</T>
+              </TooltipPopup>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger
@@ -354,7 +367,11 @@ function BotEntry(props: {
                   <Button
                     size="icon-micro"
                     variant="ghost-muted"
-                    aria-label={bot.muted ? `Unmute ${bot.name}` : `Mute ${bot.name}`}
+                    aria-label={
+                      bot.muted
+                        ? gt("Unmute {name}", { name: bot.name })
+                        : gt("Mute {name}", { name: bot.name })
+                    }
                     disabled={!canUpdate}
                     onClick={() => void toggleMuted(entry)}
                   />
@@ -362,14 +379,22 @@ function BotEntry(props: {
               >
                 {bot.muted ? <BellIcon aria-hidden /> : <BellOffIcon aria-hidden />}
               </TooltipTrigger>
-              <TooltipPopup>{bot.muted ? "Unmute" : "Mute"}</TooltipPopup>
+              <TooltipPopup>
+                {bot.muted
+                  ? gt("Unmute", { $context: "Bot notifications" })
+                  : gt("Mute", { $context: "Bot notifications" })}
+              </TooltipPopup>
             </Tooltip>
           </span>
           {links.length > 0 ? (
             <button
               type="button"
               aria-expanded={expanded}
-              aria-label={`${expanded ? "Hide" : "Show"} coding threads for ${bot.name}`}
+              aria-label={
+                expanded
+                  ? gt("Hide coding threads for {name}", { name: bot.name })
+                  : gt("Show coding threads for {name}", { name: bot.name })
+              }
               onClick={() => toggleExpanded(key)}
               className={cn(
                 "inline-flex h-5 cursor-pointer items-center gap-0.5 rounded-full px-1.5 text-2xs font-medium tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
@@ -378,7 +403,7 @@ function BotEntry(props: {
                   : "bg-sidebar-control-surface/60 text-sidebar-muted-foreground hover:text-sidebar-foreground",
               )}
             >
-              {pendingCount > 0 ? `${pendingCount} active` : links.length}
+              {pendingCount > 0 ? gt("{count} active", { count: pendingCount }) : links.length}
               <ChevronRightIcon
                 className={cn(
                   "size-3 transition-transform duration-150 motion-reduce:transition-none",
@@ -414,6 +439,7 @@ function CodingThreadRow(props: {
   readonly active: boolean;
 }) {
   const { environmentId, link } = props.scoped;
+  const gt = useGT();
   const shell = useQuietThreadShell(scopeThreadRef(environmentId, link.threadId));
   const openThread = useOpenThreadInMode();
   return (
@@ -425,7 +451,7 @@ function CodingThreadRow(props: {
     >
       <CornerDownRightIcon className="size-3 shrink-0 text-sidebar-muted-foreground" aria-hidden />
       <span className="min-w-0 flex-1 truncate text-sidebar-foreground">
-        {shell?.title ?? "Thread not loaded"}
+        {shell?.title ?? gt("Thread not loaded")}
       </span>
       {shell?.branch ? (
         <span className="max-w-20 shrink-0 truncate font-mono text-2xs text-sidebar-muted-foreground">

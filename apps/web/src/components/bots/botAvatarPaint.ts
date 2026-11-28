@@ -4,12 +4,13 @@ import {
   isBotHexColor,
 } from "@t3tools/client-runtime/bot-avatar";
 import { BOT_DEFAULT_COLOR } from "@t3tools/contracts";
+import { msg } from "gt-react";
 import type { CSSProperties } from "react";
 
 export const BOT_VISUAL_STYLES = [
-  { id: "flat", label: "Flat" },
-  { id: "glass", label: "Wallpaper glass" },
-  { id: "minimal", label: "Outline" },
+  { id: "flat", label: msg("Flat") },
+  { id: "glass", label: msg("Wallpaper glass") },
+  { id: "minimal", label: msg("Outline") },
 ] as const satisfies ReadonlyArray<{ id: BotVisualStyle; label: string }>;
 
 const FUNCTIONAL_COLOR = /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\([\d\s.,%/+-]+\)$/i;

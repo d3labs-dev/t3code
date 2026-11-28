@@ -2,6 +2,7 @@ import {
   BOT_EXCHANGE_STATUS_LABEL,
   type ScopedCodingThreadSupervisor,
 } from "@t3tools/client-runtime/state/bots";
+import { T, Var } from "gt-react";
 import { ArrowUpRightIcon } from "lucide-react";
 
 import { Button } from "../ui/button";
@@ -25,7 +26,12 @@ export function BotSupervisedBanner({
       >
         <BotAvatar icon={bot.icon} color={bot.color} size="xs" status={botEntry.status} />
         <span className="min-w-0 truncate text-muted-foreground">
-          Supervised by <span className="font-medium text-foreground">{bot.name}</span>
+          <T>
+            Supervised by{" "}
+            <span className="font-medium text-foreground">
+              <Var>{bot.name}</Var>
+            </span>
+          </T>
         </span>
         <span
           className={
@@ -50,7 +56,9 @@ export function BotSupervisedBanner({
           className="ms-auto shrink-0"
           onClick={() => openThread("bots", botEntry.environmentId, bot.threadId)}
         >
-          Open {bot.name}
+          <T>
+            Open <Var>{bot.name}</Var>
+          </T>
           <ArrowUpRightIcon aria-hidden />
         </Button>
       </div>

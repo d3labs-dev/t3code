@@ -190,6 +190,7 @@ const ROUTE_TITLES: Readonly<Record<string, string>> = {
   SettingsArchive: msg("Archive", { $context: "noun, settings page of archived threads" }),
   SettingsNavigation: msg("Navigation tabs"),
   SettingsAppearance: msg("Appearance"),
+  SettingsPhoneBackground: msg("Background", { $context: "settings page title, phone wallpaper" }),
   SettingsProjectGrouping: msg("General"),
   SettingsOrganization: msg("General"),
   SettingsLanguage: msg("Language"),
@@ -336,7 +337,7 @@ const SETTINGS_SCREENS = {
   SettingsPhoneBackground: createNativeStackScreen({
     screen: PhoneBackgroundRouteScreen,
     linking: "settings/appearance/background",
-    options: pageRoute({ title: "Background", itemStyle: "standard" }),
+    options: settingsPage(),
   }),
   SettingsProjectGrouping: createNativeStackScreen({
     screen: SettingsProjectGroupingRouteScreen,

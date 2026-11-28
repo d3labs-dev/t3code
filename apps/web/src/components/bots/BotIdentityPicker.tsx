@@ -9,9 +9,11 @@ import {
   isBotImageIcon,
   isCustomBotEmoji,
 } from "@t3tools/client-runtime/bot-avatar";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { ImageUpIcon, PlusIcon, WallpaperIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { m } from "../../i18n/messages";
 import { hexToHsv, hsvToHex } from "../../lib/color";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -25,9 +27,9 @@ import { BotAvatar, BotShapeSilhouette } from "./BotAvatar";
 import { BOT_VISUAL_STYLES } from "./botAvatarPaint";
 
 const SOURCES = [
-  { id: "shape", label: "Shape" },
-  { id: "emoji", label: "Emoji" },
-  { id: "upload", label: "Upload" },
+  { id: "shape", label: msg("Shape") },
+  { id: "emoji", label: msg("Emoji") },
+  { id: "upload", label: msg("Upload", { $context: "avatar source: an uploaded image" }) },
 ] as const;
 type AvatarSource = (typeof SOURCES)[number]["id"];
 
@@ -54,7 +56,7 @@ async function readAvatarImage(file: Blob): Promise<string> {
     canvas.width = AVATAR_IMAGE_SIZE;
     canvas.height = AVATAR_IMAGE_SIZE;
     const context = canvas.getContext("2d");
-    if (context === null) throw new Error("This browser can't resize images.");
+    if (context === null) throw new Error(m(msg("This browser can't resize images.")));
     context.imageSmoothingQuality = "high";
     context.drawImage(
       bitmap,
@@ -79,6 +81,7 @@ function CustomColorPanel(props: {
   readonly initialColor: string;
   readonly onChange: (color: string) => void;
 }) {
+  const gt = useGT();
   const [hsv, setHsv] = useState(() => hexToHsv(props.initialColor));
   const [hexDraft, setHexDraft] = useState<string | null>(null);
   const currentColor = hsvToHex(hsv.h, hsv.s, hsv.v);
@@ -89,14 +92,14 @@ function CustomColorPanel(props: {
   return (
     <div className="w-56">
       <ColorSaturationValuePlane
-        label="Bot color"
+        label={gt("Bot color")}
         value={hsv}
         onChange={changeHsv}
         variant="edge"
       />
       <div className="grid gap-3 p-3">
         <ColorHueSlider
-          label="Bot color hue"
+          label={gt("Bot color hue")}
           value={hsv.h}
           onChange={(h) => changeHsv({ ...hsv, h })}
         />
@@ -105,7 +108,7 @@ function CustomColorPanel(props: {
           size="compact"
           font="mono"
           spellCheck={false}
-          aria-label="Custom hex color"
+          aria-label={gt("Custom hex color")}
           value={hexDraft ?? currentColor}
           onChange={(event) => {
             const next = event.currentTarget.value.trim();
@@ -126,14 +129,16 @@ function ColorRow(props: {
   readonly disabled: boolean;
   readonly onColorChange: (color: string) => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const normalized = props.color.trim().toLowerCase();
   const curated = BOT_AVATAR_COLORS.some((option) => option.value === normalized);
   const customColor = !curated && isBotHexColor(normalized) ? normalized : null;
   return (
-    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Bot color">
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={gt("Bot color")}>
       {BOT_AVATAR_COLORS.map((option) => {
         const theme = option.value === BOT_THEME_COLOR;
-        const label = theme ? "Match wallpaper" : option.label;
+        const label = theme ? gt("Match wallpaper") : resolve(option.label);
         return (
           <Tooltip key={option.id}>
             <TooltipTrigger
@@ -166,7 +171,7 @@ function ColorRow(props: {
                   "border border-dashed border-border text-muted-foreground hover:text-foreground",
               )}
               style={customColor === null ? undefined : { backgroundColor: customColor }}
-              aria-label="Custom color"
+              aria-label={gt("Custom color")}
               aria-pressed={customColor !== null}
               disabled={props.disabled}
             />
@@ -192,9 +197,11 @@ function ShapeGrid(props: {
   readonly disabled: boolean;
   readonly onIconChange: (icon: string) => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const selectedId = findBotAvatarShape(props.icon)?.id ?? null;
   return (
-    <div className="grid grid-cols-7 gap-1" role="group" aria-label="Bot shape">
+    <div className="grid grid-cols-7 gap-1" role="group" aria-label={gt("Bot shape")}>
       {BOT_AVATAR_SHAPES.map((shape) => {
         const selected = selectedId === shape.id;
         return (
@@ -204,7 +211,7 @@ function ShapeGrid(props: {
                 <button
                   type="button"
                   className="flex h-11 cursor-pointer items-center justify-center rounded-xl text-muted-foreground/55 outline-none transition-colors hover:text-muted-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:bg-accent disabled:pointer-events-none disabled:opacity-64 motion-reduce:transition-none"
-                  aria-label={shape.label}
+                  aria-label={resolve(shape.label)}
                   aria-pressed={selected}
                   disabled={props.disabled}
                   onClick={() => props.onIconChange(shape.id)}
@@ -222,7 +229,7 @@ function ShapeGrid(props: {
                 <BotShapeSilhouette shape={shape} className="size-6" />
               )}
             </TooltipTrigger>
-            <TooltipPopup>{shape.label}</TooltipPopup>
+            <TooltipPopup>{resolve(shape.label)}</TooltipPopup>
           </Tooltip>
         );
       })}
@@ -235,14 +242,15 @@ function EmojiChooser(props: {
   readonly disabled: boolean;
   readonly onIconChange: (icon: string) => void;
 }) {
+  const gt = useGT();
   const [draft, setDraft] = useState<string | null>(null);
   const iconIsEmoji = isCustomBotEmoji(props.icon);
   return (
     <div className="flex flex-col gap-2">
       <Input
         disabled={props.disabled}
-        aria-label="Custom emoji"
-        placeholder="Type or paste an emoji"
+        aria-label={gt("Custom emoji")}
+        placeholder={gt("Type or paste an emoji")}
         value={draft ?? (iconIsEmoji ? props.icon : "")}
         onChange={(event) => {
           const value = event.currentTarget.value;
@@ -255,7 +263,7 @@ function EmojiChooser(props: {
         }}
         onBlur={() => setDraft(null)}
       />
-      <div className="grid grid-cols-8 gap-1" role="group" aria-label="Suggested emoji">
+      <div className="grid grid-cols-8 gap-1" role="group" aria-label={gt("Suggested emoji")}>
         {QUICK_EMOJI.map((emoji) => (
           <button
             key={emoji}
@@ -280,6 +288,7 @@ function ImageUploader(props: {
   readonly disabled: boolean;
   readonly onIconChange: (icon: string) => void;
 }) {
+  const gt = useGT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [reading, setReading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -290,8 +299,8 @@ function ImageUploader(props: {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Unsupported image",
-          description: "Choose a PNG, JPEG, WebP or GIF.",
+          title: gt("Unsupported image"),
+          description: gt("Choose a PNG, JPEG, WebP or GIF."),
         }),
       );
       return;
@@ -303,7 +312,7 @@ function ImageUploader(props: {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Could not read image",
+          title: gt("Could not read image"),
           description: error instanceof Error ? error.message : String(error),
         }),
       );
@@ -350,10 +359,14 @@ function ImageUploader(props: {
         )}
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-medium text-foreground">
-            {reading ? "Reading image…" : hasImage ? "Replace image" : "Choose an image"}
+            {reading
+              ? gt("Reading image…")
+              : hasImage
+                ? gt("Replace image")
+                : gt("Choose an image")}
           </span>
           <span className="text-xs text-muted-foreground">
-            Or drop one here. PNG, JPEG, WebP or GIF, cropped to a circle.
+            <T>Or drop one here. PNG, JPEG, WebP or GIF, cropped to a circle.</T>
           </span>
         </span>
       </button>
@@ -366,7 +379,7 @@ function ImageUploader(props: {
             disabled={props.disabled}
             onClick={() => props.onIconChange(DEFAULT_BOT_AVATAR_SHAPE.id)}
           >
-            Remove image
+            <T>Remove image</T>
           </Button>
         </div>
       ) : null}
@@ -392,11 +405,13 @@ export function BotIdentityPicker({
   readonly onVisualStyleChange?: (style: BotVisualStyle) => void;
   readonly disabled?: boolean;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const [source, setSource] = useState<AvatarSource>(() => sourceOf(icon));
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <ToggleGroup
-        aria-label="Avatar source"
+        aria-label={gt("Avatar source")}
         className="w-full"
         value={[source]}
         onValueChange={(values) => {
@@ -406,7 +421,7 @@ export function BotIdentityPicker({
       >
         {SOURCES.map((option) => (
           <Toggle key={option.id} value={option.id} className="flex-1">
-            {option.label}
+            {resolve(option.label)}
           </Toggle>
         ))}
       </ToggleGroup>
@@ -428,9 +443,11 @@ export function BotIdentityPicker({
       )}
       {onVisualStyleChange && source !== "upload" ? (
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Avatar finish</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            <T>Avatar finish</T>
+          </span>
           <ToggleGroup
-            aria-label="Avatar finish"
+            aria-label={gt("Avatar finish")}
             className="w-full"
             value={visualStyle ? [visualStyle] : []}
             onValueChange={(values) => {
@@ -441,11 +458,13 @@ export function BotIdentityPicker({
             {BOT_VISUAL_STYLES.map((style) => (
               <Toggle key={style.id} value={style.id} className="flex-1">
                 <BotAvatar icon={icon} color={color} size="xs" visualStyle={style.id} />
-                {style.label}
+                {resolve(style.label)}
               </Toggle>
             ))}
           </ToggleGroup>
-          <p className="text-2xs text-muted-foreground">Applies to every Bot on this device.</p>
+          <p className="text-2xs text-muted-foreground">
+            <T>Applies to every Bot on this device.</T>
+          </p>
         </div>
       ) : null}
     </div>

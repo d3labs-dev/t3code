@@ -1,4 +1,6 @@
 import type { ScheduledTask } from "@t3tools/contracts";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 
 type McpEventSchedule = Extract<ScheduledTask["schedule"], { readonly type: "mcp_event" }>;
 
@@ -11,22 +13,31 @@ export const isFormScheduledTask = (task: ScheduledTask): task is FormScheduledT
   task.schedule.type !== "mcp_event";
 
 /** Such as "On whatsapp.message.received (chatType=group) from executor". */
-export function mcpEventScheduleLabel(schedule: McpEventSchedule): string {
+export function mcpEventScheduleLabel(
+  schedule: McpEventSchedule,
+  resolve: MFunctionType = mFallback,
+): string {
   const filters = Object.entries(schedule.arguments).map(
     ([name, value]) => `${name}=${String(value)}`,
   );
-  return `On ${schedule.event}${filters.length === 0 ? "" : ` (${filters.join(", ")})`} from ${schedule.server}`;
+  const { event, server } = schedule;
+  return filters.length === 0
+    ? resolve(msg("On {event} from {server}", { event, server }))
+    : resolve(
+        msg("On {event} ({filters}) from {server}", { event, filters: filters.join(", "), server }),
+      );
 }
 
 export function mcpEventSubscriptionLabel(
   subscription: NonNullable<ScheduledTask["subscription"]>,
+  resolve: MFunctionType = mFallback,
 ): string {
   switch (subscription.status) {
     case "active":
-      return "Subscribed";
+      return resolve(msg("Subscribed"));
     case "pending":
-      return "Subscribing…";
+      return resolve(msg("Subscribing…"));
     case "failed":
-      return "Subscription failed";
+      return resolve(msg("Subscription failed"));
   }
 }

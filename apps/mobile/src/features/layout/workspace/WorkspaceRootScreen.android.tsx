@@ -101,7 +101,12 @@ function WorkspaceRoot() {
                     layout.usesSplitView ? (
                       <>
                         <NativeStackScreenOptions options={{ headerShown: false }} />
-                        <AppBar embedded title="Bots" />
+                        <AppBar
+                          embedded
+                          title={gt("Bots", {
+                            $context: "navigation tab, persistent named agents",
+                          })}
+                        />
                         <WorkspaceEmptyDetail tab="bots" />
                       </>
                     ) : (

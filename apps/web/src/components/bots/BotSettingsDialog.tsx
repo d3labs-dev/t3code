@@ -18,6 +18,7 @@ import {
   TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
@@ -64,16 +65,16 @@ import { BotIdentityPicker } from "./BotIdentityPicker";
 import { type BotSettingsTab, useBotsUiStore } from "./botsUiStore";
 
 const TABS = [
-  { id: "profile", label: "Profile" },
-  { id: "soul", label: "Soul & Memory" },
-  { id: "capabilities", label: "Capabilities" },
+  { id: "profile", label: msg("Profile") },
+  { id: "soul", label: msg("Soul & Memory") },
+  { id: "capabilities", label: msg("Capabilities") },
 ] as const satisfies ReadonlyArray<{ id: BotSettingsTab; label: string }>;
 
 const PROACTIVE_INTERVALS = [
-  { minutes: 15, label: "Every 15m" },
-  { minutes: 30, label: "Every 30m" },
-  { minutes: 60, label: "Every 1h" },
-  { minutes: 120, label: "Every 2h" },
+  { minutes: 15, label: msg("Every 15m") },
+  { minutes: 30, label: msg("Every 30m") },
+  { minutes: 60, label: msg("Every 1h") },
+  { minutes: 120, label: msg("Every 2h") },
 ] as const;
 
 const localTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -81,8 +82,8 @@ const localTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 
 const formatKilobytes = (bytes: number) => String(Math.ceil((bytes * 10) / 1024) / 10);
 
 const SYSTEM_PROMPT_MODES: Record<BotSystemPromptMode, string> = {
-  custom: "Custom (lightweight)",
-  preset: "Claude Code preset",
+  custom: msg("Custom (lightweight)"),
+  preset: msg("Claude Code preset"),
 };
 
 export function BotSettingsDialog() {
@@ -109,6 +110,8 @@ function BotSettingsDialogBody(props: {
   readonly entry: ScopedBotEntry;
   readonly initialTab: BotSettingsTab;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const { bot, environmentId } = props.entry;
   const open = useBotsUiStore((state) => state.botSettingsOpen);
   const close = useBotsUiStore((state) => state.closeBotSettings);
@@ -129,7 +132,7 @@ function BotSettingsDialogBody(props: {
   const requestClose = async () => {
     if (changeCount > 0) {
       const discard =
-        (await requestConfirmDialog(`Discard unsaved changes to ${bot.name}?`, {
+        (await requestConfirmDialog(gt("Discard unsaved changes to {name}?", { name: bot.name }), {
           variant: "destructive",
         })) ?? true;
       if (!discard) return;
@@ -145,7 +148,7 @@ function BotSettingsDialogBody(props: {
   const save = async () => {
     if (saveInput === null || busy) return;
     setBusy(true);
-    const saved = await update(environmentId, saveInput, "Could not save Bot settings");
+    const saved = await update(environmentId, saveInput, gt("Could not save Bot settings"));
     setBusy(false);
     if (saved) setPatch({});
   };
@@ -165,7 +168,7 @@ function BotSettingsDialogBody(props: {
     >
       <WizardPopup size="wide">
         <WizardHeader
-          title={`${bot.name} settings`}
+          title={gt("{name} settings", { name: bot.name })}
           identity={
             <div className="flex min-w-0 items-center gap-3 pe-8">
               <BotAvatar
@@ -187,14 +190,14 @@ function BotSettingsDialogBody(props: {
               </div>
               {bot.archivedAt !== null ? (
                 <Badge size="sm" variant="outline">
-                  Archived
+                  <T>Archived</T>
                 </Badge>
               ) : null}
             </div>
           }
         >
           <ToggleGroup
-            aria-label="Bot settings section"
+            aria-label={gt("Bot settings section")}
             className="mt-3 w-full"
             value={[tab]}
             onValueChange={(values) => {
@@ -204,9 +207,9 @@ function BotSettingsDialogBody(props: {
           >
             {TABS.map((option) => (
               <SegmentToggle key={option.id} value={option.id} className="flex-1">
-                {option.label}
+                {resolve(option.label)}
                 {option.id === "soul" && dirtyDocuments.length > 0 ? (
-                  <span className="size-1.5 rounded-full bg-warning" aria-label="Unsaved" />
+                  <span className="size-1.5 rounded-full bg-warning" aria-label={gt("Unsaved")} />
                 ) : null}
               </SegmentToggle>
             ))}
@@ -236,26 +239,29 @@ function BotSettingsDialogBody(props: {
           leading={
             <span className="self-center text-xs text-muted-foreground">
               {nameMissing
-                ? "A Bot needs a name."
+                ? gt("A Bot needs a name.")
                 : changeCount === 0
-                  ? "All changes saved"
-                  : `${changeCount} unsaved ${changeCount === 1 ? "change" : "changes"}`}
+                  ? gt("All changes saved")
+                  : gt(
+                      "{count, plural, one {{count} unsaved change} other {{count} unsaved changes}}",
+                      { count: changeCount },
+                    )}
             </span>
           }
         >
           {changeCount > 0 ? (
             <Button variant="ghost" disabled={busy} onClick={discard}>
-              Discard
+              <T>Discard</T>
             </Button>
           ) : null}
           <Button variant="outline" onClick={() => void requestClose()}>
-            Close
+            <T>Close</T>
           </Button>
           <Button
             disabled={!canUpdate || changeCount === 0 || nameMissing || busy}
             onClick={() => void save()}
           >
-            {busy ? "Saving…" : "Save"}
+            {busy ? gt("Saving…") : gt("Save")}
           </Button>
         </WizardFooter>
       </WizardPopup>
@@ -269,6 +275,7 @@ function ProfileSection(props: {
   readonly editable: boolean;
   readonly set: (patch: BotSettingsPatch) => void;
 }) {
+  const gt = useGT();
   const { shown, editable, set } = props;
   const visualStyle = useBotsUiStore((state) => state.visualStyle);
   const setVisualStyle = useBotsUiStore((state) => state.setVisualStyle);
@@ -279,7 +286,7 @@ function ProfileSection(props: {
           <BotAvatar icon={shown.icon} color={shown.color} size="xl" muted={shown.muted} />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <BotField label="Name" htmlFor="bot-settings-name">
+          <BotField label={gt("Name")} htmlFor="bot-settings-name">
             <Input
               id="bot-settings-name"
               disabled={!editable}
@@ -288,19 +295,19 @@ function ProfileSection(props: {
               onChange={(event) => set({ name: event.currentTarget.value })}
             />
           </BotField>
-          <BotField label="Role" htmlFor="bot-settings-role">
+          <BotField label={gt("Role", { $context: "Bot job title" })} htmlFor="bot-settings-role">
             <Input
               id="bot-settings-role"
-              placeholder="Chief of Staff, Designer, Engineering Lead"
+              placeholder={gt("Chief of Staff, Designer, Engineering Lead")}
               disabled={!editable}
               value={shown.role}
               onChange={(event) => set({ role: event.currentTarget.value })}
             />
           </BotField>
-          <BotField label="Group" htmlFor="bot-settings-group">
+          <BotField label={gt("Group", { $context: "Bot group" })} htmlFor="bot-settings-group">
             <Input
               id="bot-settings-group"
-              placeholder="Ungrouped"
+              placeholder={gt("Ungrouped")}
               disabled={!editable}
               value={shown.groupName ?? ""}
               onChange={(event) =>
@@ -323,11 +330,11 @@ function ProfileSection(props: {
       />
       <SettingsGroup>
         <SettingsRow
-          title="Primary Bot"
-          description="Pinned to the top of the Bots sidebar."
+          title={gt("Primary Bot")}
+          description={gt("Pinned to the top of the Bots sidebar.")}
           control={
             <Switch
-              aria-label="Primary Bot"
+              aria-label={gt("Primary Bot")}
               checked={shown.isPrimary}
               disabled={!editable}
               onCheckedChange={(isPrimary) => set({ isPrimary })}
@@ -342,11 +349,11 @@ function ProfileSection(props: {
           />
         ) : null}
         <SettingsRow
-          title="Muted"
-          description="Shown asleep and dimmed in the sidebar."
+          title={gt("Muted", { $context: "Bot notifications are off" })}
+          description={gt("Shown asleep and dimmed in the sidebar.")}
           control={
             <Switch
-              aria-label="Muted"
+              aria-label={gt("Muted", { $context: "Bot notifications are off" })}
               checked={shown.muted}
               disabled={!editable}
               onCheckedChange={(muted) => set({ muted })}
@@ -360,6 +367,7 @@ function ProfileSection(props: {
 }
 
 function BotDangerZone({ entry }: { readonly entry: ScopedBotEntry }) {
+  const gt = useGT();
   const { bot, environmentId } = entry;
   const index = useBotsIndex();
   const canUpdate = useAtomValue(botsEnvironment.updateBot.permissionAtom(environmentId));
@@ -381,18 +389,22 @@ function BotDangerZone({ entry }: { readonly entry: ScopedBotEntry }) {
     const changed = await update(
       environmentId,
       { botId: bot.id, archived: next },
-      next ? "Could not archive Bot" : "Could not restore Bot",
+      next ? gt("Could not archive Bot") : gt("Could not restore Bot"),
     );
     setBusy(false);
     if (!changed || !next) return;
     toastManager.add(
       stackedThreadToast({
         type: "success",
-        title: `Archived ${bot.name}`,
+        title: gt("Archived {name}", { name: bot.name }),
         actionProps: {
-          children: "Undo",
+          children: gt("Undo"),
           onClick: () => {
-            void update(environmentId, { botId: bot.id, archived: false }, "Could not restore Bot");
+            void update(
+              environmentId,
+              { botId: bot.id, archived: false },
+              gt("Could not restore Bot"),
+            );
           },
         },
       }),
@@ -403,7 +415,10 @@ function BotDangerZone({ entry }: { readonly entry: ScopedBotEntry }) {
     if (busy) return;
     const confirmed =
       (await requestConfirmDialog(
-        `Delete ${bot.name}? Its chat is deleted and it stops watching its coding threads. Its folder stays on disk.`,
+        gt(
+          "Delete {name}? Its chat is deleted and it stops watching its coding threads. Its folder stays on disk.",
+          { name: bot.name },
+        ),
         { variant: "destructive" },
       )) ?? false;
     if (!confirmed) return;
@@ -411,7 +426,7 @@ function BotDangerZone({ entry }: { readonly entry: ScopedBotEntry }) {
     const result = await deleteBot({ environmentId, input: { botId: bot.id } });
     setBusy(false);
     if (result._tag === "Failure") {
-      reportBotFailure("Could not delete Bot", result);
+      reportBotFailure(gt("Could not delete Bot"), result);
       return;
     }
     close();
@@ -426,11 +441,11 @@ function BotDangerZone({ entry }: { readonly entry: ScopedBotEntry }) {
   return (
     <SettingsGroup>
       <SettingsRow
-        title={archived ? "Restore Bot" : "Archive Bot"}
+        title={archived ? gt("Restore Bot") : gt("Archive Bot")}
         description={
           archived
-            ? "Brings this Bot back to the sidebar."
-            : "Hides this Bot from the sidebar. You can restore it later."
+            ? gt("Brings this Bot back to the sidebar.")
+            : gt("Hides this Bot from the sidebar. You can restore it later.")
         }
         control={
           <Button
@@ -440,13 +455,13 @@ function BotDangerZone({ entry }: { readonly entry: ScopedBotEntry }) {
             onClick={() => void setArchived(!archived)}
           >
             {archived ? <ArchiveRestoreIcon aria-hidden /> : <ArchiveIcon aria-hidden />}
-            {archived ? "Restore" : "Archive"}
+            {archived ? gt("Restore") : gt("Archive")}
           </Button>
         }
       />
       <SettingsRow
-        title="Delete Bot"
-        description="Deletes its chat and stops its watches. Its folder stays on disk."
+        title={gt("Delete Bot")}
+        description={gt("Deletes its chat and stops its watches. Its folder stays on disk.")}
         control={
           <Button
             size="sm"
@@ -455,7 +470,7 @@ function BotDangerZone({ entry }: { readonly entry: ScopedBotEntry }) {
             onClick={() => void remove()}
           >
             <Trash2Icon aria-hidden />
-            Delete
+            <T>Delete</T>
           </Button>
         }
       />
@@ -468,6 +483,8 @@ function ProactiveCheckInRows(props: {
   readonly editable: boolean;
   readonly onChange: (proactive: BotProactiveConfig) => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const { proactive, editable, onChange } = props;
   const interval = PROACTIVE_INTERVALS.find(({ minutes }) => minutes === proactive.intervalMinutes);
   const setActiveHour = (field: "activeHoursStart" | "activeHoursEnd", value: string) => {
@@ -476,11 +493,14 @@ function ProactiveCheckInRows(props: {
   return (
     <>
       <SettingsRow
-        title="Proactive check-ins"
-        description="Periodically check NOW.md and HEARTBEAT.md in the background and message you only when something needs attention."
+        title={gt("Proactive check-ins")}
+        description={gt(
+          "Periodically check {nowFile} and {heartbeatFile} in the background and message you only when something needs attention.",
+          { nowFile: "NOW.md", heartbeatFile: "HEARTBEAT.md" },
+        )}
         control={
           <Switch
-            aria-label="Proactive check-ins"
+            aria-label={gt("Proactive check-ins")}
             checked={proactive.enabled}
             disabled={!editable}
             onCheckedChange={(enabled) =>
@@ -497,8 +517,8 @@ function ProactiveCheckInRows(props: {
       {proactive.enabled ? (
         <>
           <SettingsRow
-            title="Cadence"
-            description="How often the Bot checks in."
+            title={gt("Cadence")}
+            description={gt("How often the Bot checks in.")}
             control={
               <Select
                 value={String(proactive.intervalMinutes)}
@@ -508,15 +528,17 @@ function ProactiveCheckInRows(props: {
                   if (next) onChange({ ...proactive, intervalMinutes: next.minutes });
                 }}
               >
-                <SelectTrigger aria-label="Check-in cadence">
+                <SelectTrigger aria-label={gt("Check-in cadence")}>
                   <SelectValue>
-                    {interval?.label ?? `Every ${proactive.intervalMinutes}m`}
+                    {interval
+                      ? resolve(interval.label)
+                      : gt("Every {minutes}m", { minutes: proactive.intervalMinutes })}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup>
                   {PROACTIVE_INTERVALS.map((option) => (
                     <SelectItem key={option.minutes} value={String(option.minutes)}>
-                      {option.label}
+                      {resolve(option.label)}
                     </SelectItem>
                   ))}
                 </SelectPopup>
@@ -524,24 +546,28 @@ function ProactiveCheckInRows(props: {
             }
           />
           <SettingsRow
-            title="Active hours"
-            description={`Check-ins run only between these times (${proactive.timezone}).`}
+            title={gt("Active hours")}
+            description={gt("Check-ins run only between these times ({timezone}).", {
+              timezone: proactive.timezone,
+            })}
             control={
               <div className="flex items-center gap-2">
                 <Input
                   type="time"
                   nativeInput
-                  aria-label="Active hours start"
+                  aria-label={gt("Active hours start")}
                   className="w-auto"
                   disabled={!editable}
                   value={proactive.activeHoursStart}
                   onChange={(event) => setActiveHour("activeHoursStart", event.currentTarget.value)}
                 />
-                <span className="text-xs text-muted-foreground">to</span>
+                <span className="text-xs text-muted-foreground">
+                  <T context="between a start and an end time">to</T>
+                </span>
                 <Input
                   type="time"
                   nativeInput
-                  aria-label="Active hours end"
+                  aria-label={gt("Active hours end")}
                   className="w-auto"
                   disabled={!editable}
                   value={proactive.activeHoursEnd}
@@ -566,6 +592,7 @@ function SoulSection(props: {
   readonly editable: boolean;
   readonly onChange: (id: BotDocumentName, value: string) => void;
 }) {
+  const gt = useGT();
   return (
     <div className="flex flex-col gap-5">
       <BotFolderPath path={props.folderPath} />
@@ -584,7 +611,7 @@ function SoulSection(props: {
               {props.dirty.includes(document.id) ? (
                 <span className="flex items-center gap-1 text-2xs text-warning-foreground">
                   <span className="size-1.5 rounded-full bg-warning" aria-hidden />
-                  Unsaved
+                  <T>Unsaved</T>
                 </span>
               ) : null}
               {document.softCapBytes !== null && props.saved !== null ? (
@@ -596,19 +623,24 @@ function SoulSection(props: {
                       : "text-muted-foreground",
                   )}
                 >
-                  {formatKilobytes(bytes)} / {formatKilobytes(document.softCapBytes)} KB
+                  {gt("{used} / {limit} KB", {
+                    used: formatKilobytes(bytes),
+                    limit: formatKilobytes(document.softCapBytes),
+                  })}
                 </span>
               ) : null}
             </div>
             {props.loadError !== null ? (
               <p className="text-xs text-destructive">
-                Could not load {document.file}: {props.loadError}
+                <T>
+                  Could not load <Var>{document.file}</Var>: <Var>{props.loadError}</Var>
+                </T>
               </p>
             ) : (
               <Textarea
                 id={`bot-settings-${document.id}`}
                 rows={document.id === "soul" ? 12 : 8}
-                placeholder={props.saved === null ? "Loading…" : document.placeholder}
+                placeholder={props.saved === null ? gt("Loading…") : document.placeholder}
                 disabled={!props.editable}
                 value={value}
                 onChange={(event) => props.onChange(document.id, event.currentTarget.value)}
@@ -622,8 +654,9 @@ function SoulSection(props: {
 }
 
 function BotFolderPath({ path }: { readonly path: string }) {
+  const gt = useGT();
   const { copyToClipboard, isCopied } = useCopyToClipboard({
-    target: namedClipboardTarget("Bot folder path"),
+    target: namedClipboardTarget(gt("Bot folder path")),
   });
   return (
     <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-muted/30 py-1 ps-3 pe-1">
@@ -635,14 +668,14 @@ function BotFolderPath({ path }: { readonly path: string }) {
             <Button
               size="icon-xs"
               variant="ghost-muted"
-              aria-label="Copy folder path"
+              aria-label={gt("Copy folder path")}
               onClick={() => copyToClipboard(path)}
             />
           }
         >
           {isCopied ? <CheckIcon aria-hidden /> : <CopyIcon aria-hidden />}
         </TooltipTrigger>
-        <TooltipPopup>{isCopied ? "Copied" : "Copy path"}</TooltipPopup>
+        <TooltipPopup>{isCopied ? gt("Copied") : gt("Copy path")}</TooltipPopup>
       </Tooltip>
     </div>
   );
@@ -717,6 +750,7 @@ function CustomMcpServersEditor(props: {
   readonly disabled: boolean;
   readonly onChange: (servers: BotRecord["customMcpServers"]) => void;
 }) {
+  const gt = useGT();
   const [name, setName] = useState("");
   const [transport, setTransport] = useState<"http" | "sse">("http");
   const [url, setUrl] = useState("");
@@ -802,7 +836,9 @@ function CustomMcpServersEditor(props: {
                     >
                       <LockIcon className="size-3.5" aria-hidden />
                     </TooltipTrigger>
-                    <TooltipPopup>Includes custom headers</TooltipPopup>
+                    <TooltipPopup>
+                      <T>Includes custom headers</T>
+                    </TooltipPopup>
                   </Tooltip>
                 ) : null}
                 <Tooltip>
@@ -811,7 +847,7 @@ function CustomMcpServersEditor(props: {
                       <Button
                         size="icon-xs"
                         variant="ghost-muted"
-                        aria-label={`Remove ${serverName}`}
+                        aria-label={gt("Remove {name}", { name: serverName })}
                         disabled={props.disabled}
                         onClick={() => remove(serverName)}
                       />
@@ -819,23 +855,25 @@ function CustomMcpServersEditor(props: {
                   >
                     <XIcon aria-hidden />
                   </TooltipTrigger>
-                  <TooltipPopup>Remove {serverName}</TooltipPopup>
+                  <TooltipPopup>{gt("Remove {name}", { name: serverName })}</TooltipPopup>
                 </Tooltip>
               </div>
             );
           })}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">No custom MCP servers yet.</p>
+        <p className="text-xs text-muted-foreground">
+          <T>No custom MCP servers yet.</T>
+        </p>
       )}
       <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/20 p-2.5">
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             size="sm"
             className="sm:w-40 sm:shrink-0"
-            aria-label="Custom MCP server name"
+            aria-label={gt("Custom MCP server name")}
             aria-invalid={nameIsReserved || undefined}
-            placeholder="Name (e.g. whatsapp)"
+            placeholder={gt("Name (e.g. whatsapp)")}
             disabled={props.disabled}
             value={name}
             onChange={(event) => setName(event.currentTarget.value)}
@@ -851,7 +889,7 @@ function CustomMcpServersEditor(props: {
             <SelectTrigger
               size="sm"
               className="w-full sm:w-24 sm:min-w-24 sm:shrink-0"
-              aria-label="Custom MCP server transport"
+              aria-label={gt("Custom MCP server transport")}
             >
               <SelectValue>
                 {CUSTOM_MCP_TRANSPORTS.find((option) => option.id === transport)?.label}
@@ -869,7 +907,7 @@ function CustomMcpServersEditor(props: {
             size="sm"
             font="mono"
             className="min-w-0 flex-1"
-            aria-label="Custom MCP server URL"
+            aria-label={gt("Custom MCP server URL")}
             aria-invalid={urlInvalid || undefined}
             placeholder="https://..."
             disabled={props.disabled}
@@ -884,8 +922,8 @@ function CustomMcpServersEditor(props: {
             type="password"
             autoComplete="off"
             className="min-w-0 flex-1"
-            aria-label="Authorization header"
-            placeholder="Authorization header (optional)"
+            aria-label={gt("Authorization header")}
+            placeholder={gt("Authorization header (optional)")}
             disabled={props.disabled}
             value={authorization}
             onChange={(event) => setAuthorization(event.currentTarget.value)}
@@ -893,15 +931,20 @@ function CustomMcpServersEditor(props: {
           />
           <Button size="sm" variant="outline" disabled={!canAdd} onClick={add}>
             <PlusIcon aria-hidden />
-            {isUpdating ? "Update" : "Add"}
+            {isUpdating ? gt("Update", { $context: "verb, saves an existing entry" }) : gt("Add")}
           </Button>
         </div>
         {nameIsReserved ? (
           <p className="text-2xs text-destructive">
-            {RESERVED_CUSTOM_MCP_NAME} is reserved for T3 Code&apos;s built-in MCP server.
+            <T>
+              <Var>{RESERVED_CUSTOM_MCP_NAME}</Var> is reserved for T3 Code&apos;s built-in MCP
+              server.
+            </T>
           </p>
         ) : urlInvalid ? (
-          <p className="text-2xs text-destructive">Enter a valid http:// or https:// URL.</p>
+          <p className="text-2xs text-destructive">
+            <T>Enter a valid http:// or https:// URL.</T>
+          </p>
         ) : null}
       </div>
     </div>
@@ -914,6 +957,8 @@ function CapabilitiesSection(props: {
   readonly editable: boolean;
   readonly set: (patch: BotSettingsPatch) => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const { shown, editable, set } = props;
   const { environmentId } = props.entry;
   const index = useBotsIndex();
@@ -924,8 +969,8 @@ function CapabilitiesSection(props: {
     <div className="flex flex-col gap-5">
       <SettingsGroup>
         <SettingsRow
-          title="Model"
-          description="Runs every turn of this Bot."
+          title={gt("Model")}
+          description={gt("Runs every turn of this Bot.")}
           control={
             <BotModelPicker
               environmentId={environmentId}
@@ -938,8 +983,8 @@ function CapabilitiesSection(props: {
           }
         />
         <SettingsRow
-          title="Runtime permissions"
-          description="What the Bot may do without asking."
+          title={gt("Runtime permissions")}
+          description={gt("What the Bot may do without asking.")}
           control={
             <Select
               value={shown.runtimeMode}
@@ -949,13 +994,13 @@ function CapabilitiesSection(props: {
                 if (runtimeMode) set({ runtimeMode });
               }}
             >
-              <SelectTrigger aria-label="Runtime permissions">
-                <SelectValue>{runtimeModeConfig[shown.runtimeMode].label}</SelectValue>
+              <SelectTrigger aria-label={gt("Runtime permissions")}>
+                <SelectValue>{resolve(runtimeModeConfig[shown.runtimeMode].label)}</SelectValue>
               </SelectTrigger>
               <SelectPopup>
                 {runtimeModeOptions.map((mode) => (
                   <SelectItem key={mode} value={mode}>
-                    {runtimeModeConfig[mode].label}
+                    {resolve(runtimeModeConfig[mode].label)}
                   </SelectItem>
                 ))}
               </SelectPopup>
@@ -963,8 +1008,10 @@ function CapabilitiesSection(props: {
           }
         />
         <SettingsRow
-          title="System prompt"
-          description="Custom keeps turns light. The preset adds Claude Code's full instructions."
+          title={gt("System prompt")}
+          description={gt(
+            "Custom keeps turns light. The preset adds Claude Code's full instructions.",
+          )}
           control={
             <Select
               value={shown.systemPromptMode}
@@ -973,13 +1020,13 @@ function CapabilitiesSection(props: {
                 if (value === "custom" || value === "preset") set({ systemPromptMode: value });
               }}
             >
-              <SelectTrigger aria-label="System prompt">
-                <SelectValue>{SYSTEM_PROMPT_MODES[shown.systemPromptMode]}</SelectValue>
+              <SelectTrigger aria-label={gt("System prompt")}>
+                <SelectValue>{resolve(SYSTEM_PROMPT_MODES[shown.systemPromptMode])}</SelectValue>
               </SelectTrigger>
               <SelectPopup>
                 {Object.entries(SYSTEM_PROMPT_MODES).map(([mode, label]) => (
                   <SelectItem key={mode} value={mode}>
-                    {label}
+                    {resolve(label)}
                   </SelectItem>
                 ))}
               </SelectPopup>
@@ -987,7 +1034,7 @@ function CapabilitiesSection(props: {
           }
         />
       </SettingsGroup>
-      <BotField label="Built-in tools">
+      <BotField label={gt("Built-in tools")}>
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap gap-1">
             {toolNames.map((tool) => (
@@ -1010,14 +1057,14 @@ function CapabilitiesSection(props: {
             ))}
           </div>
           <ChipInput
-            label="Add tool"
-            placeholder="Add a tool, like NotebookEdit"
+            label={gt("Add tool")}
+            placeholder={gt("Add a tool, like {example}", { example: "NotebookEdit" })}
             disabled={!editable}
             onAdd={(tool) => set({ tools: [...shown.tools.filter((name) => name !== tool), tool] })}
           />
         </div>
       </BotField>
-      <BotField label="MCP servers">
+      <BotField label={gt("MCP servers")}>
         <BotMcpServerChecklist
           available={availableMcpServers}
           selected={shown.mcpServerNames}
@@ -1026,8 +1073,8 @@ function CapabilitiesSection(props: {
         />
       </BotField>
       <BotField
-        label="Custom MCP servers"
-        hint="Attach scoped MCP server URLs directly to this Bot."
+        label={gt("Custom MCP servers")}
+        hint={gt("Attach scoped MCP server URLs directly to this Bot.")}
       >
         <CustomMcpServersEditor
           servers={shown.customMcpServers}
@@ -1035,7 +1082,7 @@ function CapabilitiesSection(props: {
           onChange={(customMcpServers) => set({ customMcpServers })}
         />
       </BotField>
-      <BotField label="Skills">
+      <BotField label={gt("Skills")}>
         <div className="flex flex-col gap-2">
           {shown.skills.length > 0 ? (
             <div className="flex flex-wrap gap-1">
@@ -1045,7 +1092,7 @@ function CapabilitiesSection(props: {
                   <Button
                     size="icon-tiny"
                     variant="ghost-muted"
-                    aria-label={`Remove ${skill}`}
+                    aria-label={gt("Remove {name}", { name: skill })}
                     disabled={!editable}
                     onClick={() => set({ skills: shown.skills.filter((name) => name !== skill) })}
                   >
@@ -1055,11 +1102,13 @@ function CapabilitiesSection(props: {
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">No skills yet.</p>
+            <p className="text-xs text-muted-foreground">
+              <T>No skills yet.</T>
+            </p>
           )}
           <ChipInput
-            label="Add skill"
-            placeholder="Add a skill by name"
+            label={gt("Add skill")}
+            placeholder={gt("Add a skill by name")}
             disabled={!editable}
             onAdd={(skill) =>
               set({ skills: [...shown.skills.filter((name) => name !== skill), skill] })

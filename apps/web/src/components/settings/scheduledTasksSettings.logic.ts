@@ -57,7 +57,7 @@ export function scheduleLabel(
   locale: string = getActiveLocale(),
 ): string {
   if (schedule.type === "webhook") return resolve(msg("On webhook"));
-  if (schedule.type === "mcp_event") return mcpEventScheduleLabel(schedule);
+  if (schedule.type === "mcp_event") return mcpEventScheduleLabel(schedule, resolve);
   if (schedule.type === "once") {
     return resolve(
       msg("Once, {time}", { time: formatDateTimeTimestamp(schedule.runAt, timestampFormat) }),

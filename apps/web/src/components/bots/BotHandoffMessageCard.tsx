@@ -5,6 +5,7 @@ import {
   botHandoffStatusLabel,
 } from "@t3tools/client-runtime/bot-handoff-message";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { T, useGT } from "gt-react";
 import { ArrowUpRightIcon, ChevronDownIcon, CodeXmlIcon } from "lucide-react";
 import { use, useState } from "react";
 
@@ -35,6 +36,7 @@ export function BotHandoffMessageCard({
   readonly row: Extract<TimelineRow, { kind: "message" }>;
   readonly handoff: BotHandoffMessage;
 }) {
+  const gt = useGT();
   const ctx = use(TimelineRowCtx);
   const index = useBotsIndex();
   const openThreadInMode = useOpenThreadInMode();
@@ -63,9 +65,9 @@ export function BotHandoffMessageCard({
 
   const heading =
     handoff.kind === "from_bot"
-      ? `From ${peerBot?.bot.name ?? handoff.botName}`
+      ? gt("From {name}", { name: peerBot?.bot.name ?? handoff.botName })
       : handoff.kind === "bot_reply"
-        ? `Reply from ${peerBot?.bot.name ?? handoff.botName}`
+        ? gt("Reply from {name}", { name: peerBot?.bot.name ?? handoff.botName })
         : handoff.title;
 
   const statusLabel = botHandoffStatusLabel(handoff);
@@ -107,7 +109,9 @@ export function BotHandoffMessageCard({
             <span className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-xs font-medium text-foreground">{heading}</span>
               {handoff.kind === "coding_thread_update" ? (
-                <span className="shrink-0 text-2xs text-muted-foreground">Coding thread</span>
+                <span className="shrink-0 text-2xs text-muted-foreground">
+                  <T>Coding thread</T>
+                </span>
               ) : null}
               {statusLabel !== null ? (
                 <Badge size="sm" variant={statusVariant}>
@@ -148,8 +152,8 @@ export function BotHandoffMessageCard({
                   variant="ghost-muted"
                   aria-label={
                     handoff.kind === "coding_thread_update"
-                      ? `Open coding thread ${handoff.title}`
-                      : `Open ${peerBot?.bot.name ?? handoff.botName}`
+                      ? gt("Open coding thread {title}", { title: handoff.title })
+                      : gt("Open {name}", { name: peerBot?.bot.name ?? handoff.botName })
                   }
                   onClick={() => openThreadInMode(targetMode, environmentId, targetThreadId)}
                 />
@@ -159,8 +163,8 @@ export function BotHandoffMessageCard({
             </TooltipTrigger>
             <TooltipPopup>
               {handoff.kind === "coding_thread_update"
-                ? "Open coding thread"
-                : `Open ${peerBot?.bot.name ?? handoff.botName}`}
+                ? gt("Open coding thread")
+                : gt("Open {name}", { name: peerBot?.bot.name ?? handoff.botName })}
             </TooltipPopup>
           </Tooltip>
         ) : null}

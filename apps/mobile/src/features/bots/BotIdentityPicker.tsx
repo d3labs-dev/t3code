@@ -7,6 +7,7 @@ import {
   isCustomBotEmoji,
 } from "@t3tools/client-runtime/bot-avatar";
 import * as Haptics from "expo-haptics";
+import { T, useGT, useMessages } from "gt-react-native";
 import { Pressable, View } from "react-native";
 
 import { SymbolView } from "../../components/ui/AppSymbol";
@@ -27,6 +28,8 @@ export function BotIdentityPicker(props: {
   readonly onVisualStyleChange: (style: BotVisualStyle) => void;
 }) {
   const { colors } = useControlTheme();
+  const gt = useGT();
+  const resolve = useMessages();
   const activeShape = findBotAvatarShape(props.icon);
   const customEmoji = isCustomBotEmoji(props.icon) ? props.icon : "";
 
@@ -34,7 +37,7 @@ export function BotIdentityPicker(props: {
     <View className="gap-4">
       <View className="gap-2">
         <Text textRole="footnote" className="px-1 font-t3-medium text-foreground-muted">
-          Finish
+          <T>Finish</T>
         </Text>
         <SegmentedControl
           variant="card"
@@ -42,7 +45,7 @@ export function BotIdentityPicker(props: {
           selected={props.visualStyle}
           options={BOT_VISUAL_STYLES.map((style) => ({
             value: style.id,
-            label: style.label,
+            label: resolve(style.label),
           }))}
           onSelect={(value) => {
             if (props.disabled) return;
@@ -55,10 +58,14 @@ export function BotIdentityPicker(props: {
       <View className="gap-2">
         <View className="flex-row items-center justify-between px-1">
           <Text textRole="footnote" className="font-t3-medium text-foreground-muted">
-            Shape
+            <T>Shape</T>
           </Text>
           <Text textRole="caption" className="text-foreground-muted">
-            {activeShape ? activeShape.label : customEmoji ? "Custom" : "Portrait"}
+            {activeShape
+              ? resolve(activeShape.label)
+              : customEmoji
+                ? gt("Custom", { $context: "Bot avatar made from an emoji or initials" })
+                : gt("Portrait", { $context: "Bot avatar made from an uploaded image" })}
           </Text>
         </View>
         <View className="flex-row flex-wrap gap-2">
@@ -68,7 +75,7 @@ export function BotIdentityPicker(props: {
               <Pressable
                 key={shape.id}
                 accessibilityRole="button"
-                accessibilityLabel={shape.label}
+                accessibilityLabel={resolve(shape.label)}
                 accessibilityState={{ selected, disabled: Boolean(props.disabled) }}
                 disabled={props.disabled}
                 onPress={() => {
@@ -91,8 +98,8 @@ export function BotIdentityPicker(props: {
         </View>
         <View className="mt-1 flex-row items-center gap-2">
           <TextInput
-            accessibilityLabel="Custom emoji or initials"
-            placeholder="Or type an emoji / 2 chars (e.g. 🦊)"
+            accessibilityLabel={gt("Custom emoji or initials")}
+            placeholder={gt("Or type an emoji / 2 chars (e.g. 🦊)")}
             value={customEmoji}
             editable={!props.disabled}
             maxLength={8}
@@ -111,7 +118,7 @@ export function BotIdentityPicker(props: {
 
       <View className="gap-2">
         <Text textRole="footnote" className="px-1 font-t3-medium text-foreground-muted">
-          Color
+          <T>Color</T>
         </Text>
         <View className="flex-row flex-wrap gap-2.5">
           {BOT_AVATAR_COLORS.map((swatch) => {
@@ -122,7 +129,7 @@ export function BotIdentityPicker(props: {
               <Pressable
                 key={swatch.id}
                 accessibilityRole="button"
-                accessibilityLabel={swatch.label}
+                accessibilityLabel={resolve(swatch.label)}
                 accessibilityState={{ selected, disabled: Boolean(props.disabled) }}
                 disabled={props.disabled}
                 onPress={() => {

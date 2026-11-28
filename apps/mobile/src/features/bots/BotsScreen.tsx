@@ -9,6 +9,7 @@ import {
 import type { BotExchangeStatus, EnvironmentId } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
+import { msg, T, useGT, useMessages } from "gt-react-native";
 import { useState } from "react";
 import { Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,6 +24,7 @@ import { IconButton } from "../../components/ui/IconButton";
 import { ListSection } from "../../components/ui/ListSection";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { useContentTopInset } from "../../components/ui/useBarInset";
+import { m, type MessageResolver } from "../../i18n/messages";
 import { cn } from "../../lib/cn";
 import {
   ANDROID_READING_MAX_WIDTH,
@@ -63,15 +65,16 @@ function matchesBotSearch(entry: ScopedBotEntry, normalizedQuery: string): boole
   );
 }
 
-function botSubtitle(entry: ScopedBotEntry): string | null {
+function botSubtitle(entry: ScopedBotEntry, resolve: MessageResolver): string | null {
   const role = entry.bot.role.trim();
   if (entry.status === "idle") return role || null;
-  const statusLabel = BOT_STATUS_LABEL[entry.status];
+  const statusLabel = resolve(BOT_STATUS_LABEL[entry.status]);
   return role ? `${statusLabel} · ${role}` : statusLabel;
 }
 
 export function BotsScreen(props: { readonly sidebar?: boolean } = {}) {
   const navigation = useNavigation();
+  const gt = useGT();
   const selectDetail = useSelectWorkspaceDetail();
   const workspace = useWorkspaceTabs();
   const floatingTabsEnabled = useAndroidFloatingTabs();
@@ -175,15 +178,18 @@ export function BotsScreen(props: { readonly sidebar?: boolean } = {}) {
         title="T3 Code"
         titleContent={
           <WorkspaceBrandTitle
-            accessibilityLabel="T3 Code, Bots"
+            accessibilityLabel={gt("{product}, {title}", {
+              product: "T3 Code",
+              title: gt("Bots", { $context: "navigation tab, persistent named agents" }),
+            })}
             onOpenEnvironments={() => openSettings(navigation, "SettingsEnvironments")}
           />
         }
         search={{
           value: searchQuery,
           onChangeText: (query) => workspace?.dispatch({ type: "query", query, tab: "bots" }),
-          placeholder: "Search bots",
-          accessibilityLabel: "Search bots",
+          placeholder: gt("Search bots"),
+          accessibilityLabel: gt("Search bots"),
           active: searching,
           onOpen: () => workspace?.dispatch({ type: "search", tab: "bots" }),
           onClose: () => workspace?.cancelSearch("bots"),
@@ -193,16 +199,16 @@ export function BotsScreen(props: { readonly sidebar?: boolean } = {}) {
 
   const emptyContent = !catalogState.hasConnections ? (
     <EmptyState
-      title="No environments connected"
-      detail="Connect an environment to create and chat with your Bots."
-      actionLabel="Add environment"
+      title={gt("No environments connected")}
+      detail={gt("Connect an environment to create and chat with your Bots.")}
+      actionLabel={gt("Add environment")}
       onAction={() => openSettings(navigation, "SettingsEnvironmentNew")}
       variant="plain"
     />
   ) : normalizedQuery !== "" ? (
     <EmptyState
-      title="No matching Bots"
-      detail={`No Bots match "${searchQuery.trim()}".`}
+      title={gt("No matching Bots")}
+      detail={gt('No Bots match "{query}".', { query: searchQuery.trim() })}
       variant="plain"
     />
   ) : (
@@ -213,20 +219,22 @@ export function BotsScreen(props: { readonly sidebar?: boolean } = {}) {
         <BotAvatar icon="cat" color="#e68940" size="md" />
       </View>
       <Text textRole="title" className="text-center font-t3-bold text-foreground">
-        Meet your Bots
+        <T>Meet your Bots</T>
       </Text>
       <Text
         textRole="body"
         className="mt-2 max-w-[320px] text-center leading-normal text-foreground-muted"
       >
-        Bots are agents with a soul, a memory and their own folder. They take on work, start coding
-        threads and keep watch while those run.
+        <T>
+          Bots are agents with a soul, a memory and their own folder. They take on work, start
+          coding threads and keep watch while those run.
+        </T>
       </Text>
       <View className="mt-5">
         <Button
           tone="primary"
           icon="plus"
-          label="Create your first Bot"
+          label={gt("Create your first Bot")}
           disabled={!canCreate}
           onPress={openNewBot}
         />
@@ -312,7 +320,7 @@ export function BotsScreen(props: { readonly sidebar?: boolean } = {}) {
                           tintColorClassName="accent-foreground-muted"
                         />
                         <Text textRole="footnote" className="font-t3-medium text-foreground-muted">
-                          {group.name ?? "Ungrouped"}
+                          {group.name ?? gt("Ungrouped")}
                         </Text>
                         <Text textRole="caption" className="tabular-nums text-foreground-muted/70">
                           {group.bots.length}
@@ -346,12 +354,14 @@ export function BotsScreen(props: { readonly sidebar?: boolean } = {}) {
               {!showAndroidFab && canCreate ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="New Bot"
+                  accessibilityLabel={gt("New Bot")}
                   onPress={openNewBot}
                   className="flex-row items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-grouped-card/70 px-4 py-3 active:opacity-75"
                 >
                   <SymbolView name="plus" size={16} tintColorClassName="accent-primary-text" />
-                  <Text className="text-sm font-t3-semibold text-primary-text">New Bot</Text>
+                  <Text className="text-sm font-t3-semibold text-primary-text">
+                    <T>New Bot</T>
+                  </Text>
                 </Pressable>
               ) : null}
 
@@ -382,7 +392,7 @@ export function BotsScreen(props: { readonly sidebar?: boolean } = {}) {
           }
         >
           <FloatingActionButton
-            label="New Bot"
+            label={gt("New Bot")}
             icon="plus"
             variant="extended"
             expanded={!floatingTabsEnabled}
@@ -405,14 +415,16 @@ function PrimaryBotHeroCard(props: {
   readonly onOpenCodingThread: (scoped: ScopedCodingThreadLink) => void;
 }) {
   const { bot, status } = props.entry;
-  const subtitle = botSubtitle(props.entry);
+  const gt = useGT();
+  const resolve = useMessages();
+  const subtitle = botSubtitle(props.entry, resolve);
   const pendingCount = props.links.filter(({ link }) => link.status === "pending").length;
 
   return (
     <View className="overflow-hidden rounded-[22px] border border-border bg-card">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${bot.name}, Primary Bot`}
+        accessibilityLabel={gt("{name}, Primary Bot", { name: bot.name })}
         onPress={props.onOpen}
         className="flex-row items-center gap-3.5 px-4 py-4 active:opacity-80"
       >
@@ -433,7 +445,7 @@ function PrimaryBotHeroCard(props: {
             </Text>
           ) : (
             <Text className="text-sm text-foreground-muted" numberOfLines={1}>
-              Primary Bot
+              <T>Primary Bot</T>
             </Text>
           )}
         </View>
@@ -449,7 +461,7 @@ function PrimaryBotHeroCard(props: {
           ) : null}
           <IconButton
             icon="slider.horizontal.3"
-            accessibilityLabel={`${bot.name} settings`}
+            accessibilityLabel={gt("{name} settings", { name: bot.name })}
             onPress={props.onOpenSettings}
           />
         </View>
@@ -480,7 +492,9 @@ function BotListRow(props: {
   readonly onOpenCodingThread: (scoped: ScopedCodingThreadLink) => void;
 }) {
   const { bot, status } = props.entry;
-  const subtitle = botSubtitle(props.entry);
+  const gt = useGT();
+  const resolve = useMessages();
+  const subtitle = botSubtitle(props.entry, resolve);
   const pendingCount = props.links.filter(({ link }) => link.status === "pending").length;
 
   return (
@@ -519,7 +533,7 @@ function BotListRow(props: {
           ) : null}
           <IconButton
             icon="slider.horizontal.3"
-            accessibilityLabel={`${bot.name} settings`}
+            accessibilityLabel={gt("{name} settings", { name: bot.name })}
             onPress={props.onOpenSettings}
           />
         </View>
@@ -546,11 +560,16 @@ function CodingThreadsPill(props: {
   readonly botName: string;
   readonly onPress: () => void;
 }) {
+  const gt = useGT();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ expanded: props.expanded }}
-      accessibilityLabel={`${props.expanded ? "Hide" : "Show"} coding threads for ${props.botName}`}
+      accessibilityLabel={
+        props.expanded
+          ? gt("Hide coding threads for {name}", { name: props.botName })
+          : gt("Show coding threads for {name}", { name: props.botName })
+      }
       onPress={props.onPress}
       hitSlop={6}
       className={cn(
@@ -564,7 +583,9 @@ function CodingThreadsPill(props: {
           props.pendingCount > 0 ? "text-primary-text" : "text-foreground-muted",
         )}
       >
-        {props.pendingCount > 0 ? `${props.pendingCount} active` : props.totalCount}
+        {props.pendingCount > 0
+          ? gt("{count} active", { count: props.pendingCount })
+          : props.totalCount}
       </Text>
       <SymbolView
         name={props.expanded ? "chevron.down" : "chevron.right"}
@@ -582,17 +603,18 @@ function CodingThreadLinkRow(props: {
   readonly onPress: () => void;
 }) {
   const { environmentId, link } = props.scoped;
+  const gt = useGT();
   const shell = useQuietThreadShell(scopeThreadRef(environmentId, link.threadId));
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={shell?.title ?? "Open coding thread"}
+      accessibilityLabel={shell?.title ?? gt("Open coding thread")}
       onPress={props.onPress}
       className="flex-row items-center gap-2 py-2 active:opacity-70"
     >
       <View className={cn("size-2 shrink-0 rounded-full", CODING_STATUS_DOT_CLASS[link.status])} />
       <Text className="min-w-0 flex-1 text-sm text-foreground" numberOfLines={1}>
-        {shell?.title ?? "Thread not loaded"}
+        {shell?.title ?? gt("Thread not loaded")}
       </Text>
       {shell?.branch ? (
         <Text
@@ -627,7 +649,7 @@ function ArchivedBotsSection(props: {
           tintColorClassName="accent-foreground-muted"
         />
         <Text textRole="footnote" className="font-t3-medium text-foreground-muted">
-          Archived
+          <T>Archived</T>
         </Text>
         <Text textRole="caption" className="tabular-nums text-foreground-muted/70">
           {props.bots.length}
@@ -655,6 +677,7 @@ function ArchivedBotRow(props: {
   readonly onOpenThread: () => void;
 }) {
   const { bot, environmentId } = props.entry;
+  const gt = useGT();
   const canUpdate = useAtomValue(botsEnvironment.updateBot.permissionAtom(environmentId));
   const updateBot = useAtomCommand(botsEnvironment.updateBot, {
     label: "restore bot",
@@ -671,7 +694,7 @@ function ArchivedBotRow(props: {
       input: { botId: bot.id, archived: false },
     });
     setRestoring(false);
-    reportBotCommandFailure("Could not restore Bot", result);
+    reportBotCommandFailure(m(msg("Could not restore Bot")), result);
   };
 
   return (
@@ -683,7 +706,7 @@ function ArchivedBotRow(props: {
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Open archived Bot ${bot.name}`}
+        accessibilityLabel={gt("Open archived Bot {name}", { name: bot.name })}
         onPress={props.onOpenThread}
         className="min-w-0 flex-1 flex-row items-center gap-2.5 active:opacity-70"
       >
@@ -693,7 +716,7 @@ function ArchivedBotRow(props: {
         </Text>
       </Pressable>
       <Button
-        label="Restore"
+        label={gt("Restore", { $context: "verb, unarchives the Bot" })}
         tone="text"
         size="compact"
         loading={restoring}

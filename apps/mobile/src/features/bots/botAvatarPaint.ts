@@ -4,11 +4,12 @@ import {
   isBotHexColor,
 } from "@t3tools/client-runtime/bot-avatar";
 import { BOT_DEFAULT_COLOR } from "@t3tools/contracts";
+import { msg } from "gt-react-native";
 
 export const BOT_VISUAL_STYLES = [
-  { id: "flat", label: "Flat" },
-  { id: "glass", label: "Glass" },
-  { id: "minimal", label: "Outline" },
+  { id: "flat", label: msg("Flat", { $context: "Bot avatar finish" }) },
+  { id: "glass", label: msg("Glass", { $context: "Bot avatar finish" }) },
+  { id: "minimal", label: msg("Outline", { $context: "Bot avatar finish" }) },
 ] as const satisfies ReadonlyArray<{ id: BotVisualStyle; label: string }>;
 
 type Rgb = readonly [number, number, number];

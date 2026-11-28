@@ -3,12 +3,14 @@ import { BOT_THEME_COLOR, DEFAULT_BOT_AVATAR_SHAPE } from "@t3tools/client-runti
 import { botGroupSuggestions, shuffleBotIdentity } from "@t3tools/client-runtime/bot-form";
 import {
   AuthOrchestrationOperateScope,
+  BOT_DOCUMENTS,
   type BotCreateInput,
   EnvironmentId,
   type ModelSelection,
 } from "@t3tools/contracts";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
+import { msg, T, useGT, Var } from "gt-react-native";
 import { useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -22,6 +24,7 @@ import { IconButton } from "../../components/ui/IconButton";
 import { ListSection } from "../../components/ui/ListSection";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { SheetHeader } from "../../components/ui/SheetHeader";
+import { m } from "../../i18n/messages";
 import { cn } from "../../lib/cn";
 import { botsEnvironment, useBotsIndex } from "../../state/bots";
 import { useEnvironments } from "../../state/environments";
@@ -41,6 +44,7 @@ export function NewBotSheet(
   props: StaticScreenProps<{ readonly environmentId?: string } | undefined>,
 ) {
   const navigation = useNavigation();
+  const gt = useGT();
   const insets = useSafeAreaInsets();
   const connectedIds = useAtomValue(connectedEnvironmentIdsAtom);
   const { environments } = useEnvironments();
@@ -127,7 +131,7 @@ export function NewBotSheet(
     submitting.current = false;
     setSaving(false);
     if (result._tag === "Failure") {
-      reportBotCommandFailure("Could not create Bot", result);
+      reportBotCommandFailure(m(msg("Could not create Bot")), result);
       return;
     }
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -142,12 +146,12 @@ export function NewBotSheet(
   if (environmentId === null) {
     return (
       <View collapsable={false} className="flex-1 bg-sheet">
-        <SheetHeader title="New Bot" onCancel={() => navigation.goBack()} />
+        <SheetHeader title={gt("New Bot")} onCancel={() => navigation.goBack()} />
         <ScreenContent>
           <View className="flex-1 items-center justify-center px-6">
             <EmptyState
-              title="No environment connected"
-              detail="Connect an environment before creating a Bot."
+              title={gt("No environment connected")}
+              detail={gt("Connect an environment before creating a Bot.")}
               variant="plain"
             />
           </View>
@@ -164,11 +168,11 @@ export function NewBotSheet(
       className="flex-1 bg-sheet"
     >
       <SheetHeader
-        title="New Bot"
+        title={gt("New Bot")}
         onCancel={() => navigation.goBack()}
         dismissDisabled={saving}
         confirm={{
-          label: "Create",
+          label: gt("Create", { $context: "verb, creates the Bot" }),
           loading: saving,
           disabled: !canSubmit,
           onPress: () => void handleSubmit(),
@@ -190,7 +194,7 @@ export function NewBotSheet(
               <View className="absolute right-0 bottom-0">
                 <IconButton
                   icon="arrow.clockwise"
-                  accessibilityLabel="Randomize look"
+                  accessibilityLabel={gt("Randomize look")}
                   disabled={saving}
                   onPress={handleRandomize}
                 />
@@ -199,8 +203,8 @@ export function NewBotSheet(
             <View className="w-full gap-2 pt-1">
               <TextInput
                 autoFocus
-                accessibilityLabel="Bot name"
-                placeholder="Name your Bot"
+                accessibilityLabel={gt("Bot name")}
+                placeholder={gt("Name your Bot")}
                 value={name}
                 editable={!saving}
                 onChangeText={setName}
@@ -208,8 +212,8 @@ export function NewBotSheet(
                 className="min-h-12 text-center text-lg font-t3-semibold"
               />
               <TextInput
-                accessibilityLabel="Bot role"
-                placeholder="Role (e.g. Chief of Staff, Designer)"
+                accessibilityLabel={gt("Bot role")}
+                placeholder={gt("Role (e.g. Chief of Staff, Designer)")}
                 value={role}
                 editable={!saving}
                 onChangeText={setRole}
@@ -238,7 +242,9 @@ export function NewBotSheet(
               }}
               className="flex-row items-center justify-between gap-2 rounded-2xl border border-border bg-grouped-card px-4 py-3.5 active:opacity-75"
             >
-              <Text className="text-sm font-t3-medium text-foreground">Group, model & soul</Text>
+              <Text className="text-sm font-t3-medium text-foreground">
+                <T>Group, model & soul</T>
+              </Text>
               <View className="flex-row items-center gap-1.5">
                 {model.label ? (
                   <Text className="max-w-44 text-xs text-foreground-muted" numberOfLines={1}>
@@ -257,11 +263,11 @@ export function NewBotSheet(
               <View className="gap-4">
                 <View className="gap-2">
                   <Text textRole="footnote" className="px-1 font-t3-medium text-foreground-muted">
-                    Group
+                    <T>Group</T>
                   </Text>
                   <TextInput
-                    accessibilityLabel="Group"
-                    placeholder="Ungrouped"
+                    accessibilityLabel={gt("Group", { $context: "noun, Bot group name" })}
+                    placeholder={gt("Ungrouped")}
                     value={groupName}
                     editable={!saving}
                     onChangeText={setGroupName}
@@ -302,7 +308,7 @@ export function NewBotSheet(
                 </View>
 
                 {connectedIds.length > 1 ? (
-                  <ListSection title="Environment">
+                  <ListSection title={gt("Environment")}>
                     {connectedIds.map((id, idx) => {
                       const selected = id === environmentId;
                       const label =
@@ -339,7 +345,7 @@ export function NewBotSheet(
 
                 <View className="gap-2">
                   <Text textRole="footnote" className="px-1 font-t3-medium text-foreground-muted">
-                    Model
+                    <T>Model</T>
                   </Text>
                   <ListSection>
                     <Pressable
@@ -353,7 +359,7 @@ export function NewBotSheet(
                       className="flex-row items-center justify-between gap-2 px-4 py-3 active:opacity-75"
                     >
                       <Text className="min-w-0 flex-1 text-sm text-foreground" numberOfLines={1}>
-                        {model.label ?? "No models available"}
+                        {model.label ?? gt("No models available")}
                       </Text>
                       <SymbolView
                         name={showModelList ? "chevron.up" : "chevron.down"}
@@ -402,11 +408,13 @@ export function NewBotSheet(
 
                 <View className="gap-2">
                   <Text textRole="footnote" className="px-1 font-t3-medium text-foreground-muted">
-                    Starter SOUL.md (optional)
+                    <T>
+                      Starter <Var>{BOT_DOCUMENTS.soul.file}</Var> (optional)
+                    </T>
                   </Text>
                   <TextInput
-                    accessibilityLabel="Starter SOUL.md"
-                    placeholder="Who is this Bot? How should it think, talk and decide?"
+                    accessibilityLabel={gt("Starter {file}", { file: BOT_DOCUMENTS.soul.file })}
+                    placeholder={gt("Who is this Bot? How should it think, talk and decide?")}
                     value={soul}
                     editable={!saving}
                     onChangeText={setSoul}
@@ -422,7 +430,7 @@ export function NewBotSheet(
           <Button
             fullWidth
             tone="primary"
-            label={saving ? "Creating…" : "Create Bot"}
+            label={saving ? gt("Creating…") : gt("Create Bot")}
             loading={saving}
             disabled={!canSubmit}
             onPress={() => void handleSubmit()}

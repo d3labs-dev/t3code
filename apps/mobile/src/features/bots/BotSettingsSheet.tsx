@@ -15,6 +15,7 @@ import {
 } from "@t3tools/client-runtime/state/bots";
 import {
   BOT_CLOCK_TIME,
+  BOT_DOCUMENTS,
   BotId,
   type BotExchange,
   type BotProactiveConfig,
@@ -23,6 +24,7 @@ import {
 } from "@t3tools/contracts";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
+import { msg, T, useGT, useMessages } from "gt-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -39,6 +41,7 @@ import { ListToggleRow } from "../../components/ui/ListToggleRow";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { SheetHeader } from "../../components/ui/SheetHeader";
+import { m } from "../../i18n/messages";
 import { cn } from "../../lib/cn";
 import { botsEnvironment, useBotDetail, useBotExchanges, useBotsIndex } from "../../state/bots";
 import { useQuietThreadShell } from "../../state/entities";
@@ -55,10 +58,10 @@ import { BotIdentityPicker } from "./BotIdentityPicker";
 type BotSettingsTab = "profile" | "soul" | "activity";
 
 const PROACTIVE_INTERVALS = [
-  { value: 15, label: "15m" },
-  { value: 30, label: "30m" },
-  { value: 60, label: "1h" },
-  { value: 120, label: "2h" },
+  { value: 15, label: msg("15m", { $context: "check-in interval, 15 minutes" }) },
+  { value: 30, label: msg("30m", { $context: "check-in interval, 30 minutes" }) },
+  { value: 60, label: msg("1h", { $context: "check-in interval, 1 hour" }) },
+  { value: 120, label: msg("2h", { $context: "check-in interval, 2 hours" }) },
 ] as const;
 
 const localTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -73,6 +76,7 @@ export function BotSettingsSheet(
   }>,
 ) {
   const navigation = useNavigation();
+  const gt = useGT();
   const environmentId = EnvironmentId.make(props.route.params.environmentId);
   const botId = BotId.make(props.route.params.botId);
   const index = useBotsIndex();
@@ -84,12 +88,12 @@ export function BotSettingsSheet(
   if (entry === null) {
     return (
       <View collapsable={false} className="flex-1 bg-sheet">
-        <SheetHeader title="Bot settings" onClose={() => navigation.goBack()} />
+        <SheetHeader title={gt("Bot settings")} onClose={() => navigation.goBack()} />
         <ScreenContent>
           <View className="flex-1 items-center justify-center px-6">
             <EmptyState
-              title="Bot unavailable"
-              detail="This Bot is not available in the current roster."
+              title={gt("Bot unavailable")}
+              detail={gt("This Bot is not available in the current roster.")}
               variant="plain"
             />
           </View>
@@ -115,6 +119,8 @@ function BotSettingsSheetBody(props: {
 }) {
   const { bot, status, environmentId } = props.entry;
   const navigation = useNavigation();
+  const gt = useGT();
+  const resolve = useMessages();
   const insets = useSafeAreaInsets();
   const visualStyle = useBotVisualStyle();
   const setVisualStyle = useSetBotVisualStyle();
@@ -158,9 +164,9 @@ function BotSettingsSheetBody(props: {
       return;
     }
     Dialog.confirm({
-      title: `Discard unsaved changes to ${bot.name}?`,
-      message: "Your edits to this Bot have not been saved yet.",
-      confirmText: "Discard",
+      title: m(msg("Discard unsaved changes to {name}?", { name: bot.name })),
+      message: m(msg("Your edits to this Bot have not been saved yet.")),
+      confirmText: m(msg("Discard", { $context: "verb, drops unsaved edits" })),
       destructive: true,
       onConfirm: () => navigation.goBack(),
     });
@@ -172,7 +178,7 @@ function BotSettingsSheetBody(props: {
     const result = await updateBot({ environmentId, input: saveInput });
     setBusy(false);
     if (result._tag === "Failure") {
-      reportBotCommandFailure("Could not save Bot settings", result);
+      reportBotCommandFailure(m(msg("Could not save Bot settings")), result);
       return;
     }
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -190,7 +196,7 @@ function BotSettingsSheetBody(props: {
     setBusy(false);
     if (result._tag === "Failure") {
       reportBotCommandFailure(
-        nextArchived ? "Could not archive Bot" : "Could not restore Bot",
+        nextArchived ? m(msg("Could not archive Bot")) : m(msg("Could not restore Bot")),
         result,
       );
       return;
@@ -201,9 +207,11 @@ function BotSettingsSheetBody(props: {
   const handleConfirmDelete = () => {
     if (!canDelete || busy) return;
     Dialog.confirm({
-      title: `Delete ${bot.name}?`,
-      message: "This removes the Bot and deletes its chat. Its files on disk stay untouched.",
-      confirmText: "Delete",
+      title: m(msg("Delete {name}?", { name: bot.name })),
+      message: m(
+        msg("This removes the Bot and deletes its chat. Its files on disk stay untouched."),
+      ),
+      confirmText: m(msg("Delete", { $context: "verb, confirms deleting the Bot" })),
       destructive: true,
       onConfirm: () => {
         void (async () => {
@@ -211,7 +219,7 @@ function BotSettingsSheetBody(props: {
           const result = await deleteBot({ environmentId, input: { botId: bot.id } });
           setBusy(false);
           if (result._tag === "Failure") {
-            reportBotCommandFailure("Could not delete Bot", result);
+            reportBotCommandFailure(m(msg("Could not delete Bot")), result);
             return;
           }
           navigation.dispatch(StackActions.popToTop());
@@ -239,13 +247,13 @@ function BotSettingsSheetBody(props: {
     >
       <SheetHeader
         title={shown.name.trim() || bot.name}
-        subtitle={shown.role.trim() || "Bot settings"}
+        subtitle={shown.role.trim() || gt("Bot settings")}
         onClose={handleRequestClose}
         dismissDisabled={busy}
         confirm={
           changeCount > 0
             ? {
-                label: "Save",
+                label: gt("Save"),
                 loading: busy,
                 disabled: nameMissing || !canUpdate || busy,
                 onPress: () => void handleSave(),
@@ -260,12 +268,15 @@ function BotSettingsSheetBody(props: {
             size="compact"
             selected={tab}
             options={[
-              { value: "profile", label: "Profile" },
+              { value: "profile", label: gt("Profile", { $context: "Bot settings tab" }) },
               {
                 value: "soul",
-                label: dirtyDocuments.length > 0 ? "Soul •" : "Soul",
+                label:
+                  dirtyDocuments.length > 0
+                    ? gt("Soul •", { $context: "Bot settings tab with unsaved document edits" })
+                    : gt("Soul", { $context: "Bot settings tab for its documents" }),
               },
-              { value: "activity", label: "Activity" },
+              { value: "activity", label: gt("Activity", { $context: "Bot settings tab" }) },
             ]}
             onSelect={(next) => {
               void Haptics.selectionAsync();
@@ -295,21 +306,23 @@ function BotSettingsSheetBody(props: {
                 />
                 {bot.archivedAt !== null ? (
                   <View className="rounded-full bg-subtle px-2.5 py-0.5">
-                    <Text className="text-2xs font-t3-medium text-foreground-muted">Archived</Text>
+                    <Text className="text-2xs font-t3-medium text-foreground-muted">
+                      <T>Archived</T>
+                    </Text>
                   </View>
                 ) : null}
                 <View className="w-full gap-2">
                   <TextInput
-                    accessibilityLabel="Bot name"
-                    placeholder="Bot name"
+                    accessibilityLabel={gt("Bot name")}
+                    placeholder={gt("Bot name")}
                     value={shown.name}
                     editable={editable}
                     onChangeText={(value) => setField({ name: value })}
                     className="min-h-12 text-center text-base font-t3-semibold"
                   />
                   <TextInput
-                    accessibilityLabel="Bot role"
-                    placeholder="Role"
+                    accessibilityLabel={gt("Bot role")}
+                    placeholder={gt("Role", { $context: "placeholder for the Bot's job title" })}
                     value={shown.role}
                     editable={editable}
                     onChangeText={(value) => setField({ role: value })}
@@ -330,11 +343,11 @@ function BotSettingsSheetBody(props: {
 
               <View className="gap-2">
                 <Text textRole="footnote" className="px-1 font-t3-medium text-foreground-muted">
-                  Group
+                  <T>Group</T>
                 </Text>
                 <TextInput
-                  accessibilityLabel="Group"
-                  placeholder="Ungrouped"
+                  accessibilityLabel={gt("Group", { $context: "noun, Bot group name" })}
+                  placeholder={gt("Ungrouped")}
                   value={shown.groupName ?? ""}
                   editable={editable}
                   onChangeText={(value) => setField({ groupName: value === "" ? null : value })}
@@ -372,7 +385,7 @@ function BotSettingsSheetBody(props: {
                 </View>
               </View>
 
-              <ListSection title="Model">
+              <ListSection title={gt("Model")}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={{ expanded: showModelList }}
@@ -430,10 +443,10 @@ function BotSettingsSheetBody(props: {
                   : null}
               </ListSection>
 
-              <ListSection title="Behavior">
+              <ListSection title={gt("Behavior")}>
                 <ListToggleRow
-                  label="Primary Bot"
-                  description="Feature at the top of your Bots list."
+                  label={gt("Primary Bot")}
+                  description={gt("Feature at the top of your Bots list.")}
                   value={shown.isPrimary}
                   disabled={!editable}
                   onValueChange={(value) => setField({ isPrimary: value })}
@@ -447,8 +460,8 @@ function BotSettingsSheetBody(props: {
                 ) : null}
                 <View className="h-px bg-border-subtle" />
                 <ListToggleRow
-                  label="Muted"
-                  description="Pause notifications and sleep its avatar."
+                  label={gt("Muted", { $context: "Bot setting that pauses its notifications" })}
+                  description={gt("Pause notifications and sleep its avatar.")}
                   value={shown.muted}
                   disabled={!editable}
                   onValueChange={(value) => setField({ muted: value })}
@@ -460,7 +473,7 @@ function BotSettingsSheetBody(props: {
                   fullWidth
                   tone="secondary"
                   icon="archivebox"
-                  label={bot.archivedAt === null ? "Archive Bot" : "Restore Bot"}
+                  label={bot.archivedAt === null ? gt("Archive Bot") : gt("Restore Bot")}
                   disabled={!editable}
                   onPress={() => void handleToggleArchive()}
                 />
@@ -468,7 +481,7 @@ function BotSettingsSheetBody(props: {
                   fullWidth
                   tone="danger"
                   icon="trash"
-                  label="Delete Bot"
+                  label={gt("Delete Bot")}
                   disabled={!canDelete || busy}
                   onPress={handleConfirmDelete}
                 />
@@ -490,9 +503,9 @@ function BotSettingsSheetBody(props: {
               {savedDocuments === null ? (
                 detail.error ? (
                   <EmptyState
-                    title="Could not load Bot documents"
+                    title={gt("Could not load Bot documents")}
                     detail={detail.error}
-                    actionLabel="Retry"
+                    actionLabel={gt("Retry")}
                     onAction={detail.refresh}
                   />
                 ) : (
@@ -522,14 +535,14 @@ function BotSettingsSheetBody(props: {
                           ) : null}
                           {isDirty ? (
                             <Text textRole="caption" className="text-warning-foreground">
-                              Unsaved
+                              <T>Unsaved</T>
                             </Text>
                           ) : null}
                         </View>
                       </View>
                       <TextInput
                         accessibilityLabel={doc.file}
-                        placeholder={doc.placeholder}
+                        placeholder={resolve(doc.placeholder)}
                         value={value}
                         editable={editable}
                         onChangeText={(next) =>
@@ -546,11 +559,11 @@ function BotSettingsSheetBody(props: {
             </View>
           ) : (
             <View className="gap-5">
-              <ListSection title={`Coding threads (${props.links.length})`}>
+              <ListSection title={gt("Coding threads ({count})", { count: props.links.length })}>
                 {props.links.length === 0 ? (
                   <View className="px-4 py-4">
                     <Text className="text-sm text-foreground-muted">
-                      No coding threads launched by this Bot yet.
+                      <T>No coding threads launched by this Bot yet.</T>
                     </Text>
                   </View>
                 ) : (
@@ -565,7 +578,7 @@ function BotSettingsSheetBody(props: {
                 )}
               </ListSection>
 
-              <ListSection title="Exchanges">
+              <ListSection title={gt("Exchanges")}>
                 {exchanges.isPending && exchanges.data === null ? (
                   <View className="items-center py-5">
                     <AppActivityIndicator colorClassName="accent-foreground-muted" />
@@ -576,7 +589,9 @@ function BotSettingsSheetBody(props: {
                   </View>
                 ) : (exchanges.data?.exchanges.length ?? 0) === 0 ? (
                   <View className="px-4 py-4">
-                    <Text className="text-sm text-foreground-muted">No exchanges yet.</Text>
+                    <Text className="text-sm text-foreground-muted">
+                      <T>No exchanges yet.</T>
+                    </Text>
                   </View>
                 ) : (
                   exchanges.data!.exchanges.map((exchange, idx, list) => (
@@ -603,12 +618,17 @@ function ProactiveCheckInRows(props: {
   readonly onChange: (proactive: BotProactiveConfig) => void;
 }) {
   const { proactive, editable, onChange } = props;
+  const gt = useGT();
+  const resolve = useMessages();
   return (
     <>
       <View className="h-px bg-border-subtle" />
       <ListToggleRow
-        label="Proactive check-ins"
-        description="Periodically check NOW.md and HEARTBEAT.md in the background and message you only when something needs attention."
+        label={gt("Proactive check-ins")}
+        description={gt(
+          "Periodically check {now} and {heartbeat} in the background and message you only when something needs attention.",
+          { now: BOT_DOCUMENTS.now.file, heartbeat: BOT_DOCUMENTS.heartbeat.file },
+        )}
         value={proactive.enabled}
         disabled={!editable}
         onValueChange={(enabled) =>
@@ -628,24 +648,30 @@ function ProactiveCheckInRows(props: {
             selected={proactive.intervalMinutes}
             options={PROACTIVE_INTERVALS.map((option) => ({
               value: option.value,
-              label: option.label,
-              accessibilityLabel: `Check in every ${option.label}`,
+              label: resolve(option.label),
+              accessibilityLabel: gt("Check in every {interval}", {
+                interval: resolve(option.label),
+              }),
             }))}
             onSelect={(intervalMinutes) => {
               if (editable) onChange({ ...proactive, intervalMinutes });
             }}
           />
           <View className="flex-row items-center gap-2">
-            <Text className="text-sm text-foreground-muted">Active</Text>
+            <Text className="text-sm text-foreground-muted">
+              {gt("Active", { $context: "starts the active hours range: Active 09:00 to 18:00" })}
+            </Text>
             <ClockTimeInput
-              label="Active hours start"
+              label={gt("Active hours start")}
               value={proactive.activeHoursStart}
               editable={editable}
               onChange={(activeHoursStart) => onChange({ ...proactive, activeHoursStart })}
             />
-            <Text className="text-sm text-foreground-muted">to</Text>
+            <Text className="text-sm text-foreground-muted">
+              {gt("to", { $context: "joins the active hours range: Active 09:00 to 18:00" })}
+            </Text>
             <ClockTimeInput
-              label="Active hours end"
+              label={gt("Active hours end")}
               value={proactive.activeHoursEnd}
               editable={editable}
               onChange={(activeHoursEnd) => onChange({ ...proactive, activeHoursEnd })}
@@ -666,12 +692,13 @@ function ClockTimeInput(props: {
   readonly editable: boolean;
   readonly onChange: (value: string) => void;
 }) {
+  const gt = useGT();
   const [draft, setDraft] = useState<{ readonly base: string; readonly text: string } | null>(null);
   const text = draft !== null && draft.base === props.value ? draft.text : props.value;
   return (
     <TextInput
       accessibilityLabel={props.label}
-      placeholder="HH:MM"
+      placeholder={gt("HH:MM", { $context: "time input placeholder, hours and minutes" })}
       value={text}
       editable={props.editable}
       keyboardType="numbers-and-punctuation"
@@ -695,6 +722,8 @@ function ActivityCodingThreadRow(props: {
   readonly onOpen: () => void;
 }) {
   const { environmentId, link } = props.scoped;
+  const gt = useGT();
+  const resolve = useMessages();
   const shell = useQuietThreadShell(scopeThreadRef(environmentId, link.threadId));
   return (
     <Pressable
@@ -707,10 +736,10 @@ function ActivityCodingThreadRow(props: {
     >
       <View className="min-w-0 flex-1 gap-0.5">
         <Text className="text-sm font-t3-medium text-foreground" numberOfLines={1}>
-          {shell?.title ?? "Thread not loaded"}
+          {shell?.title ?? gt("Thread not loaded")}
         </Text>
         <Text className="text-xs text-foreground-muted" numberOfLines={1}>
-          {BOT_EXCHANGE_STATUS_LABEL.coding_thread[link.status]}
+          {resolve(BOT_EXCHANGE_STATUS_LABEL.coding_thread[link.status])}
           {shell?.branch ? ` · ${shell.branch}` : ""}
         </Text>
       </View>
@@ -725,7 +754,9 @@ function BotExchangeRow(props: {
   readonly onOpen: () => void;
 }) {
   const { exchange } = props;
-  const kindLabel = exchange.kind === "coding_thread" ? "Coding thread" : "Bot message";
+  const gt = useGT();
+  const resolve = useMessages();
+  const kindLabel = exchange.kind === "coding_thread" ? gt("Coding thread") : gt("Bot message");
   return (
     <Pressable
       accessibilityRole="button"
@@ -740,7 +771,7 @@ function BotExchangeRow(props: {
           <Text className="text-sm font-t3-medium text-foreground">{kindLabel}</Text>
           <View className="rounded-full bg-subtle px-2 py-0.5">
             <Text className="text-2xs font-t3-medium text-foreground-muted">
-              {BOT_EXCHANGE_STATUS_LABEL[exchange.kind][exchange.status]}
+              {resolve(BOT_EXCHANGE_STATUS_LABEL[exchange.kind][exchange.status])}
             </Text>
           </View>
         </View>

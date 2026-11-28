@@ -888,7 +888,7 @@ function ScheduledTaskRow({
             ) : !task.enabled ? (
               gt("Paused")
             ) : task.subscription !== undefined ? (
-              mcpEventSubscriptionLabel(task.subscription)
+              mcpEventSubscriptionLabel(task.subscription, messages)
             ) : hasHook ? (
               gt("Listening")
             ) : task.nextRunAt ? (
@@ -1043,7 +1043,7 @@ function WebhookDeliveriesDialog({
           </DialogTitle>
           <DialogDescription>
             {task.schedule.type === "mcp_event" ? (
-              "Recent events its MCP server delivered."
+              <T>Recent events its MCP server delivered.</T>
             ) : (
               <T>Recent requests to this task's webhook URL.</T>
             )}

@@ -1892,6 +1892,8 @@ function BotHandoffMessageRow(props: {
   readonly renderImage: MarkdownImageRenderer;
 }) {
   const { handoff, environmentId, senderThreadId } = props;
+  const gt = useGT();
+  const resolve = useMessages();
   const index = useBotsIndex();
   const openLinkedThread = useOpenLinkedThread();
   const peerBot =
@@ -1909,18 +1911,20 @@ function BotHandoffMessageRow(props: {
         null);
   const peerName =
     handoff.kind === "coding_thread_update" ? null : (peerBot?.bot.name ?? handoff.botName);
+  const statusLabel = botHandoffStatusLabel(handoff);
+  const resolvedStatusLabel = statusLabel === null ? null : resolve(statusLabel);
   const heading =
     handoff.kind === "from_bot"
-      ? `From ${peerName}`
+      ? gt("From {name}", { name: peerName })
       : handoff.kind === "bot_reply"
-        ? `Reply from ${peerName}`
+        ? gt("Reply from {name}", { name: peerName })
         : handoff.title;
   const detail =
     handoff.kind === "from_bot"
-      ? `Hop ${handoff.hopCount}/${handoff.hopLimit}`
+      ? gt("Hop {hop}/{limit}", { hop: handoff.hopCount, limit: handoff.hopLimit })
       : handoff.kind === "coding_thread_update"
-        ? ["Coding thread", botHandoffStatusLabel(handoff)].filter(Boolean).join(" · ")
-        : botHandoffStatusLabel(handoff);
+        ? [gt("Coding thread"), resolvedStatusLabel].filter(Boolean).join(" · ")
+        : resolvedStatusLabel;
   const preview = botHandoffPreviewLine(handoff.body);
   const targetThreadId =
     handoff.kind === "coding_thread_update"
@@ -1940,7 +1944,11 @@ function BotHandoffMessageRow(props: {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={[heading, detail, preview].filter(Boolean).join(". ")}
-          accessibilityHint={`Double tap to ${props.expanded ? "hide" : "show"} the message.`}
+          accessibilityHint={
+            props.expanded
+              ? gt("Double tap to hide the message.")
+              : gt("Double tap to show the message.")
+          }
           accessibilityState={{ expanded: props.expanded }}
           hitSlop={4}
           className="min-h-10 flex-row items-center gap-2 px-3.5 py-2"
@@ -2024,7 +2032,9 @@ function BotHandoffMessageRow(props: {
               }
             >
               <Text className="font-t3-medium text-xs text-foreground-secondary">
-                {handoff.kind === "coding_thread_update" ? "Open thread" : `Open ${peerName}`}
+                {handoff.kind === "coding_thread_update"
+                  ? gt("Open thread")
+                  : gt("Open {name}", { name: peerName })}
               </Text>
             </Pressable>
           ) : null}
