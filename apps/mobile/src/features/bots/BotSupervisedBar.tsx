@@ -29,7 +29,13 @@ export function BotSupervisedBar(props: {
         }}
         className="flex-row items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 active:opacity-75"
       >
-        <BotAvatar icon={bot.icon} color={bot.color} size="xs" status={botEntry.status} />
+        <BotAvatar
+          icon={bot.icon}
+          color={bot.color}
+          owner={botEntry}
+          size="xs"
+          status={botEntry.status}
+        />
         <Text className="min-w-0 flex-1 text-xs text-foreground-muted" numberOfLines={1}>
           Supervised by <Text className="text-xs font-t3-semibold text-foreground">{bot.name}</Text>
         </Text>

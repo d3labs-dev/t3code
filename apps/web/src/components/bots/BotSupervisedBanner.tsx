@@ -23,7 +23,13 @@ export function BotSupervisedBanner({
         className="surface-glass flex min-w-0 items-center gap-2 rounded-full border border-border/50 py-1 ps-1.5 pe-1 text-xs shadow-xs"
         data-bot-supervised-banner
       >
-        <BotAvatar icon={bot.icon} color={bot.color} size="xs" status={botEntry.status} />
+        <BotAvatar
+          icon={bot.icon}
+          color={bot.color}
+          owner={botEntry}
+          size="xs"
+          status={botEntry.status}
+        />
         <span className="min-w-0 truncate text-muted-foreground">
           Supervised by <span className="font-medium text-foreground">{bot.name}</span>
         </span>

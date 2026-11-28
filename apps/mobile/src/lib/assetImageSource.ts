@@ -19,6 +19,8 @@ export function assetImageCacheKey(
   switch (resource._tag) {
     case "attachment":
       return `t3-attachment:${JSON.stringify([environmentId, resource.attachmentId])}`;
+    case "bot-avatar":
+      return resource.avatar;
     case SOURCE_CONTROL_MEDIA_ASSET: {
       const media = sourceControlClients.mediaUrl(resource.url);
       return media?.immutable

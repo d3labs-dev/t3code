@@ -1376,6 +1376,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             <BotAvatar
               icon={props.supervisedByBot.bot.icon}
               color={props.supervisedByBot.bot.color}
+              owner={props.supervisedByBot}
               size="xs"
               muted={props.supervisedByBot.bot.muted}
             />

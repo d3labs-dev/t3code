@@ -6,12 +6,14 @@ import {
   DEFAULT_BOT_AVATAR_SHAPE,
   botAvatarExpression,
   findBotAvatarShape,
+  isBotImageIcon,
   isCustomBotEmoji,
   resolveBotAvatarGlyph,
 } from "./botAvatar.ts";
 
 const PNG_ICON =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const STORED_ICON = `avatar:${"0123456789abcdef".repeat(4)}.webp`;
 
 describe("findBotAvatarShape", () => {
   it("finds shapes by id regardless of case and padding", () => {
@@ -81,12 +83,26 @@ describe("resolveBotAvatarGlyph", () => {
     expect(resolveBotAvatarGlyph("data:image/webp;base64,UklGRg==").kind).toBe("image");
   });
 
+  it("loads avatar references from the Bot's stored image", () => {
+    expect(resolveBotAvatarGlyph(STORED_ICON)).toEqual({
+      kind: "stored-image",
+      reference: STORED_ICON,
+    });
+  });
+
+  it("tells pickers both stored and unsaved images are images", () => {
+    for (const icon of [STORED_ICON, PNG_ICON]) expect(isBotImageIcon(icon)).toBe(true);
+    for (const icon of ["cat", "🦊"]) expect(isBotImageIcon(icon)).toBe(false);
+  });
+
   it("never renders SVG, script or other URLs as images", () => {
     for (const icon of [
       "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
       "javascript:alert(1)",
       "https://example.com/avatar.png",
       'data:image/png;base64,abc"onerror=alert(1)',
+      `avatar:${"0123456789abcdef".repeat(4)}.svg`,
+      "avatar:../../secrets.png",
     ]) {
       expect(resolveBotAvatarGlyph(icon)).toEqual({
         kind: "shape",

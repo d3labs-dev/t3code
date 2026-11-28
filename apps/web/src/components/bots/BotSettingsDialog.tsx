@@ -171,6 +171,7 @@ function BotSettingsDialogBody(props: {
               <BotAvatar
                 icon={shown.icon}
                 color={shown.color}
+                owner={props.entry}
                 size="lg"
                 status={props.entry.status}
                 muted={shown.muted}
@@ -276,7 +277,13 @@ function ProfileSection(props: {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-stretch">
         <div className="flex shrink-0 items-center justify-center rounded-2xl bg-muted/30 py-6 sm:w-40">
-          <BotAvatar icon={shown.icon} color={shown.color} size="xl" muted={shown.muted} />
+          <BotAvatar
+            icon={shown.icon}
+            color={shown.color}
+            owner={props.entry}
+            size="xl"
+            muted={shown.muted}
+          />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <BotField label="Name" htmlFor="bot-settings-name">
@@ -315,6 +322,7 @@ function ProfileSection(props: {
       <BotIdentityPicker
         icon={shown.icon}
         color={shown.color}
+        owner={props.entry}
         disabled={!editable}
         onIconChange={(icon) => set({ icon })}
         onColorChange={(color) => set({ color })}
