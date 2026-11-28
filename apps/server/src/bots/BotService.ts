@@ -3,6 +3,8 @@ import {
   BOT_DEFAULT_ICON,
   BOT_DEFAULT_TOOLS,
   BOT_MAX_HOPS,
+  type BotAvatarReference,
+  BotAvatarImageType,
   BotError,
   type BotCreateInput,
   type BotDeleteInput,
@@ -34,21 +36,27 @@ import {
   ProjectId,
   type RunId,
   type ThreadId,
+  isBotAvatarReference,
   slugifyBotName,
 } from "@t3tools/contracts";
 import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
 import { serverBotPromptKind } from "@t3tools/shared/botProactive";
+import { readImageDimensions } from "@t3tools/shared/imageDimensions";
 import { latestRootProviderFailure } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Base64 from "effect/encoding/Base64";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
+import { parseBase64DataUrl } from "../imageMime.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ThreadSearch from "../orchestration-v2/ThreadSearch.ts";
@@ -74,6 +82,11 @@ export class BotService extends Context.Service<
     /** Starts the bot's thread idle: no turn runs until someone messages it. */
     readonly create: (input: BotCreateInput) => Effect.Effect<BotDetailResult, BotError>;
     readonly update: (input: BotUpdateInput) => Effect.Effect<BotDetailResult, BotError>;
+    /** The file holding the image a Bot's icon names, or null once it names another or is gone. */
+    readonly avatarPath: (input: {
+      readonly botId: BotId;
+      readonly avatar: BotAvatarReference;
+    }) => Effect.Effect<string | null, BotError>;
     /** Deletes the bot's threads and keeps its folder on disk. */
     readonly delete: (input: BotDeleteInput) => Effect.Effect<BotDeleteResult, BotError>;
     readonly sendMessage: (input: BotMessageInput) => Effect.Effect<BotMessageResult, BotError>;
@@ -160,6 +173,10 @@ const latestMessage = (messages: ReadonlyArray<OrchestrationV2ConversationMessag
 const failed = (message: string) => (cause: unknown) =>
   new BotError({ code: "operation_failed", message, cause });
 
+const BOT_AVATAR_MAX_BYTES = 512 * 1024;
+const isBotAvatarImageType = Schema.is(BotAvatarImageType);
+const invalidRequest = (message: string) => new BotError({ code: "invalid_request", message });
+
 const make = Effect.gen(function* () {
   const store = yield* BotStore.BotStore;
   const folders = yield* BotFolders.BotFolders;
@@ -174,6 +191,32 @@ const make = Effect.gen(function* () {
   const rosterLock = yield* Semaphore.make(1);
 
   const nowIso = DateTime.now.pipe(Effect.map(DateTime.formatIso));
+
+  // Clients upload an avatar as a data URL; the record keeps only the stored file's reference.
+  const storeIcon = Effect.fn("BotService.storeIcon")(function* (folderPath: string, icon: string) {
+    if (isBotAvatarReference(icon)) {
+      if ((yield* folders.findAvatar(folderPath, icon)) === null) {
+        return yield* invalidRequest("This Bot has no stored avatar with that reference.");
+      }
+      return icon;
+    }
+    if (!icon.startsWith("data:")) return icon;
+    const parsed = parseBase64DataUrl(icon);
+    const type = parsed?.mimeType.replace(/^image\//, "");
+    const bytes = parsed ? Result.getOrUndefined(Base64.decode(parsed.base64)) : undefined;
+    if (type === undefined || !isBotAvatarImageType(type) || bytes === undefined) {
+      return yield* invalidRequest("A Bot avatar must be a PNG, JPEG, WebP or GIF image.");
+    }
+    if (bytes.byteLength > BOT_AVATAR_MAX_BYTES) {
+      return yield* invalidRequest("A Bot avatar must be at most 512 KB.");
+    }
+    if (readImageDimensions(bytes) === null) {
+      return yield* invalidRequest("The Bot avatar is not a readable image.");
+    }
+    return yield* folders
+      .writeAvatar(folderPath, { bytes, type })
+      .pipe(Effect.mapError(failed("Couldn't save the Bot's avatar.")));
+  });
 
   const requireBot = (botId: BotId) =>
     store.get(botId).pipe(
@@ -302,6 +345,7 @@ const make = Effect.gen(function* () {
     const folderPath = yield* folders
       .ensure(folders.folderFor(botId))
       .pipe(Effect.mapError(failed("Couldn't create the Bot's folder.")));
+    const icon = yield* storeIcon(folderPath, input.icon ?? BOT_DEFAULT_ICON);
     yield* Effect.all([
       folders.writeDocuments(folderPath, input.documents ?? {}, "replace"),
       folders.writeDocuments(
@@ -334,7 +378,7 @@ const make = Effect.gen(function* () {
       name: input.name,
       role,
       groupName: input.groupName ?? null,
-      icon: input.icon ?? BOT_DEFAULT_ICON,
+      icon,
       color: input.color ?? BOT_DEFAULT_COLOR,
       isPrimary: input.isPrimary ?? existing.length === 0,
       modelSelection: input.modelSelection,
@@ -398,6 +442,8 @@ const make = Effect.gen(function* () {
     const next: BotRecord = {
       ...bot,
       ...editable,
+      icon:
+        editable.icon === undefined ? bot.icon : yield* storeIcon(bot.folderPath, editable.icon),
       slug: nextSlug,
       proactive: proactive ?? bot.proactive,
       ...(muted === undefined ? {} : { muted }),
@@ -453,9 +499,25 @@ const make = Effect.gen(function* () {
     }
 
     yield* store.update(next).pipe(Effect.mapError(failed("Couldn't save the Bot.")));
+    if (next.icon !== bot.icon) {
+      yield* folders
+        .removeAvatarsExcept(bot.folderPath, next.icon)
+        .pipe(Effect.ignore({ log: true }));
+    }
     yield* notifyChanged;
     return yield* detail(next);
   }, rosterLock.withPermits(1));
+
+  const avatarPath: BotService["Service"]["avatarPath"] = Effect.fn("BotService.avatarPath")(
+    function* (input) {
+      const bot = yield* store
+        .get(input.botId)
+        .pipe(Effect.mapError(failed("Couldn't read the Bot.")));
+      return Option.isSome(bot) && bot.value.icon === input.avatar
+        ? yield* folders.findAvatar(bot.value.folderPath, input.avatar)
+        : null;
+    },
+  );
 
   const deleteBot: BotService["Service"]["delete"] = Effect.fn("BotService.delete")(
     function* (input) {
@@ -916,6 +978,7 @@ const make = Effect.gen(function* () {
     getByThreadId,
     create,
     update,
+    avatarPath,
     delete: deleteBot,
     sendMessage,
     listExchanges,
