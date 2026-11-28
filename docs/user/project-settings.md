@@ -175,10 +175,11 @@ than** on the task.
 ## MCP event automations
 
 A Bot can subscribe to events that one of its MCP servers publishes, such as a
-new chat message, so each event starts a turn in the Bot's thread. Ask the Bot
-in its thread, for example "watch group chats from executor"; it creates the
-task with `schedule_task` and can change or remove it the same way. The server
-must use streamable HTTP and support MCP events.
+new chat message, so an event starts a turn in the Bot's thread. Events that
+arrive while that turn runs wait, and the next turn takes them together, up to
+20 at a time. Ask the Bot in its thread, for example "watch group chats from
+executor"; it creates the task with `schedule_task` and can change or remove it
+the same way. The server must use streamable HTTP and support MCP events.
 
 The server delivers to this environment's T3 Connect URL when a managed tunnel
 is set up, and otherwise to its local address, which only an MCP server on the

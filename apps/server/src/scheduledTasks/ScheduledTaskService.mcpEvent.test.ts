@@ -245,12 +245,16 @@ const withService = <A, E>(
     readonly service: Service;
     readonly server: ReturnType<typeof makeFakeServer>;
     readonly sends: Queue.Queue<SendInput>;
+    /** Ends every turn the task's messages start; until then they run. */
+    readonly turnsEnd: Deferred.Deferred<void>;
     readonly refresh: Effect.Effect<void>;
   }) => Effect.Effect<A, E, never>,
 ) =>
   Effect.gen(function* () {
     const server = makeFakeServer(yield* Queue.unbounded<ServerCall>());
     const sends = yield* Queue.unbounded<SendInput>();
+    const sent: Array<SendInput> = [];
+    const turnsEnd = yield* Deferred.make<void>();
     const workers = new Map<string, Effect.Effect<void>>();
     const layerPublisher = Layer.effect(
       ScheduledTaskService.ScheduledTaskMcpEventPublisher,
@@ -281,8 +285,30 @@ const withService = <A, E>(
       Layer.mock(ThreadManagementService.ThreadManagementService)({
         getThreadShell: () =>
           Effect.succeed({ projectId: "project-bots", archivedAt: null, deletedAt: null } as never),
-        sendToThread: (input) => Queue.offer(sends, input).pipe(Effect.as({} as never)),
-        getProjectThreadRecords: () => Effect.succeed({ runs: [] } as never),
+        sendToThread: (input) =>
+          Effect.sync(() => sent.push(input)).pipe(
+            Effect.andThen(Queue.offer(sends, input)),
+            Effect.as({} as never),
+          ),
+        getProjectThreadRecords: () =>
+          Effect.sync(
+            () =>
+              ({
+                runs: sent.map((input) => ({
+                  id: `run:${input.messageId}`,
+                  userMessageId: input.messageId,
+                  status: "running",
+                })),
+              }) as never,
+          ),
+        waitForThread: (input) =>
+          Deferred.await(turnsEnd).pipe(
+            Effect.as({
+              threadId: input.threadId,
+              run: { id: input.runId, status: "completed" } as never,
+              timedOut: false,
+            }),
+          ),
       }),
       Layer.succeed(
         ScheduledTaskService.ScheduledTaskWebhookOrigin,
@@ -298,6 +324,7 @@ const withService = <A, E>(
         service,
         server,
         sends,
+        turnsEnd,
         refresh: Effect.suspend(() => workers.get("mcp-event-subscriptions")!),
       });
     }).pipe(
@@ -511,6 +538,39 @@ it.effect("deletes a task while its MCP server has not answered the unsubscribe"
       const ended = yield* Queue.take(server.unsubscribes);
       assert.deepEqual(ended.params.arguments, { chatType: "group" });
       yield* Deferred.succeed(unsubscribeGate, undefined);
+    }),
+  ),
+);
+
+it.effect("folds the events that arrive during a turn into the next turn, in order", () =>
+  withService(({ service, server, sends, turnsEnd }) =>
+    Effect.gen(function* () {
+      const { task } = yield* service.upsert(yield* eventTaskInput());
+      const first = yield* server.deliver("first");
+      assert.equal(first._tag === "accepted" && first.outcome, "accepted");
+      assert.include((yield* Queue.take(sends)).text, "first");
+
+      const outcomes: Array<string | false> = [];
+      for (const text of ["one", "two", "three"]) {
+        const delivered = yield* server.deliver(text);
+        outcomes.push(delivered._tag === "accepted" && delivered.outcome);
+      }
+      assert.deepEqual(outcomes, ["accepted", "coalesced", "coalesced"]);
+      assert.equal(yield* Queue.size(sends), 0);
+
+      yield* Deferred.succeed(turnsEnd, undefined);
+      const next = yield* Queue.take(sends);
+      assert.match(next.text, /one[\s\S]*two[\s\S]*three/);
+      assert.notInclude(next.text, "first");
+      assert.equal(yield* Queue.size(sends), 0);
+      const { deliveries } = yield* service.listWebhookDeliveries({
+        id: task.id,
+        acceptAnyOutcome: true,
+      });
+      assert.deepEqual(
+        deliveries.map((delivery) => delivery.outcome),
+        ["coalesced", "coalesced", "accepted", "accepted"],
+      );
     }),
   ),
 );
