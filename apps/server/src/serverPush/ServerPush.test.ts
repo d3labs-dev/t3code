@@ -258,7 +258,6 @@ const makeHarness = Effect.fn("makeHarness")(function* (baseDir: string) {
         }),
         Layer.mock(BotStore.BotStore)({
           findByThreadId: (threadId) => Effect.succeed(Option.fromUndefinedOr(bots.get(threadId))),
-          findByHeartbeatThreadId: () => Effect.succeedNone,
         }),
         Layer.mock(BotService.BotService)({
           subscribeList: () =>
@@ -424,7 +423,7 @@ describe("ServerPush", { concurrent: false }, () => {
       ),
   );
 
-  it.effect("names Bot alerts after the Bot, shows its reply, and stays quiet on NO_REPLY", () =>
+  it.effect("names Bot alerts after the Bot, shows replies, skips NO_REPLY and check-ins", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const baseDir = yield* tempBaseDir;
@@ -484,6 +483,19 @@ describe("ServerPush", { concurrent: false }, () => {
             expect(harness.requests).toHaveLength(shown + 1);
             expect(harness.requests[shown]![0]!.data.alert_id).toBeUndefined();
           }
+
+          const checkIn = ThreadId.make("bot-check-in");
+          const lineage = {
+            rootThreadId: replying,
+            parentThreadId: replying,
+            relationshipToParent: "subagent" as const,
+          };
+          const shown = harness.requests.length;
+          yield* harness.publish(threadShell(checkIn, now, { lineage }));
+          yield* harness.publish(
+            threadShell(checkIn, justNow, { ...completed(justNow), latestRunId: runId, lineage }),
+          );
+          expect(harness.requests).toHaveLength(shown);
         }).pipe(Effect.provide(harness.layer));
       }),
     ),

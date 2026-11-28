@@ -310,14 +310,7 @@ export const make = Effect.gen(function* () {
 
   // A failed lookup fails the job, so a muted Bot never falls back to an ordinary thread's alert.
   const findBot = (threadId: ThreadId) =>
-    Option.isNone(botStore)
-      ? Effect.succeed({ bot: Option.none<BotRecord>(), checkInScout: false })
-      : Effect.all({
-          bot: botStore.value.findByThreadId(threadId),
-          checkInScout: botStore.value
-            .findByHeartbeatThreadId(threadId)
-            .pipe(Effect.map(Option.isSome)),
-        });
+    Option.isNone(botStore) ? Effect.succeedNone : botStore.value.findByThreadId(threadId);
 
   // Null when the run ended without a reply, undefined when it could not be read, so the alert
   // falls back to the status line.
@@ -348,15 +341,12 @@ export const make = Effect.gen(function* () {
     threadId: ThreadId,
   ) {
     const environmentId = yield* serverEnvironment.getEnvironmentId;
-    const { bot, checkInScout } = yield* findBot(threadId);
-    // Archived threads leave the card, as they do for the relay; muted and archived Bots and their
-    // check-in scouts never reach it.
+    const bot = yield* findBot(threadId);
+    // Archived threads leave the card, as they do for the relay; muted and archived Bots never
+    // reach it.
     const shell = yield* threads.getThreadShell(threadId);
     const thread =
-      shell === null ||
-      shell.archivedAt !== null ||
-      checkInScout ||
-      (Option.isSome(bot) && isSilentBot(bot.value))
+      shell === null || shell.archivedAt !== null || (Option.isSome(bot) && isSilentBot(bot.value))
         ? Option.none<OrchestrationV2ThreadShell>()
         : Option.some(shell);
     const project = Option.isSome(thread)
