@@ -1,4 +1,3 @@
-import { useAtomSet } from "@effect/atom-react";
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -8,7 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
 import type { PhoneBackgroundQuickAdjustPosition } from "../../persistence/mobile-preferences";
-import { updateMobilePreferencesAtom } from "../../state/preferences";
+import { saveMobilePreferences } from "../../state/preferences";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { SettingsSwitchRow } from "../settings/components/SettingsSwitchRow";
 import {
@@ -37,7 +37,7 @@ export function PhoneBackgroundQuickAdjust() {
   const background = usePhoneBackground();
   const enabled = usePhoneBackgroundEnabled();
   const quickAdjust = usePhoneBackgroundQuickAdjust();
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const savePreferences = useAtomCommand(saveMobilePreferences);
   const insets = useSafeAreaInsets();
   // Screen surfaces turn transparent while the background shows; the backdrop color stays solid.
   const { phoneBackdropColor } = useAppearancePreferences();
@@ -49,7 +49,7 @@ export function PhoneBackgroundQuickAdjust() {
       <DraggableQuickAdjustButton
         onPress={() => setOpen(true)}
         onMove={(phoneBackgroundQuickAdjustPosition) =>
-          savePreferences({ phoneBackgroundQuickAdjustPosition })
+          void savePreferences({ phoneBackgroundQuickAdjustPosition })
         }
       />
       <Modal transparent animationType="slide" visible={open} onRequestClose={() => setOpen(false)}>
@@ -82,7 +82,7 @@ export function PhoneBackgroundQuickAdjust() {
               label="Show background"
               value={enabled}
               onValueChange={(phoneBackgroundEnabled) =>
-                savePreferences({ phoneBackgroundEnabled })
+                void savePreferences({ phoneBackgroundEnabled })
               }
             />
             <PhoneBackgroundLookSliders record={activePhonePlaylist(background)} />

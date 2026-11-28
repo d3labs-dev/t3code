@@ -254,6 +254,30 @@ it("steers a Grok follow-up into its running turn without restarting it", () => 
   assert.isTrue(grok.turns.supportsActiveSteering);
 });
 
+// regression: #32606 a slash command steered into a running turn replaced the task
+it.each([
+  ["/compact", { type: "queue_after_active" }],
+  ["/context", { type: "queue_after_active" }],
+  [" /context all\n", { type: "queue_after_active" }],
+  ["/plugin:review-pr 12", { type: "queue_after_active" }],
+  ["/home/me/x.ts fails", { type: "steer_active", targetRunId: activeRunId }],
+  ["/ context", { type: "steer_active", targetRunId: activeRunId }],
+  ["$skill /context", { type: "steer_active", targetRunId: activeRunId }],
+] as const)("steers %j only when it is not a slash command", (text, expected) => {
+  const projection = dispatchProjection(baseCapabilities);
+  for (const deliveryIntent of ["auto", "steer"] as const) {
+    assert.deepEqual(
+      CommandPolicy.resolveMessageDispatch(projection, {
+        dispatchMode: { type: "start_immediately" },
+        deliveryIntent,
+        text,
+        attachments: [],
+      }),
+      expected,
+    );
+  }
+});
+
 it.each([
   ["/compact", { text: "/compact" }],
   [" /LOGOUT ", { text: " /LOGOUT " }],
@@ -330,6 +354,7 @@ layer("CommandPolicyV2", (it) => {
         capabilities: CursorProviderCapabilitiesV2,
         sameProvider: true,
         hasStrongNativeSource: true,
+        hasNativeTurnBoundary: false,
         sourceRunStatus: "completed",
         fromSpecificTurn: true,
         sourceBusy: false,
@@ -339,29 +364,60 @@ layer("CommandPolicyV2", (it) => {
     }),
   );
 
-  it.effect("forks a busy source natively only where the provider supports it", () =>
-    Effect.gen(function* () {
-      const policy = yield* CommandPolicy.CommandPolicyV2;
-      const decide = (
-        provider: "codex" | "claudeAgent",
-        capabilities: OrchestrationV2ProviderCapabilities,
-        sourceBusy: boolean,
-      ) =>
-        policy.decideForkExecution({
-          commandId,
-          threadId,
-          providerInstanceId: ProviderInstanceId.make(provider),
-          capabilities,
-          sameProvider: true,
-          hasStrongNativeSource: true,
-          sourceRunStatus: "completed",
-          fromSpecificTurn: true,
-          sourceBusy,
-        });
+  it.effect.each([
+    {
+      provider: "codex",
+      capabilities: CodexProviderCapabilitiesV2,
+      hasNativeTurnBoundary: true,
+      busyStrategy: "native_fork",
+    },
+    {
+      provider: "codex without busy forks",
+      capabilities: {
+        ...CodexProviderCapabilitiesV2,
+        threads: { ...CodexProviderCapabilitiesV2.threads, canForkWhileSourceRunning: undefined },
+      },
+      hasNativeTurnBoundary: true,
+      busyStrategy: "portable_context",
+    },
+    {
+      provider: "codex",
+      capabilities: CodexProviderCapabilitiesV2,
+      hasNativeTurnBoundary: false,
+      busyStrategy: "portable_context",
+    },
+    {
+      provider: "claudeAgent",
+      capabilities: ClaudeProviderCapabilitiesV2,
+      hasNativeTurnBoundary: false,
+      busyStrategy: "native_fork",
+    },
+  ] satisfies ReadonlyArray<{
+    provider: string;
+    capabilities: OrchestrationV2ProviderCapabilities;
+    hasNativeTurnBoundary: boolean;
+    busyStrategy: CommandPolicy.ForkExecutionPolicyV2;
+  }>)(
+    "forks a busy $provider source with hasNativeTurnBoundary=$hasNativeTurnBoundary as $busyStrategy",
+    ({ capabilities, hasNativeTurnBoundary, busyStrategy }) =>
+      Effect.gen(function* () {
+        const policy = yield* CommandPolicy.CommandPolicyV2;
+        const decide = (sourceBusy: boolean) =>
+          policy.decideForkExecution({
+            commandId,
+            threadId,
+            providerInstanceId: ProviderInstanceId.make("custom-instance"),
+            capabilities,
+            sameProvider: true,
+            hasStrongNativeSource: true,
+            hasNativeTurnBoundary,
+            sourceRunStatus: "completed",
+            fromSpecificTurn: true,
+            sourceBusy,
+          });
 
-      assert.equal(yield* decide("codex", CodexProviderCapabilitiesV2, false), "native_fork");
-      assert.equal(yield* decide("codex", CodexProviderCapabilitiesV2, true), "portable_context");
-      assert.equal(yield* decide("claudeAgent", ClaudeProviderCapabilitiesV2, true), "native_fork");
-    }),
+        assert.equal(yield* decide(false), "native_fork");
+        assert.equal(yield* decide(true), busyStrategy);
+      }),
   );
 });

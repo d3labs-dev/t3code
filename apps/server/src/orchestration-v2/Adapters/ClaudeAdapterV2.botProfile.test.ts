@@ -131,7 +131,7 @@ describe("ClaudeAdapterV2 bot harness profile", () => {
   it("restarts the query when bot tools change but not when its prompt text does", () => {
     const policy = { permissionMode: "default" as const, installPermissionCallback: false };
     const key = (botProfile?: BotHarnessProfile) =>
-      ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(policy, {}, botProfile);
+      ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(policy, {}, undefined, botProfile);
     assert.equal(key({ ...BOT_PROFILE, dynamicContext: "Roster changed." }), key(BOT_PROFILE));
     assert.notEqual(key({ ...BOT_PROFILE, tools: ["Read"] }), key(BOT_PROFILE));
     assert.notEqual(key(BOT_PROFILE), key());

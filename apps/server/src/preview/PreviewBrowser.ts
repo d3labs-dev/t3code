@@ -21,35 +21,34 @@ import * as NodeCrypto from "node:crypto";
 import * as ServerConfig from "../config.ts";
 import { openZipArchive } from "../zipArchive.ts";
 
-// Update the version, sizes and hashes from each build's zips listed at
+// Update each build's version, sizes and hashes from its zips listed at
 // https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json
 // Never pin below 156.0.8078.70: the shell has no CRLSet and older SPKI blocklists trust
 // compromised eMudhra intermediates (crrev.com/c/8627687).
-const VERSION = "157.0.8103.78";
 const HEADLESS_SHELL_ARCHIVES = {
   linux64: {
-    bytes: 127_965_683,
-    sha256: "f90329720fb61e5a76da9b6b509b6ad12a484c9c5df0359403e935177c6d153a",
+    bytes: 132_091_593,
+    sha256: "63401333cc587645bfaeea7f0c90958b327d249251e23954a47f30112ca23d5b",
   },
   "linux-arm64": {
-    bytes: 128_047_138,
-    sha256: "912fbf877e53de34d7b3cca5104f3b95607d41bd35412ccc6cd2a599ff0c0dbf",
+    bytes: 129_942_265,
+    sha256: "9f89b7ef6574e4bbf6ddda9f17f1fab5626e93d6f7d852653232d0d3554df975",
   },
   "mac-arm64": {
-    bytes: 104_822_985,
-    sha256: "17bf66d53c1b1104dcb641c5b331cd4ac5d200c778f5feed0934a0b92deaf8d6",
+    bytes: 105_060_087,
+    sha256: "69320f6869c4defbbdac8b8fa83aef65dc63975e83bbd06899b75dbea5c464b3",
   },
   "mac-x64": {
-    bytes: 110_132_547,
-    sha256: "f1a6a9561eaf1f409849538de663695d36d72fbf1ebca4d42e47c7b5f2a157f3",
+    bytes: 112_314_759,
+    sha256: "dc1ac31965cb2ec7794aed8c66127aceea304ae15353cd56fc4b8bde44091548",
   },
   win32: {
-    bytes: 120_403_126,
-    sha256: "d9829c59dcc79d9e6e920f8ab841f2a9a055dcf54229d756ac0b42dfec303910",
+    bytes: 122_509_314,
+    sha256: "936ad5e7f530bdd66b7261d0a2ceed76b057d429cf31b770a95fd903a7969856",
   },
   win64: {
-    bytes: 126_047_001,
-    sha256: "2138c1583d25d6f3abec5269943b2f430207d87a539895aa9e90cc4697ec0e1f",
+    bytes: 127_879_225,
+    sha256: "e935ea2d4633495b5e9ab7bc66bcd982806329c0ee9ecbafc1ac9596a3b34cdb",
   },
 } as const;
 
@@ -85,6 +84,7 @@ const FULL_CHROME_ARCHIVES: Record<ChromePlatform, { bytes: number; sha256: stri
 /** A Chrome for Testing download. Its name also names the archive's top folder and T3's install folder. */
 export interface ChromeBuild {
   readonly name: string;
+  readonly version: string;
   readonly archives: Readonly<Record<ChromePlatform, { bytes: number; sha256: string }>>;
   readonly executable: (platform: NodeJS.Platform) => string;
 }
@@ -92,6 +92,7 @@ export interface ChromeBuild {
 /** Small and fast; HTML render previews use it. */
 export const HEADLESS_SHELL: ChromeBuild = {
   name: "chrome-headless-shell",
+  version: "158.0.8127.88",
   archives: HEADLESS_SHELL_ARCHIVES,
   executable: (platform) =>
     platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell",
@@ -100,6 +101,7 @@ export const HEADLESS_SHELL: ChromeBuild = {
 /** Google's sign-in rejects the headless shell as insecure but accepts full Chrome in headless mode. */
 export const FULL_CHROME: ChromeBuild = {
   name: "chrome",
+  version: "157.0.8103.78",
   archives: FULL_CHROME_ARCHIVES,
   executable: (platform) =>
     platform === "win32"
@@ -143,9 +145,9 @@ const previewBrowserRelease = (
   return chrome === null
     ? null
     : {
-        version: VERSION,
+        version: build.version,
         platform: chrome,
-        url: `https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/${chrome}/${build.name}-${chrome}.zip`,
+        url: `https://storage.googleapis.com/chrome-for-testing-public/${build.version}/${chrome}/${build.name}-${chrome}.zip`,
         ...build.archives[chrome],
       };
 };

@@ -32,7 +32,7 @@ import {
 import { useState } from "react";
 
 import { requestConfirmDialog } from "../../confirmDialog";
-import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { namedClipboardTarget, useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { botsEnvironment, useBotDetail, useBotsIndex } from "../../state/bots";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { cn } from "../../lib/utils";
@@ -622,7 +622,9 @@ function SoulSection(props: {
 }
 
 function BotFolderPath({ path }: { readonly path: string }) {
-  const { copyToClipboard, isCopied } = useCopyToClipboard({ target: "Bot folder path" });
+  const { copyToClipboard, isCopied } = useCopyToClipboard({
+    target: namedClipboardTarget("Bot folder path"),
+  });
   return (
     <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-muted/30 py-1 ps-3 pe-1">
       <FolderIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />

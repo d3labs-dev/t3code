@@ -1,4 +1,4 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -11,7 +11,8 @@ import { AsyncResult } from "effect/reactivity";
 import * as Dialog from "../../components/ui/Dialog";
 import { buildModelOptions, type ModelOption } from "../../lib/modelOptions";
 import { useEnvironmentServerConfig } from "../../state/entities";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { mobilePreferencesAtom, saveMobilePreferences } from "../../state/preferences";
+import { useAtomCommand } from "../../state/use-atom-command";
 
 export function useBotVisualStyle(): BotVisualStyle {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
@@ -22,8 +23,8 @@ export function useBotVisualStyle(): BotVisualStyle {
 }
 
 export function useSetBotVisualStyle(): (style: BotVisualStyle) => void {
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
-  return (botVisualStyle) => savePreferences({ botVisualStyle });
+  const savePreferences = useAtomCommand(saveMobilePreferences);
+  return (botVisualStyle) => void savePreferences({ botVisualStyle });
 }
 
 export function reportBotCommandFailure(

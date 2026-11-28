@@ -9,6 +9,7 @@ import * as Schema from "effect/Schema";
 import {
   IssueTrackerKind,
   type IssueCapabilities,
+  type IssueInvolvement,
   type IssueLinkedPullRequest,
   type IssueViewerPermissions,
 } from "@t3tools/contracts";
@@ -61,8 +62,21 @@ const PAGE_SIZE = 50;
 /** How many pages of a listing with no cursor of its own are read before giving up on the rest. */
 const MAX_PAGES = 10;
 
+const INVOLVEMENT_PARAM: Record<Exclude<IssueInvolvement, "all">, string> = {
+  assigned: "assigned_by",
+  authored: "created_by",
+  mentioned: "mentioned_by",
+};
+
+const isForgejoCliError = Schema.is(ForgejoCli.ForgejoCliError);
 const repoPath = (scope: string) => `repos/${scope.split("/").map(encodeURIComponent).join("/")}`;
+const orgPath = (scope: string) => `orgs/${encodeURIComponent(scope.split("/").at(-2) ?? "")}`;
 const issuePath = (scope: string, number: number) => `${repoPath(scope)}/issues/${number}`;
+const isNoOrg = (error: IssueTrackerError) =>
+  error.reason === "not-found" ||
+  (isForgejoCliError(error.cause) && error.cause.reason === "forbidden");
+const dedupeLabels = <T extends { readonly name: string }>(rows: ReadonlyArray<T>) =>
+  rows.filter((label, index) => rows.findIndex((other) => other.name === label.name) === index);
 
 function parseNumber(key: string): number | null {
   return /^[1-9]\d*$/.test(key) ? Number(key) : null;
@@ -76,6 +90,7 @@ function parsePage(cursor: string | undefined): number | null {
 function reasonFor(error: ForgejoCli.ForgejoCliError): IssueTrackerError["reason"] {
   switch (error.reason) {
     case "missing-cli":
+    case "wrong-cli":
       return "missing-tool";
     case "authentication":
       return "unauthenticated";
@@ -208,6 +223,11 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
           return Effect.succeed({ rows, nextCursor: more ? String(page + 1) : null });
         }),
       );
+    // A personal owner answers 404 and a token without the organization scope 403: no org labels.
+    const orgLabelsPage = (target: Target, operation: string, page: number) =>
+      readPage(target, operation, `${orgPath(target.scope)}/labels`, page, ForgejoLabel).pipe(
+        Effect.catchIf(isNoOrg, () => Effect.succeed({ rows: [], nextCursor: null })),
+      );
 
     const write = (
       target: Target,
@@ -258,8 +278,7 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
     });
 
     /**
-     * Labels are written by id, so names are resolved against the repository's own, page by page
-     * until each is found. A name the repository lacks refuses the write rather than dropping it.
+     * Names resolve to repository labels first, then org labels; an unknown name refuses the write.
      */
     const labelIds = Effect.fn("ForgejoIssueTracker.labelIds")(function* (
       target: Target,
@@ -278,6 +297,12 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
         for (const label of next.rows) {
           if (names.includes(label.name)) ids.set(label.name, label.id);
         }
+        if (next.nextCursor === null) break;
+      }
+      for (let page = 1; ids.size < new Set(names).size && page <= MAX_PAGES; page++) {
+        const next = yield* orgLabelsPage(target, operation, page);
+        for (const label of next.rows)
+          if (names.includes(label.name) && !ids.has(label.name)) ids.set(label.name, label.id);
         if (next.nextCursor === null) break;
       }
       if (names.some((name) => !ids.has(name))) {
@@ -400,15 +425,9 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
         if (labels.length > 0) params.set("labels", labels.join(","));
         const text = input.query?.trim() ?? "";
         if (text.length > 0) params.set("q", text);
-        const involvement =
-          input.involvement === "assigned"
-            ? "assigned_by"
-            : input.involvement === "authored"
-              ? "created_by"
-              : input.involvement === "mentioned"
-                ? "mentioned_by"
-                : null;
-        if (involvement !== null) params.set(involvement, input.viewer);
+        if (input.involvement !== "all") {
+          params.set(INVOLVEMENT_PARAM[input.involvement], input.viewer);
+        }
         if (input.assignee !== undefined) params.set("assigned_by", input.assignee);
         // `assigned_by` names one person, so "assigned to me" is kept here beside a named assignee.
         const alsoAssignedTo =
@@ -616,12 +635,13 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
         Effect.all(
           [
             readPage(input, "listCandidates", `${repoPath(input.scope)}/labels`, 1, ForgejoLabel),
+            orgLabelsPage(input, "listCandidates", 1),
             readPage(input, "listCandidates", `${repoPath(input.scope)}/assignees`, 1, ForgejoUser),
           ],
           { concurrency: 2 },
         ).pipe(
-          Effect.map(([labels, assignees]) => ({
-            labels: labels.rows.map((label) => ({
+          Effect.map(([repo, org, assignees]) => ({
+            labels: dedupeLabels([...repo.rows, ...org.rows]).map((label) => ({
               name: label.name,
               color: label.color ?? null,
               description: label.description ?? null,
@@ -630,7 +650,8 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
               const actor = forgejoActor(user);
               return actor === null ? [] : [{ ...actor, id: actor.login }];
             }),
-            truncated: labels.nextCursor !== null || assignees.nextCursor !== null,
+            truncated:
+              repo.nextCursor !== null || org.nextCursor !== null || assignees.nextCursor !== null,
           })),
         ),
     };
