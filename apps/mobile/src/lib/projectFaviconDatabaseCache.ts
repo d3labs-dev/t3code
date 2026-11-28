@@ -3,27 +3,9 @@ import {
   createProjectFaviconImageLoader,
   PROJECT_FAVICON_MAX_DATA_URL_LENGTH,
   PROJECT_FAVICON_THUMBNAIL_SIZE,
-  type ProjectFaviconEntry,
 } from "@t3tools/client-runtime/project-favicon-cache";
-import * as Effect from "effect/Effect";
 
-import * as MobileDatabase from "../persistence/mobile-database";
-
-const CACHE_KIND = "project-favicon";
-const CACHE_SCHEMA_VERSION = 1;
-
-let database: MobileDatabase.MobileDatabase["Service"] | undefined;
-
-export function attachProjectFaviconDatabase(service: MobileDatabase.MobileDatabase["Service"]) {
-  database = service;
-}
-
-const runDatabase = <A, E>(
-  use: (database: MobileDatabase.MobileDatabase["Service"]) => Effect.Effect<A, E>,
-) =>
-  database
-    ? Effect.runPromise(use(database))
-    : Promise.reject(new Error("Project icon storage is not attached."));
+import { createImageCacheDatabaseStorage } from "./imageCacheDatabase";
 
 /** expo-image encodes only through disk cache; remove the temporary frame after reading bytes. */
 export async function downscaleProjectFavicon(
@@ -70,33 +52,6 @@ export async function downscaleProjectFavicon(
 }
 
 export const projectFaviconDatabaseCache = createSharedProjectFaviconCache({
-  storage: {
-    list: () =>
-      runDatabase((database) =>
-        database.listCache(CACHE_KIND).pipe(
-          Effect.map((payloads) =>
-            payloads.flatMap((payload): Array<unknown> => {
-              try {
-                return [JSON.parse(payload)];
-              } catch {
-                return [];
-              }
-            }),
-          ),
-        ),
-      ),
-    put: (key, entry: ProjectFaviconEntry) =>
-      runDatabase((database) =>
-        database.saveCache(
-          entry.environmentId,
-          CACHE_KIND,
-          key,
-          CACHE_SCHEMA_VERSION,
-          JSON.stringify(entry),
-        ),
-      ),
-    remove: (key, entry) =>
-      runDatabase((database) => database.removeCache(entry.environmentId, CACHE_KIND, key)),
-  },
+  storage: createImageCacheDatabaseStorage("project-favicon"),
   load: createProjectFaviconImageLoader({ downscale: downscaleProjectFavicon }),
 });

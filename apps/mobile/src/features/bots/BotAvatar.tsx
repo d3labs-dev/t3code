@@ -1,19 +1,25 @@
+import { useAtomValue } from "@effect/atom-react";
 import {
   type BotAvatarExpression,
   type BotAvatarEyes,
+  type BotAvatarOwner,
   type BotAvatarShape,
   type BotVisualStyle,
   botAvatarExpression,
+  DEFAULT_BOT_AVATAR_SHAPE,
   resolveBotAvatarGlyph,
 } from "@t3tools/client-runtime/bot-avatar";
-import type { BotStatus } from "@t3tools/contracts";
+import type { BotAvatarReference, BotStatus } from "@t3tools/contracts";
 import { Image } from "expo-image";
 import { msg } from "gt-react-native";
+import { type ReactNode, useState } from "react";
 import { View } from "react-native";
 import Svg, { G, Path, Rect } from "react-native-svg";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { useControlTheme } from "../../components/ui/useControlTheme";
+import { assetImageSource } from "../../lib/assetImageSource";
+import { botAvatarUrlAtom } from "../../state/assets";
 import { botAvatarPaint } from "./botAvatarPaint";
 import { useBotVisualStyle } from "./botFormHelpers";
 
@@ -109,9 +115,40 @@ export function BotShapeSilhouette(props: {
   );
 }
 
+function StoredBotImage(props: {
+  readonly owner: BotAvatarOwner;
+  readonly reference: BotAvatarReference;
+  readonly dimension: number;
+  readonly fallback: ReactNode;
+}) {
+  const resource = {
+    _tag: "bot-avatar" as const,
+    botId: props.owner.bot.id,
+    avatar: props.reference,
+  };
+  const url = useAtomValue(
+    botAvatarUrlAtom({
+      environmentId: props.owner.environmentId,
+      botId: props.owner.bot.id,
+      reference: props.reference,
+    }),
+  );
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  if (url === null || url === brokenUrl) return props.fallback;
+  return (
+    <Image
+      source={assetImageSource(props.owner.environmentId, resource, url)}
+      contentFit="cover"
+      style={{ width: props.dimension, height: props.dimension, borderRadius: props.dimension / 2 }}
+      onError={() => setBrokenUrl(url)}
+    />
+  );
+}
+
 export function BotAvatar({
   icon,
   color,
+  owner = null,
   size = "md",
   visualStyle,
   status = null,
@@ -120,6 +157,8 @@ export function BotAvatar({
 }: {
   readonly icon: string;
   readonly color: string;
+  /** Without it, an icon naming a stored image shows the default shape. */
+  readonly owner?: BotAvatarOwner | null;
   readonly size?: BotAvatarSize;
   readonly visualStyle?: BotVisualStyle;
   readonly status?: BotStatus | null;
@@ -145,6 +184,22 @@ export function BotAvatar({
         : status === "error"
           ? colors["--color-danger"]
           : null;
+  const shapeBody = (shape: BotAvatarShape) => (
+    <Svg width={dimension} height={dimension} viewBox="0 0 24 24">
+      <Path
+        d={shape.path}
+        fill={paint.fill}
+        stroke={paint.stroke}
+        strokeWidth={paint.strokeWidth}
+        vectorEffect="non-scaling-stroke"
+      />
+      <BotFace
+        eyes={shape.eyes}
+        expression={botAvatarExpression(status, muted)}
+        color={paint.eyes}
+      />
+    </Svg>
+  );
 
   return (
     <View
@@ -159,20 +214,7 @@ export function BotAvatar({
       className="relative shrink-0 items-center justify-center"
     >
       {glyph.kind === "shape" ? (
-        <Svg width={dimension} height={dimension} viewBox="0 0 24 24">
-          <Path
-            d={glyph.shape.path}
-            fill={paint.fill}
-            stroke={paint.stroke}
-            strokeWidth={paint.strokeWidth}
-            vectorEffect="non-scaling-stroke"
-          />
-          <BotFace
-            eyes={glyph.shape.eyes}
-            expression={botAvatarExpression(status, muted)}
-            color={paint.eyes}
-          />
-        </Svg>
+        shapeBody(glyph.shape)
       ) : glyph.kind === "emoji" ? (
         <View
           style={{
@@ -191,11 +233,20 @@ export function BotAvatar({
             {glyph.emoji}
           </Text>
         </View>
-      ) : (
+      ) : glyph.kind === "image" ? (
         <Image
           source={{ uri: glyph.src }}
           contentFit="cover"
           style={{ width: dimension, height: dimension, borderRadius: dimension / 2 }}
+        />
+      ) : owner === null ? (
+        shapeBody(DEFAULT_BOT_AVATAR_SHAPE)
+      ) : (
+        <StoredBotImage
+          owner={owner}
+          reference={glyph.reference}
+          dimension={dimension}
+          fallback={shapeBody(DEFAULT_BOT_AVATAR_SHAPE)}
         />
       )}
       {dotColor !== null ? (

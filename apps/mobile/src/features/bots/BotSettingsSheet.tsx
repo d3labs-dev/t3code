@@ -299,6 +299,7 @@ function BotSettingsSheetBody(props: {
                 <BotAvatar
                   icon={shown.icon}
                   color={shown.color}
+                  owner={props.entry}
                   size="xl"
                   visualStyle={visualStyle}
                   status={status}

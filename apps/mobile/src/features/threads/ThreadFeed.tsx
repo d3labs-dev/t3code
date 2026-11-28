@@ -1969,6 +1969,7 @@ function BotHandoffMessageRow(props: {
             <BotAvatar
               icon={peerBot?.bot.icon ?? DEFAULT_BOT_AVATAR_SHAPE.id}
               color={peerBot?.bot.color ?? BOT_THEME_COLOR}
+              owner={peerBot}
               size="sm"
             />
           )}

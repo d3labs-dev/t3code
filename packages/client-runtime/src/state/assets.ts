@@ -3,6 +3,8 @@ import {
   type AssetCreateUrlResult,
   type AssetImageDimensions,
   AssetResource,
+  BotAvatarReference,
+  BotId,
   EnvironmentId,
   type ProjectCloneSnapshot,
   WS_METHODS,
@@ -21,6 +23,7 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 
+import type { BotAvatarCache, BotAvatarTarget } from "../botAvatarCache.ts";
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import { request } from "../rpc/client.ts";
@@ -395,4 +398,41 @@ export function createProjectFaviconUrlAtomFamily(input: {
   });
   return (target: ProjectFaviconTarget) =>
     family(getProjectFaviconResourceKey(target.environmentId, target.cwd, target.faviconPath));
+}
+
+export function createBotAvatarUrlAtomFamily(
+  input: Pick<
+    Parameters<typeof createProjectFaviconUrlAtomFamily>[0],
+    "createUrl" | "preparedConnection"
+  > & { readonly imageCache: BotAvatarCache },
+) {
+  const decodeKey = Schema.decodeUnknownSync(
+    Schema.Tuple([EnvironmentId, BotId, BotAvatarReference]),
+  );
+  const cache = input.imageCache;
+  const family = Atom.family((key: string) => {
+    const [environmentId, botId, reference] = decodeKey(JSON.parse(key));
+    const query = input.createUrl({
+      environmentId,
+      input: { resource: { _tag: "bot-avatar", botId, avatar: reference } },
+    });
+    const resolvedUrl = Atom.make((get): string | null => {
+      const connection = get(input.preparedConnection(environmentId));
+      const state = assetUrlStateFromResult(
+        get(query),
+        Option.isSome(connection) ? connection.value.httpBaseUrl : null,
+      );
+      return state._tag === "Success" ? state.url : Option.getOrNull(get.self<string | null>());
+    }).pipe(Atom.setIdleTTL(ASSET_URL_IDLE_TTL_MS));
+    const target = { environmentId, reference };
+    const image = Atom.make((get) => {
+      const url = get(resolvedUrl);
+      return Effect.promise((signal) => cache.resolve(target, url, signal));
+    }).pipe(Atom.setIdleTTL(ASSET_URL_IDLE_TTL_MS));
+    return Atom.make((get): string | null =>
+      AsyncResult.getOrElse(get(image), () => cache.peek(target)),
+    ).pipe(Atom.setIdleTTL(ASSET_URL_IDLE_TTL_MS));
+  });
+  return (target: BotAvatarTarget & { readonly botId: BotId }) =>
+    family(JSON.stringify([target.environmentId, target.botId, target.reference]));
 }

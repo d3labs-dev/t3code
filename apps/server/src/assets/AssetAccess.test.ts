@@ -7,6 +7,8 @@ import {
   AssetAccessError,
   AssetCreateUrlInput,
   AssetPreviewTypeValidationError,
+  BotAvatarReference,
+  BotId,
   SOURCE_CONTROL_MEDIA_ASSET,
   ThreadId,
   TurnItemId,
@@ -238,6 +240,45 @@ describe("AssetAccess", () => {
 
       yield* fs.remove(imagePath);
       expect(yield* resolveAsset(token, suffix.slice(separator + 1))).toBeNull();
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("serves a Bot's avatar from one URL for the whole expiry bucket", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const folder = yield* fs.makeTempDirectoryScoped({ prefix: "t3-asset-bot-avatar-" });
+      const hash = "a".repeat(64);
+      const imagePath = path.join(folder, `avatar-${hash}.png`);
+      yield* fs.writeFile(imagePath, screenshotPng);
+      const resource = {
+        _tag: "bot-avatar" as const,
+        botId: BotId.make("bot-1"),
+        avatar: BotAvatarReference.make(`avatar:${hash}.png`),
+      };
+
+      const result = yield* issueAssetUrl({ resource, botAvatarPath: imagePath });
+      expect(result.relativeUrl).toMatch(new RegExp(`/avatar-${hash}\\.png$`));
+      yield* TestClock.adjust("1 minute");
+      expect(yield* issueAssetUrl({ resource, botAvatarPath: imagePath })).toEqual(result);
+
+      const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const separator = suffix.indexOf("/");
+      const token = suffix.slice(0, separator);
+      const asset = yield* resolveAsset(token, suffix.slice(separator + 1));
+      expect(asset).toMatchObject({ kind: "file", path: yield* fs.realPath(imagePath) });
+      if (asset?.kind !== "file") return;
+      const response = yield* assetFileResponse(asset);
+      expect(response.headers["content-type"]).toBe("image/png");
+
+      const unnamed = yield* issueAssetUrl({ resource }).pipe(Effect.flip);
+      expect(unnamed._tag).toBe("AssetBotAvatarNotFoundError");
+      yield* fs.remove(imagePath);
+      expect(yield* resolveAsset(token, suffix.slice(separator + 1))).toBeNull();
+      const removed = yield* issueAssetUrl({ resource, botAvatarPath: imagePath }).pipe(
+        Effect.flip,
+      );
+      expect(removed._tag).toBe("AssetBotAvatarNotFoundError");
     }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
 

@@ -5,47 +5,9 @@ import {
   PROJECT_FAVICON_THUMBNAIL_SIZE,
 } from "@t3tools/client-runtime/project-favicon-cache";
 
-const DATABASE_NAME = "t3code:project-favicons";
-const DATABASE_VERSION = 2;
-const STORE_NAME = "images";
-let database: Promise<IDBDatabase> | undefined;
+import { createIndexedDbImageCacheStorage } from "./imageCacheDatabase";
 
-function openDatabase() {
-  return (database ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-    request.addEventListener("upgradeneeded", () => {
-      for (const name of request.result.objectStoreNames) {
-        if (name !== STORE_NAME) request.result.deleteObjectStore(name);
-      }
-      if (!request.result.objectStoreNames.contains(STORE_NAME)) {
-        request.result.createObjectStore(STORE_NAME);
-      }
-    });
-    request.addEventListener("success", () => resolve(request.result));
-    request.addEventListener("error", () => reject(request.error));
-    request.addEventListener("blocked", () => reject(new Error("Project icon cache is blocked.")));
-  }));
-}
-
-function completed(transaction: IDBTransaction) {
-  return new Promise<void>((resolve, reject) => {
-    transaction.addEventListener("complete", () => resolve());
-    transaction.addEventListener("abort", () => reject(transaction.error));
-    transaction.addEventListener("error", () => reject(transaction.error));
-  });
-}
-
-async function withStore<A>(
-  mode: IDBTransactionMode,
-  use: (store: IDBObjectStore) => IDBRequest<A> | void,
-) {
-  const transaction = (await openDatabase()).transaction(STORE_NAME, mode);
-  const request = use(transaction.objectStore(STORE_NAME));
-  await completed(transaction);
-  return request?.result;
-}
-
-async function downscaleProjectFavicon(
+export async function downscaleProjectFavicon(
   image: { readonly mimeType: string; readonly bytes: Uint8Array<ArrayBuffer> },
   signal: AbortSignal,
 ) {
@@ -71,14 +33,6 @@ async function downscaleProjectFavicon(
 }
 
 export const projectFaviconCache = createProjectFaviconCache({
-  storage: {
-    list: async () => (await withStore("readonly", (store) => store.getAll())) ?? [],
-    put: async (key, entry) => {
-      await withStore("readwrite", (store) => store.put(entry, key));
-    },
-    remove: async (key) => {
-      await withStore("readwrite", (store) => store.delete(key));
-    },
-  },
+  storage: createIndexedDbImageCacheStorage("t3code:project-favicons"),
   load: createProjectFaviconImageLoader({ downscale: downscaleProjectFavicon }),
 });

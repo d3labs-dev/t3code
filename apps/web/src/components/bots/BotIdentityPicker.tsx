@@ -2,6 +2,7 @@ import {
   BOT_AVATAR_COLORS,
   BOT_AVATAR_SHAPES,
   BOT_THEME_COLOR,
+  type BotAvatarOwner,
   type BotVisualStyle,
   DEFAULT_BOT_AVATAR_SHAPE,
   findBotAvatarShape,
@@ -285,6 +286,7 @@ function EmojiChooser(props: {
 function ImageUploader(props: {
   readonly icon: string;
   readonly color: string;
+  readonly owner: BotAvatarOwner | null;
   readonly disabled: boolean;
   readonly onIconChange: (icon: string) => void;
 }) {
@@ -351,7 +353,7 @@ function ImageUploader(props: {
         className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-dashed border-border px-4 py-3.5 text-left outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-64 data-dragging:border-ring data-dragging:bg-accent/40 motion-reduce:transition-none"
       >
         {hasImage ? (
-          <BotAvatar icon={props.icon} color={props.color} size="lg" />
+          <BotAvatar icon={props.icon} color={props.color} owner={props.owner} size="lg" />
         ) : (
           <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
             <ImageUpIcon className="size-4" aria-hidden />
@@ -390,6 +392,7 @@ function ImageUploader(props: {
 export function BotIdentityPicker({
   icon,
   color,
+  owner = null,
   onIconChange,
   onColorChange,
   visualStyle,
@@ -398,6 +401,7 @@ export function BotIdentityPicker({
 }: {
   readonly icon: string;
   readonly color: string;
+  readonly owner?: BotAvatarOwner | null;
   readonly onIconChange: (icon: string) => void;
   readonly onColorChange: (color: string) => void;
   readonly visualStyle?: BotVisualStyle;
@@ -436,7 +440,13 @@ export function BotIdentityPicker({
       ) : source === "emoji" ? (
         <EmojiChooser icon={icon} disabled={disabled} onIconChange={onIconChange} />
       ) : (
-        <ImageUploader icon={icon} color={color} disabled={disabled} onIconChange={onIconChange} />
+        <ImageUploader
+          icon={icon}
+          color={color}
+          owner={owner}
+          disabled={disabled}
+          onIconChange={onIconChange}
+        />
       )}
       {source === "upload" ? null : (
         <ColorRow color={color} disabled={disabled} onColorChange={onColorChange} />
@@ -457,7 +467,13 @@ export function BotIdentityPicker({
           >
             {BOT_VISUAL_STYLES.map((style) => (
               <Toggle key={style.id} value={style.id} className="flex-1">
-                <BotAvatar icon={icon} color={color} size="xs" visualStyle={style.id} />
+                <BotAvatar
+                  icon={icon}
+                  color={color}
+                  owner={owner}
+                  size="xs"
+                  visualStyle={style.id}
+                />
                 {resolve(style.label)}
               </Toggle>
             ))}

@@ -1,4 +1,11 @@
-import { BOT_DEFAULT_ICON, type BotStatus } from "@t3tools/contracts";
+import {
+  BOT_DEFAULT_ICON,
+  type BotAvatarReference,
+  type BotRecord,
+  type BotStatus,
+  type EnvironmentId,
+  isBotAvatarReference,
+} from "@t3tools/contracts";
 import { msg } from "gt-i18n";
 
 export type BotVisualStyle = "flat" | "glass" | "minimal";
@@ -116,11 +123,18 @@ export function findBotAvatarShape(icon: string): BotAvatarShape | null {
 export const DEFAULT_BOT_AVATAR_SHAPE =
   findBotAvatarShape(BOT_DEFAULT_ICON) ?? BOT_AVATAR_SHAPES[0];
 
-const BOT_IMAGE_ICON = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z\d+/]+={0,2}$/i;
+const BOT_IMAGE_UPLOAD = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z\d+/]+={0,2}$/i;
 
-/** Uploaded portraits are inline raster data URLs; SVG and other schemes never render. */
+/** A stored portrait, or a raster upload not saved yet; SVG and other schemes never render. */
 export function isBotImageIcon(icon: string): boolean {
-  return BOT_IMAGE_ICON.test(icon.trim());
+  const trimmed = icon.trim();
+  return isBotAvatarReference(trimmed) || BOT_IMAGE_UPLOAD.test(trimmed);
+}
+
+/** The Bot whose folder holds a stored portrait; any roster entry is one. */
+export interface BotAvatarOwner {
+  readonly environmentId: EnvironmentId;
+  readonly bot: Pick<BotRecord, "id">;
 }
 
 // Hermes has no Intl.Segmenter. This keeps its grapheme clusters for the text an icon holds:
@@ -138,11 +152,14 @@ export function isCustomBotEmoji(icon: string): boolean {
 export type BotAvatarGlyph =
   | { readonly kind: "shape"; readonly shape: BotAvatarShape }
   | { readonly kind: "emoji"; readonly emoji: string }
+  | { readonly kind: "stored-image"; readonly reference: BotAvatarReference }
   | { readonly kind: "image"; readonly src: string };
 
 /** Icons written by agents or older clients may name neither a shape, an emoji nor an image. */
 export function resolveBotAvatarGlyph(icon: string): BotAvatarGlyph {
-  if (isBotImageIcon(icon)) return { kind: "image", src: icon.trim() };
+  const trimmed = icon.trim();
+  if (isBotAvatarReference(trimmed)) return { kind: "stored-image", reference: trimmed };
+  if (BOT_IMAGE_UPLOAD.test(trimmed)) return { kind: "image", src: trimmed };
   const shape = findBotAvatarShape(icon);
   if (shape !== null) return { kind: "shape", shape };
   if (isCustomBotEmoji(icon)) return { kind: "emoji", emoji: icon.trim() };

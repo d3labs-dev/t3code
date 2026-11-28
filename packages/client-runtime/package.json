@@ -91,6 +91,10 @@
       "types": "./src/load-balancing.ts",
       "default": "./src/load-balancing.ts"
     },
+    "./image-cache": {
+      "types": "./src/imageCache.ts",
+      "default": "./src/imageCache.ts"
+    },
     "./project-favicon-cache": {
       "types": "./src/projectFaviconCache.ts",
       "default": "./src/projectFaviconCache.ts"
@@ -98,6 +102,10 @@
     "./bot-avatar": {
       "types": "./src/botAvatar.ts",
       "default": "./src/botAvatar.ts"
+    },
+    "./bot-avatar-cache": {
+      "types": "./src/botAvatarCache.ts",
+      "default": "./src/botAvatarCache.ts"
     },
     "./bot-background-runs": {
       "types": "./src/botBackgroundRuns.ts",

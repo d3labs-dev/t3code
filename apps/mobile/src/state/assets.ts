@@ -5,6 +5,7 @@ import {
   assetUrlStateFromResult,
   blockedAssetUrlState,
   createAssetEnvironmentAtoms,
+  createBotAvatarUrlAtomFamily,
   createProjectFaviconUrlAtomFamily,
   EMPTY_ASSET_URL_ATOM,
   makeRevisionedAssetUrlFamily,
@@ -20,6 +21,7 @@ import { Atom, AsyncResult } from "effect/reactivity";
 
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
+import { botAvatarDatabaseCache } from "../lib/botAvatarDatabaseCache";
 import { projectFaviconDatabaseCache } from "../lib/projectFaviconDatabaseCache";
 import { type AssetUrlState, deriveAssetUrlState } from "./asset-url-state";
 import { appAtomRegistry } from "./atom-registry";
@@ -38,6 +40,12 @@ export const projectFaviconUrlAtom = createProjectFaviconUrlAtomFamily({
   createUrl: assetEnvironment.createUrl,
   preparedConnection: environmentSession.preparedConnectionValueAtom,
   projectClones: environmentProjectCloneListAtom,
+});
+
+export const botAvatarUrlAtom = createBotAvatarUrlAtomFamily({
+  imageCache: botAvatarDatabaseCache,
+  createUrl: assetEnvironment.createUrl,
+  preparedConnection: environmentSession.preparedConnectionValueAtom,
 });
 
 const revisionedAssetUrl = makeRevisionedAssetUrlFamily(assetEnvironment.createUrl);

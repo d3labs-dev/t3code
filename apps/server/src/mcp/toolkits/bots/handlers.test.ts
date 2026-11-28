@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import {
@@ -82,6 +83,7 @@ const withBotTools = <A, E>(
           BotFolders.layer.pipe(
             Layer.provide(ServerConfig.layerTest(baseDir, baseDir)),
             Layer.provide(Layer.succeed(HostProcess.HomeDirectory, baseDir)),
+            Layer.provide(NodeCrypto.layer),
           ),
           Layer.mock(ThreadManagement.ThreadManagementService)({
             getThreadShell: (threadId) => Effect.succeed(liveThreadShell(threadId)),

@@ -53,6 +53,36 @@ export const BOT_DEFAULT_TOOLS = [
 export const BOT_DEFAULT_ICON = "squircle";
 export const BOT_DEFAULT_COLOR = "#6366f1";
 
+const BOT_AVATAR_IMAGE_TYPES = ["webp", "png", "jpeg", "gif"] as const;
+export const BotAvatarImageType = Schema.Literals(BOT_AVATAR_IMAGE_TYPES);
+export type BotAvatarImageType = typeof BotAvatarImageType.Type;
+
+const BOT_AVATAR_REFERENCE_PREFIX = "avatar:";
+const BOT_AVATAR_FILE_PREFIX = "avatar-";
+
+/** An icon naming an image in the Bot's folder by the SHA-256 of its bytes. */
+export const BotAvatarReference = Schema.String.check(
+  Schema.isPattern(
+    new RegExp(
+      `^${BOT_AVATAR_REFERENCE_PREFIX}[\\da-f]{64}\\.(?:${BOT_AVATAR_IMAGE_TYPES.join("|")})$`,
+    ),
+  ),
+).pipe(Schema.brand("BotAvatarReference"));
+export type BotAvatarReference = typeof BotAvatarReference.Type;
+export const isBotAvatarReference = Schema.is(BotAvatarReference);
+
+export const botAvatarReference = (sha256Hex: string, type: BotAvatarImageType) =>
+  BotAvatarReference.make(`${BOT_AVATAR_REFERENCE_PREFIX}${sha256Hex}.${type}`);
+
+export const botAvatarFileName = (reference: BotAvatarReference) =>
+  `${BOT_AVATAR_FILE_PREFIX}${reference.slice(BOT_AVATAR_REFERENCE_PREFIX.length)}`;
+
+export const botAvatarReferenceFromFileName = (fileName: string) => {
+  if (!fileName.startsWith(BOT_AVATAR_FILE_PREFIX)) return null;
+  const reference = `${BOT_AVATAR_REFERENCE_PREFIX}${fileName.slice(BOT_AVATAR_FILE_PREFIX.length)}`;
+  return isBotAvatarReference(reference) ? reference : null;
+};
+
 const BotStringMap = Schema.Record(Schema.String, Schema.String);
 
 export const BotMcpServerConfig = Schema.Union([

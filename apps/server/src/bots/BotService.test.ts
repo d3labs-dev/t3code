@@ -1,6 +1,8 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
+  BotAvatarReference,
   type BotExchangeStatus,
   type BotId,
   type BotListResult,
@@ -118,6 +120,15 @@ const runUpdated = (
     contextHandoffId: null,
   },
 });
+
+/** A PNG header is all a Bot avatar check reads; `padding` grows the file past it. */
+const pngAvatar = (side: number, padding = 0) => {
+  const bytes = new Uint8Array(24 + padding);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+  new DataView(bytes.buffer).setUint32(16, side);
+  new DataView(bytes.buffer).setUint32(20, side);
+  return { bytes, dataUrl: `data:image/png;base64,${Buffer.from(bytes).toString("base64")}` };
+};
 
 const makeHarness = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
@@ -246,6 +257,7 @@ const makeHarness = Effect.gen(function* () {
         BotFolders.layer.pipe(
           Layer.provide(ServerConfig.layerTest(baseDir, baseDir)),
           Layer.provide(Layer.succeed(HostProcess.HomeDirectory, home)),
+          Layer.provide(NodeCrypto.layer),
         ),
         projectsLayer,
         launchLayer,
@@ -549,6 +561,73 @@ it.effect(
           .update({ botId: designer.id, slug: BotSlug.make("kelsier") })
           .pipe(Effect.flip);
         assert.strictEqual(conflict.code, "slug_conflict");
+      }),
+    ),
+);
+
+it.effect(
+  "stores an uploaded avatar as a file in the Bot's folder and keeps only its reference",
+  () =>
+    withBots((_harness, bots) =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const avatarFiles = (folderPath: string) =>
+          fileSystem
+            .readDirectory(folderPath)
+            .pipe(Effect.map((names) => names.filter((name) => name.startsWith("avatar-")).sort()));
+        const first = pngAvatar(128);
+        const second = pngAvatar(64);
+
+        const created = (yield* bots.create({
+          name: "Painter",
+          modelSelection,
+          icon: first.dataUrl,
+        })).bot;
+        assert.match(created.icon, /^avatar:[\da-f]{64}\.png$/);
+        const firstAvatar = BotAvatarReference.make(created.icon);
+        const firstPath = yield* bots.avatarPath({ botId: created.id, avatar: firstAvatar });
+        assert.strictEqual(
+          firstPath,
+          path.join(created.folderPath, `avatar-${created.icon.slice("avatar:".length)}`),
+        );
+        assert.deepStrictEqual(yield* fileSystem.readFile(firstPath!), first.bytes);
+        assert.strictEqual((yield* bots.list({})).bots[0]?.bot.icon, created.icon);
+
+        const sameImage = yield* bots.update({ botId: created.id, icon: first.dataUrl });
+        assert.strictEqual(sameImage.bot.icon, created.icon);
+        const kept = yield* bots.update({ botId: created.id, icon: created.icon });
+        assert.strictEqual(kept.bot.icon, created.icon);
+
+        const replaced = (yield* bots.update({ botId: created.id, icon: second.dataUrl })).bot;
+        assert.notStrictEqual(replaced.icon, created.icon);
+        assert.deepStrictEqual(yield* avatarFiles(created.folderPath), [
+          `avatar-${replaced.icon.slice("avatar:".length)}`,
+        ]);
+        assert.isNull(yield* bots.avatarPath({ botId: created.id, avatar: firstAvatar }));
+
+        const stale = yield* bots
+          .update({ botId: created.id, icon: created.icon })
+          .pipe(Effect.flip);
+        assert.strictEqual(stale.code, "invalid_request");
+        const foreign = yield* bots
+          .create({ name: "Copycat", modelSelection, icon: replaced.icon })
+          .pipe(Effect.flip);
+        assert.strictEqual(foreign.code, "invalid_request");
+
+        for (const icon of [
+          "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+          `data:image/png;base64,${Buffer.from("not an image").toString("base64")}`,
+          pngAvatar(128, 512 * 1024).dataUrl,
+        ]) {
+          const rejected = yield* bots.update({ botId: created.id, icon }).pipe(Effect.flip);
+          assert.strictEqual(rejected.code, "invalid_request");
+        }
+        assert.strictEqual((yield* bots.get({ botId: created.id })).bot.icon, replaced.icon);
+
+        const emoji = (yield* bots.update({ botId: created.id, icon: "🦊" })).bot;
+        assert.strictEqual(emoji.icon, "🦊");
+        assert.deepStrictEqual(yield* avatarFiles(created.folderPath), []);
       }),
     ),
 );

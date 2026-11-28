@@ -98,6 +98,7 @@ import {
   serverProviderDeltas,
   type FilesystemBrowseFailure,
   FilesystemBrowseError,
+  AssetBotAvatarNotFoundError,
   AssetWorkspaceContextNotFoundError,
   AssetWorkspaceContextResolutionError,
   SOURCE_CONTROL_MEDIA_ASSET,
@@ -3280,6 +3281,20 @@ export const layerWsRpc = (
                 resource: input.resource,
                 workspaceRoot: input.resource.cwd,
               });
+            }
+            if (input.resource._tag === "bot-avatar") {
+              const botAvatarPath = yield* bots
+                .avatarPath(input.resource)
+                .pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new AssetWorkspaceContextResolutionError({ resource: input.resource, cause }),
+                  ),
+                );
+              if (botAvatarPath === null) {
+                return yield* new AssetBotAvatarNotFoundError({ resource: input.resource });
+              }
+              return yield* issueAssetUrl({ resource: input.resource, botAvatarPath });
             }
             if (input.resource._tag === "project-favicon") {
               const project = yield* projectStore
