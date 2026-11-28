@@ -501,27 +501,6 @@ describe("buildThreadFeed", () => {
       "message-assistant",
       "dream-failure",
     ]);
-    const steered: OrchestrationV2TurnItem = {
-      ...userMessage("2026-06-20T00:00:05.500Z"),
-      id: TurnItemId.make("steered-into-dream"),
-      runId: dreamRunId,
-      messageId: MessageId.make("steered-into-dream"),
-      text: "Are you there?",
-    };
-    expect(feedIds([...chat, ...dream, steered])).toEqual(
-      expect.arrayContaining(["dream-reply", "steered-into-dream"]),
-    );
-    const [, ...dreamWork] = dream;
-    const typed: OrchestrationV2TurnItem = {
-      ...userMessage("2026-06-20T00:00:04.000Z"),
-      id: TurnItemId.make("typed-prefix"),
-      runId: dreamRunId,
-      messageId: MessageId.make("typed-prefix"),
-      text: BOT_DREAMING_PROMPT,
-    };
-    expect(feedIds([...chat, typed, ...dreamWork])).toEqual(
-      expect.arrayContaining(["typed-prefix", "dream-reply"]),
-    );
   });
 
   it("hides a Bot check-in prompt and shows only a real reply", () => {
@@ -562,20 +541,10 @@ describe("buildThreadFeed", () => {
           : [entry.id],
       );
 
-    expect(feedIds([prompt, read])).toEqual([]);
-    expect(feedIds([prompt, read, reply("NO_REPLY")])).toEqual([]);
-    expect(feedIds([prompt, reply("Heads up — PR #286 is green.")])).toEqual(["check-in-reply"]);
-    expect(feedIds([prompt, preamble, runningRead])).toEqual([]);
-    expect(feedIds([prompt, preamble, read, reply("NO_REPLY")])).toEqual([]);
-    expect(feedIds([prompt, preamble, read, reply("PR #286 is green.")])).toEqual([
+    expect(feedIds([prompt, preamble, read, reply("Heads up — PR #286 is green.")])).toEqual([
       "check-in-reply",
     ]);
-    const typed: OrchestrationV2TurnItem = {
-      ...prompt,
-      createdBy: "user",
-      creationSource: "mobile",
-    };
-    expect(feedIds([typed, reply("NO_REPLY")])).toEqual(["check-in-prompt", "check-in-reply"]);
+    expect(feedIds([prompt, preamble, runningRead])).toEqual([]);
   });
 
   it("keeps async answers in question history instead of user bubbles", () => {

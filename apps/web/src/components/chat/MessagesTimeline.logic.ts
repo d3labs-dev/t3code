@@ -1,6 +1,7 @@
 import * as DateTime from "effect/DateTime";
 import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
+import { botBackgroundRuns } from "@t3tools/client-runtime/bot-background-runs";
 import {
   isLiveSubagentTurnItem,
   waitingOnSubagentsLabel,
@@ -65,7 +66,7 @@ import {
 } from "@t3tools/contracts";
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/shell";
 import type { ToolCallVisibility } from "@t3tools/contracts/settings";
-import { isBotNoReplyMessage, serverBotPromptKind } from "@t3tools/shared/botProactive";
+import { serverBotPromptKind } from "@t3tools/shared/botProactive";
 import { resolveT3McpToolDefinition } from "@t3tools/shared/t3McpToolPresentation";
 import { compactDynamicToolOutput } from "@t3tools/shared/toolOutput";
 import { htmlRenderReferencesEqual, type HtmlRenderReference } from "@t3tools/shared/htmlRender";
@@ -1452,8 +1453,6 @@ function deriveInFlightSteerAnswerIds(entries: ReadonlyArray<TimelineEntry>): Re
   return ids;
 }
 
-type TimelineMessage = Extract<TimelineEntry, { kind: "message" }>["message"];
-
 export function liveAnswerPreview(entries: ReadonlyArray<TimelineEntry>): string | null {
   const boundary = lastResponseBoundaryIndex(entries);
   const prompt = entries[boundary];
@@ -1485,54 +1484,17 @@ function runningSubagentsAtRunTail(entries: ReadonlyArray<TimelineEntry>, runId:
   return running;
 }
 
-/**
- * Bot memory consolidations and check-ins run in the background: only their errors and pending
- * approvals show. A finished check-in whose last reply is a real message keeps only that reply,
- * so the Bot reads as texting first.
- */
+/** Of a Bot's background runs, only errors, pending approvals and a check-in's answer show. */
 function withoutBotBackgroundRuns(
   entries: ReadonlyArray<TimelineEntry>,
   pendingApprovalRequestIds: ReadonlySet<RuntimeRequestId> | undefined,
   activeRunId: RunId | null,
 ): ReadonlyArray<TimelineEntry> {
-  const backgroundRunIds = new Set<RunId>();
-  const checkInRunIds = new Set<RunId>();
-  const conversationRunIds = new Set<RunId>();
-  const lastReplyByRun = new Map<RunId, TimelineMessage>();
-  for (const entry of entries) {
-    if (entry.kind !== "message") continue;
-    const { message } = entry;
-    const runId = message.runId;
-    if (runId === null) continue;
-    if (message.role === "assistant") lastReplyByRun.set(runId, message);
-    else if (message.role !== "user") continue;
-    else {
-      const promptKind = serverBotPromptKind(message);
-      if (promptKind === "checkIn") checkInRunIds.add(runId);
-      else if (promptKind === "dreaming") backgroundRunIds.add(runId);
-      else conversationRunIds.add(runId);
-    }
-  }
-  // A run that also carries someone's message is a conversation, never hidden.
-  for (const runId of conversationRunIds) {
-    backgroundRunIds.delete(runId);
-    checkInRunIds.delete(runId);
-  }
-  if (backgroundRunIds.size === 0 && checkInRunIds.size === 0) return entries;
-  const checkInAnswerIds = new Set<MessageId>();
-  for (const runId of checkInRunIds) {
-    backgroundRunIds.add(runId);
-    const reply = lastReplyByRun.get(runId);
-    if (
-      runId !== activeRunId &&
-      reply !== undefined &&
-      !reply.streaming &&
-      reply.text.trim() !== "" &&
-      !isBotNoReplyMessage(reply.text)
-    ) {
-      checkInAnswerIds.add(reply.id);
-    }
-  }
+  const { backgroundRunIds, checkInAnswerIds } = botBackgroundRuns(
+    entries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
+    (runId) => runId === activeRunId,
+  );
+  if (backgroundRunIds.size === 0) return entries;
   return entries.filter((entry) => {
     const runId =
       entry.kind === "message"

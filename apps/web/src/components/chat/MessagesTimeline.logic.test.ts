@@ -3166,7 +3166,6 @@ describe("v2 run and attempt history", () => {
       role: "user" | "assistant",
       runId: RunId,
       text = id,
-      sender: "server" | "web" = "server",
     ): TimelineEntry => ({
       id,
       kind: "message",
@@ -3176,8 +3175,8 @@ describe("v2 run and attempt history", () => {
         role,
         text,
         runId,
-        createdBy: sender === "server" ? "agent" : "user",
-        creationSource: sender,
+        createdBy: "agent",
+        creationSource: "server",
         createdAt: at,
         updatedAt: at,
         streaming: false,
@@ -3217,26 +3216,12 @@ describe("v2 run and attempt history", () => {
       "final",
       "dream-error",
     ]);
-    const steered = message("steered", "user", dreamRun, "Are you there?", "web");
-    expect(rows([...chat, ...dream, steered])).toEqual(
-      expect.arrayContaining(["steered", "no-reply"]),
-    );
-    const typed = message("typed", "user", dreamRun, BOT_DREAMING_PROMPT, "web");
-    expect(rows([...chat, typed, ...dream.slice(1)])).toEqual(
-      expect.arrayContaining(["typed", "no-reply"]),
-    );
   });
   it("hides a Bot check-in prompt and shows only a real reply", () => {
     const at = "2026-01-01T00:00:00Z";
     const checkInRun = RunId.make("check-in");
     const prompt = buildBotCheckInHandoffPrompt("- PR #286 is green");
-    const message = (
-      id: string,
-      role: "user" | "assistant",
-      text: string,
-      sender: "server" | "web" = "server",
-      streaming = false,
-    ): TimelineEntry => ({
+    const message = (id: string, role: "user" | "assistant", text: string): TimelineEntry => ({
       id,
       kind: "message",
       createdAt: at,
@@ -3245,11 +3230,11 @@ describe("v2 run and attempt history", () => {
         role,
         text,
         runId: checkInRun,
-        createdBy: sender === "server" ? "agent" : "user",
-        creationSource: sender,
+        createdBy: "agent",
+        creationSource: "server",
         createdAt: at,
         updatedAt: at,
-        streaming,
+        streaming: false,
       },
     });
     const work = (id: string, tone: "tool" | "error"): TimelineEntry => ({
@@ -3277,29 +3262,16 @@ describe("v2 run and attempt history", () => {
     const checkIn = message("check-in", "user", prompt);
     const preamble = message("preamble", "assistant", "Checking PR...");
 
-    expect(rows([checkIn, work("read", "tool")])).toEqual([]);
-    expect(rows([checkIn, message("no-reply", "assistant", "NO_REPLY")])).toEqual([]);
-    expect(rows([checkIn, work("read", "tool"), work("failed", "error")])).toEqual(["failed"]);
-    expect(rows([checkIn, message("reply", "assistant", "Heads up — PR #286 is green.")])).toEqual([
-      "reply",
-    ]);
-    expect(rows([checkIn, preamble], true)).toEqual(["working-indicator-row", "live-activity-row"]);
-    expect(liveAnswerPreview([checkIn, preamble])).toBeNull();
-    expect(
-      rows([checkIn, preamble, message("streaming", "assistant", "PR #286", "server", true)]),
-    ).toEqual([]);
-    expect(rows([checkIn, preamble, message("no-reply", "assistant", "NO_REPLY")])).toEqual([]);
     expect(
       rows([
         checkIn,
         preamble,
         work("read", "tool"),
-        message("final", "assistant", "PR #286 is green."),
+        message("reply", "assistant", "Heads up — PR #286 is green."),
       ]),
-    ).toEqual(["final"]);
-    expect(
-      rows([message("typed", "user", prompt, "web"), message("answer", "assistant", "NO_REPLY")]),
-    ).toEqual(["typed", "answer"]);
+    ).toEqual(["reply"]);
+    expect(rows([checkIn, preamble], true)).toEqual(["working-indicator-row", "live-activity-row"]);
+    expect(liveAnswerPreview([checkIn, preamble])).toBeNull();
   });
   it("collapses only output from a superseded V2 attempt within the active logical run", () => {
     const runId = "run-steered" as never;

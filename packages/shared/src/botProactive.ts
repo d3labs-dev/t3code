@@ -29,13 +29,15 @@ export function serverBotPromptKind(message: {
   );
 }
 
-// ProjectionStore's shell SQL mirrors this; change both together.
+/**
+ * A Bot reply that stays quiet: empty, or NO_REPLY wrapped in markdown marks.
+ * ProjectionStore's shell SQL mirrors this; change both together.
+ */
 export function isBotNoReplyMessage(text: string): boolean {
+  const trimmed = text.trim();
   return (
-    text
-      .trim()
-      .replace(/^[`*_"'\s]+|[`*_"'.!\s]+$/g, "")
-      .toUpperCase() === BOT_NO_REPLY_TOKEN
+    trimmed === "" ||
+    trimmed.replace(/^[`*_"'\s]+|[`*_"'.!\s]+$/g, "").toUpperCase() === BOT_NO_REPLY_TOKEN
   );
 }
 

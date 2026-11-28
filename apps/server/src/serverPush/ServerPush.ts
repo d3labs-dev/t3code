@@ -120,7 +120,7 @@ const botCardKey = (bot: BotRecord) =>
 
 /** A Bot's reply as one plain line, or null when the Bot chose not to reply. */
 function botReplyPreview(text: string): string | null {
-  if (text.trim() === "" || isBotNoReplyMessage(text)) return null;
+  if (isBotNoReplyMessage(text)) return null;
   return text
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")

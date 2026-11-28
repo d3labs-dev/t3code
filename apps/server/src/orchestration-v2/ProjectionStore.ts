@@ -1969,7 +1969,7 @@ function isAnsweredCheckInRun(
       (left, right) =>
         DateTime.toEpochMillis(right.createdAt) - DateTime.toEpochMillis(left.createdAt),
     )[0];
-  return reply !== undefined && reply.text.trim() !== "" && !isBotNoReplyMessage(reply.text);
+  return reply !== undefined && !isBotNoReplyMessage(reply.text);
 }
 
 function isSilentRunForShell(

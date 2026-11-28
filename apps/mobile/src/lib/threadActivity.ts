@@ -2,6 +2,7 @@ import type {
   ThreadPendingApproval,
   ThreadPendingUserInput,
 } from "@t3tools/client-runtime/state/thread-requests";
+import { botBackgroundRuns } from "@t3tools/client-runtime/bot-background-runs";
 import { linkRequestTargetName } from "@t3tools/client-runtime/link-request";
 import { turnItemIsWorkspacePreparation } from "@t3tools/client-runtime/state/turn-item-presentation";
 import type { ThreadCheckpointSummary } from "@t3tools/client-runtime/state/thread-checkpoints";
@@ -60,7 +61,6 @@ import type {
   TurnItemId,
 } from "@t3tools/contracts";
 import { idleCompactionOf, isCompactionCommandMessage, RunId, ThreadId } from "@t3tools/contracts";
-import { isBotNoReplyMessage, serverBotPromptKind } from "@t3tools/shared/botProactive";
 import {
   classifyToolActivity,
   collectToolFilePaths,
@@ -2431,13 +2431,6 @@ export function buildThreadFeed(
   // An answer that started a later run stays a normal message at that run's position.
   const foldedAnswerRunIdByMessageId = new Map<string, RunId | null>();
   const delegatedChildrenByRun = new Map<RunId, Set<string>>();
-  const backgroundRunIds = new Set<RunId>();
-  const checkInRunIds = new Set<RunId>();
-  const conversationRunIds = new Set<RunId>();
-  const lastReplyByRun = new Map<
-    RunId,
-    Extract<OrchestrationV2TurnItem, { readonly type: "assistant_message" }>
-  >();
   const liveRunIds = new Set(
     (options?.attempts ?? [])
       .filter((attempt) => attempt.status === "pending" || attempt.status === "running")
@@ -2447,14 +2440,7 @@ export function buildThreadFeed(
     if (item.runId !== null && LIVE_TURN_ITEM_STATUSES.has(item.status)) {
       liveRunIds.add(item.runId);
     }
-    if (item.type === "user_message" && item.runId !== null) {
-      const promptKind = serverBotPromptKind({ role: "user", ...item });
-      if (promptKind === "dreaming") backgroundRunIds.add(item.runId);
-      else if (promptKind === "checkIn") checkInRunIds.add(item.runId);
-      else conversationRunIds.add(item.runId);
-    } else if (item.type === "assistant_message" && item.runId !== null) {
-      lastReplyByRun.set(item.runId, item);
-    } else if (item.type === "user_input_request" && item.questionAnswer) {
+    if (item.type === "user_input_request" && item.questionAnswer) {
       foldedAnswerRunIdByMessageId.set(`async-answer:${item.questionAnswer.requestId}`, item.runId);
     } else if (item.type === "subagent" && item.origin === "app_owned" && item.runId !== null) {
       const children = delegatedChildrenByRun.get(item.runId) ?? new Set<string>();
@@ -2462,27 +2448,34 @@ export function buildThreadFeed(
       delegatedChildrenByRun.set(item.runId, children);
     }
   }
-  // A run that also carries someone's message is a conversation, never hidden.
-  for (const runId of conversationRunIds) {
-    backgroundRunIds.delete(runId);
-    checkInRunIds.delete(runId);
-  }
-  // A finished check-in whose last reply is a real message keeps only that reply, so the Bot
-  // reads as texting first.
-  const checkInAnswerIds = new Set<MessageId>();
-  for (const runId of checkInRunIds) {
-    backgroundRunIds.add(runId);
-    const reply = lastReplyByRun.get(runId);
-    if (
-      !liveRunIds.has(runId) &&
-      reply !== undefined &&
-      !reply.streaming &&
-      reply.text.trim() !== "" &&
-      !isBotNoReplyMessage(reply.text)
-    ) {
-      checkInAnswerIds.add(reply.messageId);
-    }
-  }
+  const { backgroundRunIds, checkInAnswerIds } = botBackgroundRuns(
+    visibleTurnItems.flatMap(({ item }) =>
+      item.type === "user_message"
+        ? [
+            {
+              id: item.messageId,
+              role: "user",
+              runId: item.runId,
+              text: item.text,
+              streaming: false,
+              createdBy: item.createdBy,
+              creationSource: item.creationSource,
+            },
+          ]
+        : item.type === "assistant_message"
+          ? [
+              {
+                id: item.messageId,
+                role: "assistant",
+                runId: item.runId,
+                text: item.text,
+                streaming: item.streaming,
+              },
+            ]
+          : [],
+    ),
+    (runId) => liveRunIds.has(runId),
+  );
 
   const cache = options?.cache;
   const previous = cache?.feedBuild ?? null;

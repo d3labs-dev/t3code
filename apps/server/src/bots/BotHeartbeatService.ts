@@ -203,7 +203,7 @@ export const make = Effect.gen(function* () {
           (left, right) =>
             DateTime.toEpochMillis(right.createdAt) - DateTime.toEpochMillis(left.createdAt),
         )[0]?.text;
-      if (brief === undefined || brief.trim() === "" || isBotNoReplyMessage(brief)) return;
+      if (brief === undefined || isBotNoReplyMessage(brief)) return;
       const bot = yield* bots.get(found.value.id);
       if (Option.isNone(bot) || !isProactivePrimary(bot.value)) return;
       // One handoff per scout run, even across duplicate events; a busy Bot takes it next.
