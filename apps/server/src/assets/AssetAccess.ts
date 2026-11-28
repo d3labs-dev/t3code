@@ -1,6 +1,7 @@
 import type { AssetResource } from "@t3tools/contracts";
 import {
   AssetAttachmentNotFoundError,
+  AssetBotAvatarNotFoundError,
   AssetSourceControlMediaUrlValidationError,
   AssetPreviewTypeValidationError,
   AssetProjectFaviconInspectionError,
@@ -18,6 +19,7 @@ import {
   NativeAppIconReference,
   TurnItemId,
   EnvironmentThemeId,
+  botAvatarFileName,
 } from "@t3tools/contracts";
 import {
   hostPreviewMimeTypeFromExtension,
@@ -69,7 +71,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 export const ASSET_ROUTE_PREFIX = "/api/assets";
 
 const ASSET_TOKEN_TTL_MS = 60 * 60 * 1000;
-const PROJECT_FAVICON_TOKEN_BUCKET_MS = 30 * 60 * 1000;
+const ICON_TOKEN_BUCKET_MS = 30 * 60 * 1000;
 const HTML_ATTACHMENT_TOKEN_BUCKET_MS = 30 * 60 * 1000;
 const PROJECT_FAVICON_VERSION_PREFIX = "v";
 const PROJECT_FAVICON_ICNS_MIN_SIZE = 96;
@@ -180,6 +182,12 @@ const AssetClaimsSchema = Schema.Union([
     version: Schema.Literal(1),
     kind: Schema.Literal("environment-theme-background"),
     themeId: EnvironmentThemeId,
+    expiresAt: Schema.Number,
+  }),
+  Schema.Struct({
+    version: Schema.Literal(1),
+    kind: Schema.Literal("bot-avatar"),
+    filePath: Schema.String,
     expiresAt: Schema.Number,
   }),
   Schema.Struct({
@@ -569,6 +577,7 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
   readonly projectFaviconPath?: string;
   /** Where a cloned project's checkout stands, while the clone tracker still knows it. */
   readonly projectCheckout?: "pending" | "cloned";
+  readonly botAvatarPath?: string;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -866,6 +875,23 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
       fileName = `${input.resource.themeId}-background`;
       break;
     }
+    case "bot-avatar": {
+      // Bot rosters go to every client, so any client may read a Bot's avatar.
+      const filePath = input.botAvatarPath
+        ? yield* resolveCanonicalFile(input.botAvatarPath).pipe(
+            Effect.mapError(
+              (cause) =>
+                new AssetWorkspaceAssetInspectionError({ resource: input.resource, cause }),
+            ),
+          )
+        : null;
+      if (filePath === null) {
+        return yield* new AssetBotAvatarNotFoundError({ resource: input.resource });
+      }
+      claims = { version: 1, kind: "bot-avatar", filePath, expiresAt };
+      fileName = botAvatarFileName(input.resource.avatar);
+      break;
+    }
     case "native-app-icon": {
       claims = {
         version: 1,
@@ -894,11 +920,13 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
     }
   }
 
-  if (claims.kind === "project-favicon" || claims.kind === "project-favicon-external") {
+  if (
+    claims.kind === "project-favicon" ||
+    claims.kind === "project-favicon-external" ||
+    claims.kind === "bot-avatar"
+  ) {
     const issuedAt = yield* Clock.currentTimeMillis;
-    expiresAt =
-      (Math.floor(issuedAt / PROJECT_FAVICON_TOKEN_BUCKET_MS) + 2) *
-      PROJECT_FAVICON_TOKEN_BUCKET_MS;
+    expiresAt = (Math.floor(issuedAt / ICON_TOKEN_BUCKET_MS) + 2) * ICON_TOKEN_BUCKET_MS;
     claims = { ...claims, expiresAt };
   }
   if (claims.kind === "attachment" && claims.mimeType === "text/html") {
@@ -1030,6 +1058,16 @@ export const resolveAsset = Effect.fn("AssetAccess.resolveAsset")(function* (
       Effect.orElseSucceed(() => null),
     );
     return file ? ({ kind: "file", path: background.path, file } satisfies ResolvedAsset) : null;
+  }
+
+  if (claims.kind === "bot-avatar") {
+    const file = yield* openMediaFile(claims.filePath).pipe(
+      Effect.tapError((cause) =>
+        Effect.logError("Failed to open Bot avatar.", { path: claims.filePath, cause }),
+      ),
+      Effect.orElseSucceed(() => null),
+    );
+    return file ? ({ kind: "file", path: claims.filePath, file } satisfies ResolvedAsset) : null;
   }
 
   if (claims.kind === "native-app-icon") {
