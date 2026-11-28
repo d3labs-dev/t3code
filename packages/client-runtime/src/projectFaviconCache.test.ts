@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { EnvironmentId } from "@t3tools/contracts";
+import { botAvatarReference, EnvironmentId } from "@t3tools/contracts";
 
+import { type BotAvatarEntry, createBotAvatarCache } from "./botAvatarCache.ts";
+import type { ImageCacheStorage } from "./imageCache.ts";
 import {
   createProjectFaviconCache,
   createProjectFaviconImageLoader,
@@ -9,7 +11,6 @@ import {
   PROJECT_FAVICON_MAX_DATA_URL_LENGTH,
   PROJECT_FAVICON_MAX_SOURCE_BYTES,
   type ProjectFaviconEntry,
-  type ProjectFaviconStorage,
 } from "./projectFaviconCache.ts";
 
 const target = { environmentId: EnvironmentId.make("remote"), cwd: "/workspace" };
@@ -26,10 +27,9 @@ function deferred<A>() {
   return { promise, resolve };
 }
 
-function fixture() {
-  const records = new Map<string, ProjectFaviconEntry>();
-  const load = vi.fn(async () => image);
-  const storage: ProjectFaviconStorage = {
+function memoryStorage<Entry>() {
+  const records = new Map<string, Entry>();
+  const storage: ImageCacheStorage<Entry> = {
     list: async () => [...records.values()],
     put: async (key, entry) => {
       records.set(key, entry);
@@ -38,6 +38,12 @@ function fixture() {
       records.delete(key);
     },
   };
+  return { records, storage };
+}
+
+function fixture() {
+  const { records, storage } = memoryStorage<ProjectFaviconEntry>();
+  const load = vi.fn(async () => image);
   return {
     storage,
     load,
@@ -152,6 +158,29 @@ describe("persistent project favicon cache", () => {
     expect(await unavailable.resolve(target, url, signal())).toBe(image);
     await unavailable.flush();
     expect(unavailable.peek(target)).toBe(image);
+  });
+});
+
+describe("persistent Bot avatar cache", () => {
+  it("downloads each avatar once per environment, whatever URL signs it", async () => {
+    const { storage } = memoryStorage<BotAvatarEntry>();
+    const load = vi.fn(async () => image);
+    const avatar = {
+      environmentId: target.environmentId,
+      reference: botAvatarReference("a".repeat(64), "png"),
+    };
+    const signed = (token: string) => `https://remote.test/api/assets/${token}/avatar.png`;
+    const cache = createBotAvatarCache({ storage, load });
+    expect(await cache.resolve(avatar, signed("token-a"), signal())).toBe(image);
+    expect(await cache.resolve(avatar, signed("token-b"), signal())).toBe(image);
+    await cache.flush();
+    const reloaded = createBotAvatarCache({ storage, load });
+    expect(await reloaded.resolve(avatar, signed("token-c"), signal())).toBe(image);
+    expect(load).toHaveBeenCalledOnce();
+    expect(reloaded.peek({ ...avatar, environmentId: EnvironmentId.make("other") })).toBeNull();
+    expect(
+      reloaded.peek({ ...avatar, reference: botAvatarReference("b".repeat(64), "png") }),
+    ).toBeNull();
   });
 });
 

@@ -22,7 +22,7 @@ export interface ProjectFaviconTarget {
   readonly faviconPath?: string | null | undefined;
 }
 
-const ImageDataUrl = Schema.String.check(
+export const ImageDataUrl = Schema.String.check(
   Schema.isMaxLength(PROJECT_FAVICON_MAX_DATA_URL_LENGTH),
   Schema.isPattern(
     /^data:image\/(?:png|jpeg|gif|webp|avif|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/]+={0,2}$/,

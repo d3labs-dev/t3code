@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import {
   type BotAvatarExpression,
   type BotAvatarEyes,
@@ -11,8 +12,8 @@ import {
 import type { BotAvatarReference, BotStatus } from "@t3tools/contracts";
 import { type ReactNode, useState } from "react";
 
-import { useAssetUrlState } from "../../assets/assetUrls";
 import { cn } from "../../lib/utils";
+import { botAvatarUrlAtom } from "../../state/assets";
 import { botAvatarPaint } from "./botAvatarPaint";
 import { useBotsUiStore } from "./botsUiStore";
 
@@ -119,20 +120,22 @@ function StoredBotImage(props: {
   readonly reference: BotAvatarReference;
   readonly fallback: ReactNode;
 }) {
-  const asset = useAssetUrlState(props.owner.environmentId, {
-    _tag: "bot-avatar",
-    botId: props.owner.bot.id,
-    avatar: props.reference,
-  });
-  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
-  if (asset._tag !== "Success" || asset.url === brokenUrl) return props.fallback;
+  const src = useAtomValue(
+    botAvatarUrlAtom({
+      environmentId: props.owner.environmentId,
+      botId: props.owner.bot.id,
+      reference: props.reference,
+    }),
+  );
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
+  if (src === null || src === brokenSrc) return props.fallback;
   return (
     <img
-      src={asset.url}
+      src={src}
       alt=""
       draggable={false}
       className={AVATAR_IMAGE_CLASS}
-      onError={() => setBrokenUrl(asset.url)}
+      onError={() => setBrokenSrc(src)}
     />
   );
 }

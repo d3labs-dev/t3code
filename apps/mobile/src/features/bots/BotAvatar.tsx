@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import {
   type BotAvatarExpression,
   type BotAvatarEyes,
@@ -17,7 +18,7 @@ import Svg, { G, Path, Rect } from "react-native-svg";
 import { AppText as Text } from "../../components/ui/AppText";
 import { useControlTheme } from "../../components/ui/useControlTheme";
 import { assetImageSource } from "../../lib/assetImageSource";
-import { useAssetUrl } from "../../state/assets";
+import { botAvatarUrlAtom } from "../../state/assets";
 import { botAvatarPaint } from "./botAvatarPaint";
 import { useBotVisualStyle } from "./botFormHelpers";
 
@@ -124,7 +125,13 @@ function StoredBotImage(props: {
     botId: props.owner.bot.id,
     avatar: props.reference,
   };
-  const url = useAssetUrl(props.owner.environmentId, resource);
+  const url = useAtomValue(
+    botAvatarUrlAtom({
+      environmentId: props.owner.environmentId,
+      botId: props.owner.bot.id,
+      reference: props.reference,
+    }),
+  );
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
   if (url === null || url === brokenUrl) return props.fallback;
   return (
