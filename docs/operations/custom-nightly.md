@@ -1,6 +1,6 @@
 # Custom nightly builds
 
-This fork follows released T3 Code nightlies from upstream `main` and publishes them as D3 Code releases. `t3` servers update from the Linux x64 CLI archive in each release.
+This fork follows released T3 Code nightlies from upstream `main` and publishes them as D3 Code releases. `t3` servers update from the Linux x64 CLI archive in each release, and the Linux machine that publishes it installs each build on its own server.
 
 GitHub Actions is off for the fork because its builds used up the free plan's minutes, so two machines publish releases instead (see [Publish a build](#publish-a-build)): a Linux machine creates each release with the Linux CLI archive, and a Mac attaches the macOS app and Android APK when it next runs. Windows builds are not published.
 
@@ -96,7 +96,9 @@ Android refuses to install a lower version code than the installed one. Releases
 
 ## Publish a build
 
-`scripts/custom-nightly-linux.sh` publishes from a Linux machine with Docker, `gh`, `git`, and `jq`. Daily at 9:00 Peru time, when `custom-nightly` has moved since the last release, it builds the Linux x64 CLI archive inside the Ubuntu 24.04 image in `scripts/custom-nightly-linux.Dockerfile`, because `scripts/build-cli-archive.ts` bundles Ubuntu's libatomic and its package metadata. It smoke-tests the archive and publishes it with `SHA256SUMS` as a prerelease. The release starts as a draft and is published only once its files are attached, because servers take the newest published nightly.
+`scripts/custom-nightly-linux.sh` publishes from a Linux machine with Docker, `gh`, `git`, and `jq`. Every 5 minutes it checks `custom-nightly`. When the branch has moved since the last release, it builds the Linux x64 CLI archive inside the Ubuntu 24.04 image in `scripts/custom-nightly-linux.Dockerfile`, because `scripts/build-cli-archive.ts` bundles Ubuntu's libatomic and its package metadata. It smoke-tests the archive and publishes it with `SHA256SUMS` as a prerelease. The release starts as a draft and is published only once its files are attached, because servers take the newest published nightly. Then it installs the same build on this machine's T3 Code server, which restarts its background service.
+
+Pushing to `custom-nightly` is how a change reaches this server, in under 10 minutes.
 
 The script resets its worktree to `origin/custom-nightly` on every run, so give it a worktree of its own and install its timer from there:
 
@@ -105,11 +107,11 @@ git worktree add --detach ../t3code-nightly-builder origin/custom-nightly
 ../t3code-nightly-builder/scripts/custom-nightly-linux.sh --install
 ```
 
-The timer runs as the `d3code-nightly` user service; if the machine is off at 9:00, it runs at the next boot. Watch it with `journalctl --user -u d3code-nightly`, and publish right away with `systemctl --user start d3code-nightly`. The last run's log and the build state live in `~/.local/state/d3code-nightly`. Both builders publish through the `DiegoJohnsonL` `gh` login whichever account is active, because work switches it to an account that cannot write to the fork. A failed build opens an issue assigned to that account and retries once the branch moves.
+The timer runs as the `d3code-nightly` user service; while the machine is off, a push waits for the first check after it starts. Watch it with `journalctl --user -u d3code-nightly`, and skip the wait with `systemctl --user start d3code-nightly`. The last build's log and the build state live in `~/.local/state/d3code-nightly`. Both builders publish through the `DiegoJohnsonL` `gh` login whichever account is active, because work switches it to an account that cannot write to the fork. A failed build opens an issue assigned to that account and retries once the branch moves. A failed install also opens an issue and leaves the published release for the update button.
 
 The two machines never talk to each other; the release is the handoff. The Linux machine publishes on its own schedule, and the Mac pulls whatever the newest release lacks. The Mac is a laptop that is often asleep or away, and its signing identity, keystore password, and `gh` token sit in the login keychain, which only the logged-in session can use, never an SSH session. Neither machine waits for the other, and Remote Login can stay off.
 
-The Mac attaches its builds with `scripts/custom-nightly-mac-builder.sh`. Every 15 minutes and at login it finds the newest release missing the macOS app or the Android APK, checks out the commit the release records, and builds what is missing, on battery too: the app signed with `T3 Code Local Development`, and the APK signed with the release keystore and checked against its certificate fingerprint. It attaches them and adds the `android-version-code` marker the Android app looks for. Until the Mac runs, the Mac app's update check finds no `nightly-mac.yml` in the newest release, and phones keep their version. A failed build shows a notification and retries only for a newer release. A failed upload shows one notification and retries every run with the build it kept in `~/.local/share/d3code-builder/built`.
+The Mac attaches its builds with `scripts/custom-nightly-mac-builder.sh`. Every 15 minutes and at login it finds the newest release missing the macOS app or the Android APK, checks out the commit the release records, and builds what is missing, on battery too: the app signed with `T3 Code Local Development`, and the APK signed with the release keystore and checked against its certificate fingerprint. It attaches them and adds the `android-version-code` marker the Android app looks for. D3 Code then offers the app through its update control, which checks at launch and every 4 hours, and finds it right away when you check from the control. Until the Mac runs, the Mac app's update check finds no `nightly-mac.yml` in the newest release, and phones keep their version. A failed build shows a notification and retries only for a newer release. A failed upload shows one notification and retries every run with the build it kept in `~/.local/share/d3code-builder/built`.
 
 The Mac script also resets its clone on every run, so give it a clone of its own. A shallow one without the vendored `.repos/` is enough:
 
