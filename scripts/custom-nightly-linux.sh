@@ -227,7 +227,8 @@ publish_nightly() {
   local upstream_changes=""
   if [[ -n "$published_upstream_tag" && "$published_upstream_tag" != "$upstream_tag" ]]; then
     fetch_upstream_tag "$published_upstream_tag"
-    upstream_changes="$(git log --reverse --first-parent --format='- %s' "${published_upstream_tag}..${upstream_tag}")"
+    # GitHub rejects release notes over 125,000 characters, which a few days of upstream exceed.
+    upstream_changes="$(git log --reverse --first-parent --format='- %s' "${published_upstream_tag}..${upstream_tag}" | tail -n 500)"
   fi
 
   log "Building ${version} from ${upstream_tag} on ${commit}."
