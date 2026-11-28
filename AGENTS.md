@@ -111,6 +111,7 @@ Most code changes do not need an internal documentation change. Agents can read 
 
 - Do not commit implementation plans, research notes, or agent scratch files (keep temporary material outside the worktree).
 - Track active maintainer work in its GitHub issue or project item; external proposals belong in Ideas discussions. A merged PR is the implementation record.
+- File issues with `gh issue create -R d3labs-dev/t3code`. `gh` and T3's issue tool both default to the public upstream, `pingdotgg/t3code`.
 
 ## Where code lives
 
