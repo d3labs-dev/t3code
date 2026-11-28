@@ -48,21 +48,15 @@ describe("RPC authorization scopes", () => {
     }
   });
 
-  it("lets readers see Bots but keeps changing or messaging them behind operate scope", () => {
+  it("lets readers see Bots but keeps changing them behind operate scope", () => {
     for (const method of [
-      WS_METHODS.botsList,
       WS_METHODS.botsSubscribe,
       WS_METHODS.botsGet,
       WS_METHODS.botsListExchanges,
     ]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
     }
-    for (const method of [
-      WS_METHODS.botsCreate,
-      WS_METHODS.botsUpdate,
-      WS_METHODS.botsDelete,
-      WS_METHODS.botsMessage,
-    ]) {
+    for (const method of [WS_METHODS.botsCreate, WS_METHODS.botsUpdate, WS_METHODS.botsDelete]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
     }
   });

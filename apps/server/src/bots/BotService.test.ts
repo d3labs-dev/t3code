@@ -39,6 +39,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import * as ThreadSearch from "../orchestration-v2/ThreadSearch.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as BotFolders from "./BotFolders.ts";
+import { resolveBotHarnessProfile } from "./BotHarnessProfile.ts";
 import * as BotService from "./BotService.ts";
 import * as BotStore from "./BotStore.ts";
 
@@ -305,7 +306,11 @@ const withBots = <A, E>(
     harness: Harness,
     bots: BotService.BotService["Service"],
     store: BotStore.BotStore["Service"],
-  ) => Effect.Effect<A, E, Scope.Scope | FileSystem.FileSystem | Path.Path>,
+  ) => Effect.Effect<
+    A,
+    E,
+    Scope.Scope | FileSystem.FileSystem | Path.Path | BotStore.BotStore | BotFolders.BotFolders
+  >,
 ) =>
   Effect.gen(function* () {
     const harness = yield* makeHarness;
@@ -361,7 +366,8 @@ it.effect("creates bots with unique slugs, one primary, an idle thread and seede
       const afterCreate = yield* Queue.take(updates);
       assert.lengthOf(afterCreate.bots, 1);
       assert.isNotNull(afterCreate.backingProjectId);
-      assert.strictEqual(afterCreate.backingProjectId, yield* bots.backingProjectId);
+      const { backingProjectId } = yield* bots.list({});
+      assert.strictEqual(afterCreate.backingProjectId, backingProjectId);
 
       assert.deepStrictEqual(
         harness.bootstraps.map(({ title, workspaceRoot }) => ({ title, workspaceRoot })),
@@ -373,7 +379,7 @@ it.effect("creates bots with unique slugs, one primary, an idle thread and seede
         worktreePath: engineer.folderPath,
       });
       assert.isUndefined(launch?.initialMessage);
-      assert.strictEqual(launch?.projectId, yield* bots.backingProjectId);
+      assert.strictEqual(launch?.projectId, backingProjectId);
 
       const second = (yield* bots.create({ name: "Engineer", modelSelection })).bot;
       assert.strictEqual(second.slug, "engineer-2");
@@ -609,10 +615,10 @@ it.effect(
         assert.notInclude(JSON.stringify(available), "secret");
 
         assert.isTrue(
-          Option.isNone(yield* bots.resolveHarnessProfile(harness.addThread("Repo work"))),
+          Option.isNone(yield* resolveBotHarnessProfile(harness.addThread("Repo work"))),
         );
 
-        const profile = Option.getOrThrow(yield* bots.resolveHarnessProfile(engineer.threadId));
+        const profile = Option.getOrThrow(yield* resolveBotHarnessProfile(engineer.threadId));
         assert.strictEqual(profile.botId, engineer.id);
         assert.strictEqual(profile.systemPromptMode, "custom");
         assert.deepStrictEqual(profile.tools, ["Read", "Bash"]);
@@ -651,7 +657,7 @@ it.effect(
 
         const housekeepingFor = (documents: { now?: string; memory?: string }) =>
           bots.update({ botId: engineer.id, documents }).pipe(
-            Effect.andThen(bots.resolveHarnessProfile(engineer.threadId)),
+            Effect.andThen(resolveBotHarnessProfile(engineer.threadId)),
             Effect.map((resolved) => Option.getOrThrow(resolved).dynamicContext),
             Effect.map((context) => context.slice(context.indexOf("## Memory housekeeping"))),
           );
@@ -672,17 +678,17 @@ it.effect(
         });
         yield* bots.update({ botId: reviewer.id, documents: { heartbeat: "- Watch reviews." } });
         const primaryContext = Option.getOrThrow(
-          yield* bots.resolveHarnessProfile(engineer.threadId),
+          yield* resolveBotHarnessProfile(engineer.threadId),
         ).dynamicContext;
         assert.include(primaryContext, "## HEARTBEAT.md\n\n- Watch CI on main.");
         const specialistContext = Option.getOrThrow(
-          yield* bots.resolveHarnessProfile(reviewer.threadId),
+          yield* resolveBotHarnessProfile(reviewer.threadId),
         ).dynamicContext;
         assert.notInclude(specialistContext, "HEARTBEAT.md");
 
         const scoutThreadId = harness.addThread("Engineer check-in");
         yield* store.setHeartbeatThreadId({ botId: engineer.id, threadId: scoutThreadId });
-        const scout = Option.getOrThrow(yield* bots.resolveHarnessProfile(scoutThreadId));
+        const scout = Option.getOrThrow(yield* resolveBotHarnessProfile(scoutThreadId));
         assert.strictEqual(scout.botId, engineer.id);
         assert.strictEqual(scout.systemPromptMode, "custom");
         assert.deepStrictEqual(scout.tools, ["Read", "Grep", "WebFetch"]);

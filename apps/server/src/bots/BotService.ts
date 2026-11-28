@@ -11,7 +11,6 @@ import {
   type BotExchange,
   BotExchangeId,
   type BotGetInput,
-  type BotHarnessProfile,
   BotId,
   type BotListExchangesInput,
   type BotListExchangesResult,
@@ -57,7 +56,6 @@ import * as ThreadSearch from "../orchestration-v2/ThreadSearch.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as BotFolders from "./BotFolders.ts";
-import { resolveBotHarnessProfile } from "./BotHarnessProfile.ts";
 import * as BotStore from "./BotStore.ts";
 
 export type BotHistoryMatch = Omit<ThreadSearch.ThreadMessageHit, "quality"> & {
@@ -67,8 +65,6 @@ export type BotHistoryMatch = Omit<ThreadSearch.ThreadMessageHit, "quality"> & {
 export class BotService extends Context.Service<
   BotService,
   {
-    /** The internal project that owns every bot thread, once a bot has been created. */
-    readonly backingProjectId: Effect.Effect<ProjectId | null>;
     readonly list: (input: BotListInput) => Effect.Effect<BotListResult, BotError>;
     readonly subscribeList: (input?: BotListInput) => Stream.Stream<BotListResult, BotError>;
     readonly get: (input: BotGetInput) => Effect.Effect<BotDetailResult, BotError>;
@@ -92,10 +88,6 @@ export class BotService extends Context.Service<
       readonly limit?: number | undefined;
       readonly includeCodingThreads?: boolean | undefined;
     }) => Effect.Effect<{ readonly matches: ReadonlyArray<BotHistoryMatch> }, BotError>;
-    /** None for any thread that is not a bot's. */
-    readonly resolveHarnessProfile: (
-      threadId: ThreadId,
-    ) => Effect.Effect<Option.Option<BotHarnessProfile>, BotError>;
     /** Resets hop counts on human messages and wakes bots when the work they wait on ends. */
     readonly startReactor: () => Effect.Effect<void, never, Scope.Scope>;
   }
@@ -215,14 +207,12 @@ const make = Effect.gen(function* () {
       { concurrency: 2 },
     ).pipe(Effect.map(([entry, documents]) => ({ ...entry, documents })));
 
-  const backingProjectId: BotService["Service"]["backingProjectId"] = projects
-    .getByWorkspaceRoot(folders.root)
-    .pipe(
-      Effect.map(Option.match({ onNone: () => null, onSome: (project) => project.id })),
-      Effect.catch((cause) =>
-        Effect.logWarning("Couldn't look up the Bots project.", { cause }).pipe(Effect.as(null)),
-      ),
-    );
+  const backingProjectId = projects.getByWorkspaceRoot(folders.root).pipe(
+    Effect.map(Option.match({ onNone: () => null, onSome: (project) => project.id })),
+    Effect.catch((cause) =>
+      Effect.logWarning("Couldn't look up the Bots project.", { cause }).pipe(Effect.as(null)),
+    ),
+  );
 
   const ensureBackingProject = Effect.fn("BotService.ensureBackingProject")(function* () {
     const id = yield* randomUuidV4;
@@ -668,12 +658,6 @@ const make = Effect.gen(function* () {
     };
   });
 
-  const resolveHarnessProfile: BotService["Service"]["resolveHarnessProfile"] = (threadId) =>
-    resolveBotHarnessProfile(threadId).pipe(
-      Effect.provideService(BotStore.BotStore, store),
-      Effect.provideService(BotFolders.BotFolders, folders),
-    );
-
   const readOutcome = Effect.fn("BotService.readOutcome")(function* (
     threadId: ThreadId,
     runId: RunId,
@@ -932,7 +916,6 @@ const make = Effect.gen(function* () {
   );
 
   return BotService.of({
-    backingProjectId,
     list,
     subscribeList,
     get,
@@ -944,7 +927,6 @@ const make = Effect.gen(function* () {
     sendMessage,
     listExchanges,
     searchHistory,
-    resolveHarnessProfile,
     startReactor,
   });
 });

@@ -56,14 +56,6 @@ export function createBotsEnvironmentAtoms<R, E>(
       label: "environment-data:bots:delete",
       tag: WS_METHODS.botsDelete,
     }),
-    messageBot: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:bots:message",
-      tag: WS_METHODS.botsMessage,
-      onSuccess: ({ environmentId, input }, registry) =>
-        Effect.sync(() =>
-          registry.refresh(botExchanges({ environmentId, input: { botId: input.fromBotId } })),
-        ),
-    }),
   };
 }
 
