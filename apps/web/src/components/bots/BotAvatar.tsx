@@ -1,13 +1,17 @@
 import {
   type BotAvatarExpression,
   type BotAvatarEyes,
+  type BotAvatarOwner,
   type BotAvatarShape,
   type BotVisualStyle,
   botAvatarExpression,
+  DEFAULT_BOT_AVATAR_SHAPE,
   resolveBotAvatarGlyph,
 } from "@t3tools/client-runtime/bot-avatar";
-import type { BotStatus } from "@t3tools/contracts";
+import type { BotAvatarReference, BotStatus } from "@t3tools/contracts";
+import { type ReactNode, useState } from "react";
 
+import { useAssetUrlState } from "../../assets/assetUrls";
 import { cn } from "../../lib/utils";
 import { botAvatarPaint } from "./botAvatarPaint";
 import { useBotsUiStore } from "./botsUiStore";
@@ -108,9 +112,35 @@ export function BotShapeSilhouette(props: {
   );
 }
 
+const AVATAR_IMAGE_CLASS = "size-full rounded-full object-cover";
+
+function StoredBotImage(props: {
+  readonly owner: BotAvatarOwner;
+  readonly reference: BotAvatarReference;
+  readonly fallback: ReactNode;
+}) {
+  const asset = useAssetUrlState(props.owner.environmentId, {
+    _tag: "bot-avatar",
+    botId: props.owner.bot.id,
+    avatar: props.reference,
+  });
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  if (asset._tag !== "Success" || asset.url === brokenUrl) return props.fallback;
+  return (
+    <img
+      src={asset.url}
+      alt=""
+      draggable={false}
+      className={AVATAR_IMAGE_CLASS}
+      onError={() => setBrokenUrl(asset.url)}
+    />
+  );
+}
+
 export function BotAvatar({
   icon,
   color,
+  owner = null,
   size = "md",
   visualStyle,
   status = null,
@@ -120,6 +150,8 @@ export function BotAvatar({
 }: {
   readonly icon: string;
   readonly color: string;
+  /** Without it, an icon naming a stored image shows the default shape. */
+  readonly owner?: BotAvatarOwner | null;
   readonly size?: BotAvatarSize;
   /** Defaults to the finish chosen in the Bot designer. */
   readonly visualStyle?: BotVisualStyle;
@@ -132,6 +164,16 @@ export function BotAvatar({
   const preferredStyle = useBotsUiStore((state) => state.visualStyle);
   const glyph = resolveBotAvatarGlyph(icon);
   const paint = botAvatarPaint(color, visualStyle ?? preferredStyle);
+  const shapeBody = (shape: BotAvatarShape) => (
+    <svg viewBox="0 0 24 24" className="size-full overflow-visible">
+      <path d={shape.path} style={paint.body} vectorEffect="non-scaling-stroke" />
+      <BotFace
+        eyes={shape.eyes}
+        expression={botAvatarExpression(status, muted)}
+        color={paint.eyes}
+      />
+    </svg>
+  );
   return (
     <span
       className={cn(
@@ -145,14 +187,7 @@ export function BotAvatar({
       data-bot-avatar
     >
       {glyph.kind === "shape" ? (
-        <svg viewBox="0 0 24 24" className="size-full overflow-visible">
-          <path d={glyph.shape.path} style={paint.body} vectorEffect="non-scaling-stroke" />
-          <BotFace
-            eyes={glyph.shape.eyes}
-            expression={botAvatarExpression(status, muted)}
-            color={paint.eyes}
-          />
-        </svg>
+        shapeBody(glyph.shape)
       ) : glyph.kind === "emoji" ? (
         <span
           className="flex size-full items-center justify-center rounded-full"
@@ -160,12 +195,15 @@ export function BotAvatar({
         >
           <span className={cn("leading-none select-none", EMOJI_CLASS[size])}>{glyph.emoji}</span>
         </span>
+      ) : glyph.kind === "image" ? (
+        <img src={glyph.src} alt="" draggable={false} className={AVATAR_IMAGE_CLASS} />
+      ) : owner === null ? (
+        shapeBody(DEFAULT_BOT_AVATAR_SHAPE)
       ) : (
-        <img
-          src={glyph.src}
-          alt=""
-          draggable={false}
-          className="size-full rounded-full object-cover"
+        <StoredBotImage
+          owner={owner}
+          reference={glyph.reference}
+          fallback={shapeBody(DEFAULT_BOT_AVATAR_SHAPE)}
         />
       )}
       {status !== null && status !== "idle" ? (

@@ -416,7 +416,14 @@ function PrimaryBotHeroCard(props: {
         onPress={props.onOpen}
         className="flex-row items-center gap-3.5 px-4 py-4 active:opacity-80"
       >
-        <BotAvatar icon={bot.icon} color={bot.color} size="lg" status={status} muted={bot.muted} />
+        <BotAvatar
+          icon={bot.icon}
+          color={bot.color}
+          owner={props.entry}
+          size="lg"
+          status={status}
+          muted={bot.muted}
+        />
         <View className="min-w-0 flex-1 gap-0.5">
           <View className="flex-row items-center gap-1.5">
             <Text className="shrink text-base font-t3-bold text-foreground" numberOfLines={1}>
@@ -491,7 +498,14 @@ function BotListRow(props: {
         onPress={props.onOpen}
         className="flex-row items-center gap-3 px-4 py-3 active:opacity-75"
       >
-        <BotAvatar icon={bot.icon} color={bot.color} size="md" status={status} muted={bot.muted} />
+        <BotAvatar
+          icon={bot.icon}
+          color={bot.color}
+          owner={props.entry}
+          size="md"
+          status={status}
+          muted={bot.muted}
+        />
         <View className="min-w-0 flex-1 gap-0.5">
           <View className="flex-row items-center gap-1.5">
             <Text className="shrink text-base font-t3-medium text-foreground" numberOfLines={1}>
@@ -687,7 +701,7 @@ function ArchivedBotRow(props: {
         onPress={props.onOpenThread}
         className="min-w-0 flex-1 flex-row items-center gap-2.5 active:opacity-70"
       >
-        <BotAvatar icon={bot.icon} color={bot.color} size="sm" muted />
+        <BotAvatar icon={bot.icon} color={bot.color} owner={props.entry} size="sm" muted />
         <Text className="min-w-0 flex-1 text-sm text-foreground-muted" numberOfLines={1}>
           {bot.name}
         </Text>

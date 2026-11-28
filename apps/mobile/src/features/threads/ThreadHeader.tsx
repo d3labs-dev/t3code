@@ -70,6 +70,7 @@ export function ThreadHeader(props: {
       <BotAvatar
         icon={botEntry.bot.icon}
         color={botEntry.bot.color}
+        owner={botEntry}
         size="sm"
         status={botEntry.status}
         muted={botEntry.bot.muted}

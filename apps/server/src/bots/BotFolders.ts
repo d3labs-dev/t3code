@@ -1,17 +1,24 @@
 import {
   BOT_DOCUMENTS,
   type BotAvailableMcpServer,
+  type BotAvatarImageType,
+  type BotAvatarReference,
   type BotDocuments,
   type BotHarnessProfile,
   type BotId,
   BotMcpServerConfig,
   type BotRecord,
+  botAvatarFileName,
+  botAvatarReference,
+  botAvatarReferenceFromFileName,
   TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
+import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
+import * as Hex from "effect/encoding/Hex";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -23,11 +30,21 @@ import * as Schema from "effect/Schema";
 import * as ServerConfig from "../config.ts";
 
 export type BotAuthSettings = NonNullable<BotHarnessProfile["authSettings"]>;
+export interface BotAvatarImage {
+  readonly bytes: Uint8Array;
+  readonly type: BotAvatarImageType;
+}
 type BotMcpServers = Readonly<Record<string, BotMcpServerConfig>>;
 type DocumentName = keyof BotDocuments;
 
 export class BotFolderError extends Schema.TaggedError<BotFolderError>()("BotFolderError", {
-  operation: Schema.Literals(["ensure", "read-document", "write-document"]),
+  operation: Schema.Literals([
+    "ensure",
+    "read-document",
+    "write-document",
+    "write-avatar",
+    "remove-avatar",
+  ]),
   path: Schema.String,
   cause: Schema.Defect(),
 }) {
@@ -56,6 +73,21 @@ export class BotFolders extends Context.Service<
     /** Points providers that read AGENTS.md, not Claude's harness profile, at the bot's files. */
     readonly writeAgentsFile: (
       bot: Pick<BotRecord, "folderPath" | "name" | "role">,
+    ) => Effect.Effect<void, BotFolderError>;
+    /** The file holding a stored avatar, or null when the folder doesn't hold it. */
+    readonly findAvatar: (
+      folderPath: string,
+      avatar: BotAvatarReference,
+    ) => Effect.Effect<string | null>;
+    /** Stores the image under its content hash and returns the icon that names it. */
+    readonly writeAvatar: (
+      folderPath: string,
+      image: BotAvatarImage,
+    ) => Effect.Effect<BotAvatarReference, BotFolderError>;
+    /** Removes every stored avatar except the one `icon` names. */
+    readonly removeAvatarsExcept: (
+      folderPath: string,
+      icon: string,
     ) => Effect.Effect<void, BotFolderError>;
     /** Names and transports only: configs can hold credentials. */
     readonly listAvailableMcpServers: Effect.Effect<ReadonlyArray<BotAvailableMcpServer>>;
@@ -103,6 +135,7 @@ const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const digest = yield* Digest.Digest;
   const homeDirectory = yield* HostProcess.HomeDirectory;
 
   const root = path.resolve(config.baseDir, "bots");
@@ -185,6 +218,48 @@ const make = Effect.gen(function* () {
     writeFile(path.join(bot.folderPath, "AGENTS.md"), agentsFileContents(bot)).pipe(
       Effect.withSpan("BotFolders.writeAgentsFile"),
     );
+
+  const avatarPath = (folderPath: string, avatar: BotAvatarReference) =>
+    path.join(folderPath, botAvatarFileName(avatar));
+
+  const findAvatar: BotFolders["Service"]["findAvatar"] = (folderPath, avatar) => {
+    const filePath = avatarPath(folderPath, avatar);
+    return fileSystem.exists(filePath).pipe(
+      Effect.map((exists) => (exists ? filePath : null)),
+      Effect.orElseSucceed(() => null),
+    );
+  };
+
+  const writeAvatar: BotFolders["Service"]["writeAvatar"] = Effect.fn("BotFolders.writeAvatar")(
+    function* (folderPath, image) {
+      const hash = yield* digest.digest(Digest.sha256, image.bytes).pipe(Effect.map(Hex.encode));
+      const avatar = botAvatarReference(hash, image.type);
+      yield* fileSystem.writeFile(avatarPath(folderPath, avatar), image.bytes);
+      return avatar;
+    },
+    (effect, folderPath) =>
+      Effect.mapError(
+        effect,
+        (cause) => new BotFolderError({ operation: "write-avatar", path: folderPath, cause }),
+      ),
+  );
+
+  const removeAvatarsExcept: BotFolders["Service"]["removeAvatarsExcept"] = Effect.fn(
+    "BotFolders.removeAvatarsExcept",
+  )(
+    function* (folderPath, icon) {
+      const stale = (yield* fileSystem.readDirectory(folderPath)).filter((fileName) => {
+        const avatar = botAvatarReferenceFromFileName(fileName);
+        return avatar !== null && avatar !== icon;
+      });
+      for (const fileName of stale) yield* fileSystem.remove(path.join(folderPath, fileName));
+    },
+    (effect, folderPath) =>
+      Effect.mapError(
+        effect,
+        (cause) => new BotFolderError({ operation: "remove-avatar", path: folderPath, cause }),
+      ),
+  );
 
   // ~/.claude.json also holds every project's history and can be megabytes; parse it once per change.
   const globalServersCache = yield* Ref.make<{
@@ -271,6 +346,9 @@ const make = Effect.gen(function* () {
     readDocuments,
     writeDocuments,
     writeAgentsFile,
+    findAvatar,
+    writeAvatar,
+    removeAvatarsExcept,
     listAvailableMcpServers,
     resolveMcpServers,
     readAuthSettings,

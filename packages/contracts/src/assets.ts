@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import { NonNegativeInt, ThreadId, TrimmedNonEmptyString, TurnItemId } from "./baseSchemas.ts";
+import { BotAvatarReference, BotId } from "./bot.ts";
 import {
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
@@ -69,6 +70,10 @@ export const AssetResource = Schema.Union([
   // names the change request's repository, which can differ from the checkout at `cwd`.
   Schema.TaggedStruct("environment-theme-background", {
     themeId: EnvironmentThemeId,
+  }),
+  Schema.TaggedStruct("bot-avatar", {
+    botId: BotId,
+    avatar: BotAvatarReference,
   }),
   Schema.TaggedStruct(SOURCE_CONTROL_MEDIA_ASSET, {
     cwd: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
@@ -307,6 +312,17 @@ export class AssetProjectFaviconNotFoundError extends Schema.TaggedError<AssetPr
   }
 }
 
+export class AssetBotAvatarNotFoundError extends Schema.TaggedError<AssetBotAvatarNotFoundError>()(
+  "AssetBotAvatarNotFoundError",
+  {
+    resource: AssetResource,
+  },
+) {
+  override get message(): string {
+    return "Bot avatar was not found.";
+  }
+}
+
 export class AssetSigningKeyLoadError extends Schema.TaggedError<AssetSigningKeyLoadError>()(
   "AssetSigningKeyLoadError",
   {
@@ -342,6 +358,7 @@ export const AssetAccessError = Schema.Union([
   AssetProjectFaviconResolutionError,
   AssetProjectFaviconInspectionError,
   AssetProjectFaviconNotFoundError,
+  AssetBotAvatarNotFoundError,
   AssetSourceControlMediaUrlValidationError,
   AssetSigningKeyLoadError,
 ]);

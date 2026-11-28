@@ -138,7 +138,14 @@ function BotDetailsHeader(props: {
   const toggleMuted = useToggleBotMuted();
   return (
     <div className="flex min-w-0 items-center gap-2.5 px-4 pt-3 pb-2">
-      <BotAvatar icon={bot.icon} color={bot.color} size="md" status={status} muted={bot.muted} />
+      <BotAvatar
+        icon={bot.icon}
+        color={bot.color}
+        owner={entry}
+        size="md"
+        status={status}
+        muted={bot.muted}
+      />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-1">
           <span className="truncate text-sm font-semibold text-foreground">{bot.name}</span>

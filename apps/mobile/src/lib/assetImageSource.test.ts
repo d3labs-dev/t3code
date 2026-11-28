@@ -1,4 +1,10 @@
-import { EnvironmentId, SOURCE_CONTROL_MEDIA_ASSET, ThreadId } from "@t3tools/contracts";
+import {
+  BotAvatarReference,
+  BotId,
+  EnvironmentId,
+  SOURCE_CONTROL_MEDIA_ASSET,
+  ThreadId,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { assetImageCacheKey, assetImageSource } from "./assetImageSource";
@@ -27,6 +33,22 @@ describe("assetImageSource", () => {
     expect(
       assetImageSource(EnvironmentId.make("environment-2"), resource, "https://other/p.jpg")
         .cacheKey,
+    ).not.toBe(first.cacheKey);
+  });
+
+  it("caches a Bot avatar under its content reference across re-signed URLs", () => {
+    const avatar = BotAvatarReference.make(`avatar:${"ab".repeat(32)}.webp`);
+    const resource = { _tag: "bot-avatar", botId: BotId.make("bot-1"), avatar } as const;
+    const first = assetImageSource(environmentId, resource, "https://host/api/assets/a/x.webp");
+    const second = assetImageSource(environmentId, resource, "https://host/api/assets/b/x.webp");
+
+    expect(first.cacheKey).toBeDefined();
+    expect(second.cacheKey).toBe(first.cacheKey);
+    expect(
+      assetImageCacheKey(environmentId, {
+        ...resource,
+        avatar: BotAvatarReference.make(`avatar:${"cd".repeat(32)}.webp`),
+      }),
     ).not.toBe(first.cacheKey);
   });
 

@@ -176,7 +176,7 @@ function ArchivedBotRow({ entry }: { readonly entry: ScopedBotEntry }) {
         onClick={() => openThread("bots", environmentId, bot.threadId)}
         className={cn(ROW_CLASS, "h-7 min-w-0 flex-1 gap-2 rounded-md px-2")}
       >
-        <BotAvatar icon={bot.icon} color={bot.color} size="sm" muted />
+        <BotAvatar icon={bot.icon} color={bot.color} owner={entry} size="sm" muted />
         <span className="min-w-0 flex-1 truncate text-xs text-sidebar-muted-foreground">
           {bot.name}
         </span>
@@ -303,6 +303,7 @@ function BotEntry(props: {
           <BotAvatar
             icon={bot.icon}
             color={bot.color}
+            owner={entry}
             size={featured ? "lg" : "md"}
             status={status}
             muted={bot.muted}

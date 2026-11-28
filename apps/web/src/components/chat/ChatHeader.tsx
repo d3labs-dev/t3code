@@ -389,6 +389,7 @@ export const ChatHeader = memo(function ChatHeader({
                   <BotAvatar
                     icon={activeBot.bot.icon}
                     color={activeBot.bot.color}
+                    owner={activeBot}
                     size="sm"
                     status={activeBot.status}
                     muted={activeBot.bot.muted}
