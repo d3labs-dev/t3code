@@ -65,8 +65,7 @@ import {
 } from "@t3tools/contracts";
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/shell";
 import type { ToolCallVisibility } from "@t3tools/contracts/settings";
-import { isServerBotDreamingMessage } from "@t3tools/shared/botDreaming";
-import { isBotNoReplyMessage, isServerBotCheckInMessage } from "@t3tools/shared/botProactive";
+import { isBotNoReplyMessage, serverBotPromptKind } from "@t3tools/shared/botProactive";
 import { resolveT3McpToolDefinition } from "@t3tools/shared/t3McpToolPresentation";
 import { compactDynamicToolOutput } from "@t3tools/shared/toolOutput";
 import { htmlRenderReferencesEqual, type HtmlRenderReference } from "@t3tools/shared/htmlRender";
@@ -1455,13 +1454,10 @@ function deriveInFlightSteerAnswerIds(entries: ReadonlyArray<TimelineEntry>): Re
 
 type TimelineMessage = Extract<TimelineEntry, { kind: "message" }>["message"];
 
-const isQuietBotPrompt = (message: TimelineMessage) =>
-  isServerBotDreamingMessage(message) || isServerBotCheckInMessage(message);
-
 export function liveAnswerPreview(entries: ReadonlyArray<TimelineEntry>): string | null {
   const boundary = lastResponseBoundaryIndex(entries);
   const prompt = entries[boundary];
-  if (prompt?.kind === "message" && isQuietBotPrompt(prompt.message)) return null;
+  if (prompt?.kind === "message" && serverBotPromptKind(prompt.message) !== null) return null;
   for (let index = entries.length - 1; index > boundary; index -= 1) {
     const entry = entries[index]!;
     const text =
@@ -1510,9 +1506,12 @@ function withoutBotBackgroundRuns(
     if (runId === null) continue;
     if (message.role === "assistant") lastReplyByRun.set(runId, message);
     else if (message.role !== "user") continue;
-    else if (isServerBotCheckInMessage(message)) checkInRunIds.add(runId);
-    else if (isQuietBotPrompt(message)) backgroundRunIds.add(runId);
-    else conversationRunIds.add(runId);
+    else {
+      const promptKind = serverBotPromptKind(message);
+      if (promptKind === "checkIn") checkInRunIds.add(runId);
+      else if (promptKind === "dreaming") backgroundRunIds.add(runId);
+      else conversationRunIds.add(runId);
+    }
   }
   // A run that also carries someone's message is a conversation, never hidden.
   for (const runId of conversationRunIds) {

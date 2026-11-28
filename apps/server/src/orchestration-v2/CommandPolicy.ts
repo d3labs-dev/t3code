@@ -10,8 +10,7 @@ import {
   ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
-import { isServerBotDreamingMessage } from "@t3tools/shared/botDreaming";
-import { isServerBotCheckInMessage } from "@t3tools/shared/botProactive";
+import { serverBotPromptKind } from "@t3tools/shared/botProactive";
 import { latestExecutedRun } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -104,9 +103,7 @@ export function resolveMessageDispatchIntent(
   const targetMessage = projection.messages.find((message) => message.id === target?.userMessageId);
   if (
     targetMessage !== undefined &&
-    (isNativeMaintenanceCommand(targetMessage) ||
-      isServerBotDreamingMessage(targetMessage) ||
-      isServerBotCheckInMessage(targetMessage))
+    (isNativeMaintenanceCommand(targetMessage) || serverBotPromptKind(targetMessage) !== null)
   ) {
     return { type: "queue_after_active" };
   }

@@ -4,14 +4,10 @@ import { applyThreadPullRequestLinkUpdate } from "../sourceControl/threadPullReq
 import { projectTurnItemForWire } from "./WireProjection.ts";
 import * as Stream from "effect/Stream";
 import {
-  BOT_DREAMING_MESSAGE_PREFIX,
-  isServerBotDreamingMessage,
-} from "@t3tools/shared/botDreaming";
-import {
-  BOT_CHECKIN_MESSAGE_PREFIX,
   BOT_NO_REPLY_TOKEN,
   isBotNoReplyMessage,
-  isServerBotCheckInMessage,
+  SERVER_BOT_PROMPT_PREFIXES,
+  serverBotPromptKind,
 } from "@t3tools/shared/botProactive";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { makeThreadFind } from "./ThreadFind.ts";
@@ -1956,11 +1952,7 @@ function activeProviderGoalForShell(
 }
 
 function isSilentShellPrompt(message: OrchestrationV2ThreadProjection["messages"][number]) {
-  return (
-    idleCompactionOf(message) !== undefined ||
-    isServerBotDreamingMessage(message) ||
-    isServerBotCheckInMessage(message)
-  );
+  return idleCompactionOf(message) !== undefined || serverBotPromptKind(message) !== null;
 }
 
 /** A check-in the Bot answered with a real message reaches the user like any reply. */
@@ -1989,7 +1981,9 @@ function isSilentRunForShell(
     run.status !== "failed" &&
     prompt !== undefined &&
     isSilentShellPrompt(prompt) &&
-    !(isServerBotCheckInMessage(prompt) && isAnsweredCheckInRun(run, projection.messages)) &&
+    !(
+      serverBotPromptKind(prompt) === "checkIn" && isAnsweredCheckInRun(run, projection.messages)
+    ) &&
     !projection.turnItems.some(
       (item) => item.runId === run.id && item.type === "compaction" && item.status === "failed",
     )
@@ -7914,8 +7908,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
     const whitespace = sql.literal(
       "char(9, 10, 11, 12, 13, 32, 160, 5760, 8192, 8193, 8194, 8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202, 8232, 8233, 8239, 8287, 12288, 65279)",
     );
-    // Mirrors isServerBotDreamingMessage and isServerBotCheckInMessage; JavaScript trimStart
-    // drops the same whitespace.
+    // Mirrors serverBotPromptKind; JavaScript trimStart drops the same whitespace.
     const isServerPrefixedMessage = (alias: string, prefix: string) => {
       const payload = sql.literal(`${alias}.payload_json`);
       return sql`(
@@ -7929,8 +7922,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
     // Mirrors isSilentShellPrompt.
     const isSilentShellMessage = (alias: string) => sql`(
       ${isIdleCompactionMessage(alias)}
-      OR ${isServerPrefixedMessage(alias, BOT_DREAMING_MESSAGE_PREFIX)}
-      OR ${isServerPrefixedMessage(alias, BOT_CHECKIN_MESSAGE_PREFIX)}
+      OR ${sql.or(
+        Object.values(SERVER_BOT_PROMPT_PREFIXES).map((prefix) =>
+          isServerPrefixedMessage(alias, prefix),
+        ),
+      )}
     )`;
     // Mirrors isAnsweredCheckInRun; strips the same marks as isBotNoReplyMessage.
     const isAnsweredCheckInShellRun = (alias: string) => {
@@ -7940,7 +7936,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         AND EXISTS (
           SELECT 1 FROM orchestration_v2_projection_messages checkin
           WHERE checkin.message_id = json_extract(${run}.payload_json, '$.userMessageId')
-            AND ${isServerPrefixedMessage("checkin", BOT_CHECKIN_MESSAGE_PREFIX)}
+            AND ${isServerPrefixedMessage("checkin", SERVER_BOT_PROMPT_PREFIXES.checkIn)}
         )
         AND EXISTS (
           SELECT 1 FROM (

@@ -37,8 +37,7 @@ import {
   slugifyBotName,
 } from "@t3tools/contracts";
 import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
-import { isServerBotDreamingMessage } from "@t3tools/shared/botDreaming";
-import { isServerBotCheckInMessage } from "@t3tools/shared/botProactive";
+import { serverBotPromptKind } from "@t3tools/shared/botProactive";
 import { latestRootProviderFailure } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -776,13 +775,7 @@ const make = Effect.gen(function* () {
   // The reactor sees every domain event; these handlers stay untraced and return before any read
   // for the common events they ignore.
   const onUserMessage = Effect.fnUntraced(function* (message: OrchestrationV2ConversationMessage) {
-    if (
-      isServerBotDreamingMessage(message) ||
-      isServerBotCheckInMessage(message) ||
-      isCompactionCommandMessage(message)
-    ) {
-      return;
-    }
+    if (serverBotPromptKind(message) !== null || isCompactionCommandMessage(message)) return;
     if (message.createdBy === "user" && message.senderThreadId === undefined) {
       const bot = yield* store.findByThreadId(message.threadId);
       if (Option.isSome(bot) && bot.value.hopCount !== 0) {

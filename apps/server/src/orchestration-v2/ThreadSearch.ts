@@ -24,7 +24,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as SqlSchema from "effect/sql/SqlSchema";
 import * as Struct from "effect/Struct";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
-import { BOT_DREAMING_MESSAGE_PREFIX } from "@t3tools/shared/botDreaming";
+import { SERVER_BOT_PROMPT_PREFIXES } from "@t3tools/shared/botProactive";
 import {
   messageSearchTokens,
   foldSearchQuery,
@@ -380,8 +380,8 @@ const recalledMessageCondition = (
     AND substr(
       ltrim(json_extract(messages.payload_json, '$.text'), char(9, 10, 11, 12, 13, 32)),
       1,
-      ${BOT_DREAMING_MESSAGE_PREFIX.length}
-    ) IS ${BOT_DREAMING_MESSAGE_PREFIX}
+      ${SERVER_BOT_PROMPT_PREFIXES.dreaming.length}
+    ) IS ${SERVER_BOT_PROMPT_PREFIXES.dreaming}
   )
   AND ${shownMessageCondition(sql, tokens)}
 `;

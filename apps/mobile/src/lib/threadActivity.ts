@@ -60,8 +60,7 @@ import type {
   TurnItemId,
 } from "@t3tools/contracts";
 import { idleCompactionOf, isCompactionCommandMessage, RunId, ThreadId } from "@t3tools/contracts";
-import { isServerBotDreamingMessage } from "@t3tools/shared/botDreaming";
-import { isBotNoReplyMessage, isServerBotCheckInMessage } from "@t3tools/shared/botProactive";
+import { isBotNoReplyMessage, serverBotPromptKind } from "@t3tools/shared/botProactive";
 import {
   classifyToolActivity,
   collectToolFilePaths,
@@ -2449,8 +2448,9 @@ export function buildThreadFeed(
       liveRunIds.add(item.runId);
     }
     if (item.type === "user_message" && item.runId !== null) {
-      if (isServerBotDreamingMessage({ role: "user", ...item })) backgroundRunIds.add(item.runId);
-      else if (isServerBotCheckInMessage({ role: "user", ...item })) checkInRunIds.add(item.runId);
+      const promptKind = serverBotPromptKind({ role: "user", ...item });
+      if (promptKind === "dreaming") backgroundRunIds.add(item.runId);
+      else if (promptKind === "checkIn") checkInRunIds.add(item.runId);
       else conversationRunIds.add(item.runId);
     } else if (item.type === "assistant_message" && item.runId !== null) {
       lastReplyByRun.set(item.runId, item);
