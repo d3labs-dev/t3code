@@ -13,8 +13,6 @@ import { buildModelOptions, type ModelOption } from "../../lib/modelOptions";
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 
-export const SUGGESTED_BOT_GROUPS = ["Engineering", "Operations", "Creative"] as const;
-
 export function useBotVisualStyle(): BotVisualStyle {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const stored = AsyncResult.isSuccess(preferencesResult)

@@ -1,20 +1,23 @@
 import { useAtomValue } from "@effect/atom-react";
+import {
+  type BotDocumentDrafts,
+  type BotDocumentName,
+  type BotSettingsPatch,
+  botDocumentFields,
+  botSettingsForm,
+} from "@t3tools/client-runtime/bot-form";
 import { type ScopedBotEntry, botKey } from "@t3tools/client-runtime/state/bots";
 import {
+  BOT_CLOCK_TIME,
   BOT_DEFAULT_TOOLS,
-  BOT_HEARTBEAT_SOFT_CAP_BYTES,
-  BOT_MEMORY_SOFT_CAP_BYTES,
-  BOT_NOW_SOFT_CAP_BYTES,
   type BotDocuments,
   type BotMcpServerConfig,
   type BotProactiveConfig,
   type BotRecord,
   type BotSystemPromptMode,
-  type BotUpdateInput,
   TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import * as Equal from "effect/Equal";
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
@@ -66,65 +69,6 @@ const TABS = [
   { id: "capabilities", label: "Capabilities" },
 ] as const satisfies ReadonlyArray<{ id: BotSettingsTab; label: string }>;
 
-type EditableBotField =
-  | "name"
-  | "role"
-  | "groupName"
-  | "icon"
-  | "color"
-  | "isPrimary"
-  | "muted"
-  | "modelSelection"
-  | "runtimeMode"
-  | "systemPromptMode"
-  | "tools"
-  | "mcpServerNames"
-  | "customMcpServers"
-  | "skills"
-  | "proactive";
-
-type BotRecordPatch = Partial<Pick<BotRecord, EditableBotField>>;
-
-type BotDocumentName = keyof BotDocuments;
-type DocumentDrafts = Partial<Record<BotDocumentName, string>>;
-
-const DOCUMENTS = [
-  {
-    id: "soul",
-    file: "SOUL.md",
-    placeholder: "Who is this Bot? How should it think, talk and decide?",
-    softCapBytes: null,
-    primaryOnly: false,
-  },
-  {
-    id: "now",
-    file: "NOW.md",
-    placeholder: "Active threads, open commitments, and next actions (kept concise).",
-    softCapBytes: BOT_NOW_SOFT_CAP_BYTES,
-    primaryOnly: false,
-  },
-  {
-    id: "memory",
-    file: "MEMORY.md",
-    placeholder: "What should this Bot remember between conversations?",
-    softCapBytes: BOT_MEMORY_SOFT_CAP_BYTES,
-    primaryOnly: false,
-  },
-  {
-    id: "heartbeat",
-    file: "HEARTBEAT.md",
-    placeholder: "What should this Bot keep an eye on during proactive check-ins?",
-    softCapBytes: BOT_HEARTBEAT_SOFT_CAP_BYTES,
-    primaryOnly: true,
-  },
-] as const satisfies ReadonlyArray<{
-  id: BotDocumentName;
-  file: string;
-  placeholder: string;
-  softCapBytes: number | null;
-  primaryOnly: boolean;
-}>;
-
 const PROACTIVE_INTERVALS = [
   { minutes: 15, label: "Every 15m" },
   { minutes: 30, label: "Every 30m" },
@@ -140,16 +84,6 @@ const SYSTEM_PROMPT_MODES: Record<BotSystemPromptMode, string> = {
   custom: "Custom (lightweight)",
   preset: "Claude Code preset",
 };
-
-function changedFields(bot: BotRecord, patch: BotRecordPatch): BotRecordPatch {
-  const changes: Record<string, unknown> = {};
-  for (const [field, value] of Object.entries(patch)) {
-    if (value !== undefined && !Equal.equals(value, bot[field as EditableBotField])) {
-      changes[field] = value;
-    }
-  }
-  return changes as BotRecordPatch;
-}
 
 export function BotSettingsDialog() {
   const target = useBotsUiStore((state) => state.botSettings);
@@ -183,32 +117,14 @@ function BotSettingsDialogBody(props: {
   const detail = useBotDetail(environmentId, bot.id);
   const update = useUpdateBot();
   const [tab, setTab] = useState<BotSettingsTab>(props.initialTab);
-  const [patch, setPatch] = useState<BotRecordPatch>({});
-  const [documentDrafts, setDocumentDrafts] = useState<DocumentDrafts>({});
+  const [patch, setPatch] = useState<BotSettingsPatch>({});
+  const [documentDrafts, setDocumentDrafts] = useState<BotDocumentDrafts>({});
   const [busy, setBusy] = useState(false);
 
   const savedDocuments = detail.data?.documents ?? null;
-  // A saved draft stays on screen until the refreshed detail returns the same text.
-  const settled = DOCUMENTS.filter(
-    ({ id }) =>
-      documentDrafts[id] !== undefined &&
-      savedDocuments !== null &&
-      savedDocuments[id] === documentDrafts[id],
-  );
-  if (settled.length > 0) {
-    setDocumentDrafts((current) => {
-      const next = { ...current };
-      for (const { id } of settled) delete next[id];
-      return next;
-    });
-  }
-  const dirtyDocuments = DOCUMENTS.filter(
-    ({ id }) => documentDrafts[id] !== undefined && documentDrafts[id] !== savedDocuments?.[id],
-  );
-  const changes = changedFields(bot, patch);
-  const changeCount = Object.keys(changes).length + dirtyDocuments.length;
-  const shown = { ...bot, ...patch };
-  const nameMissing = shown.name.trim() === "";
+  const { shown, nameMissing, changeCount, dirtyDocuments, pendingDrafts, saveInput } =
+    botSettingsForm(bot, patch, savedDocuments, documentDrafts);
+  if (pendingDrafts !== documentDrafts) setDocumentDrafts(pendingDrafts);
 
   const requestClose = async () => {
     if (changeCount > 0) {
@@ -227,26 +143,15 @@ function BotSettingsDialogBody(props: {
   };
 
   const save = async () => {
-    if (changeCount === 0 || nameMissing || busy) return;
-    const groupName =
-      changes.groupName === undefined ? undefined : changes.groupName?.trim() || null;
-    const documents: DocumentDrafts = {};
-    for (const { id } of dirtyDocuments) documents[id] = documentDrafts[id] ?? "";
-    const input: BotUpdateInput = {
-      botId: bot.id,
-      ...changes,
-      ...(changes.name === undefined ? {} : { name: changes.name.trim() }),
-      ...(groupName === undefined ? {} : { groupName }),
-      ...(dirtyDocuments.length === 0 ? {} : { documents }),
-    };
+    if (saveInput === null || busy) return;
     setBusy(true);
-    const saved = await update(environmentId, input, "Could not save Bot settings");
+    const saved = await update(environmentId, saveInput, "Could not save Bot settings");
     setBusy(false);
     if (saved) setPatch({});
   };
 
   const editable = canUpdate && !busy;
-  const set = (next: BotRecordPatch) => setPatch((current) => ({ ...current, ...next }));
+  const set = (next: BotSettingsPatch) => setPatch((current) => ({ ...current, ...next }));
 
   return (
     <Dialog
@@ -317,7 +222,7 @@ function BotSettingsDialogBody(props: {
               saved={savedDocuments}
               loadError={savedDocuments === null ? detail.error : null}
               drafts={documentDrafts}
-              dirty={dirtyDocuments.map(({ id }) => id)}
+              dirty={dirtyDocuments}
               editable={editable && savedDocuments !== null}
               onChange={(id, value) =>
                 setDocumentDrafts((current) => ({ ...current, [id]: value }))
@@ -362,7 +267,7 @@ function ProfileSection(props: {
   readonly entry: ScopedBotEntry;
   readonly shown: BotRecord;
   readonly editable: boolean;
-  readonly set: (patch: BotRecordPatch) => void;
+  readonly set: (patch: BotSettingsPatch) => void;
 }) {
   const { shown, editable, set } = props;
   const visualStyle = useBotsUiStore((state) => state.visualStyle);
@@ -566,7 +471,7 @@ function ProactiveCheckInRows(props: {
   const { proactive, editable, onChange } = props;
   const interval = PROACTIVE_INTERVALS.find(({ minutes }) => minutes === proactive.intervalMinutes);
   const setActiveHour = (field: "activeHoursStart" | "activeHoursEnd", value: string) => {
-    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) onChange({ ...proactive, [field]: value });
+    if (BOT_CLOCK_TIME.test(value)) onChange({ ...proactive, [field]: value });
   };
   return (
     <>
@@ -656,7 +561,7 @@ function SoulSection(props: {
   readonly isPrimary: boolean;
   readonly saved: BotDocuments | null;
   readonly loadError: string | null;
-  readonly drafts: DocumentDrafts;
+  readonly drafts: BotDocumentDrafts;
   readonly dirty: ReadonlyArray<BotDocumentName>;
   readonly editable: boolean;
   readonly onChange: (id: BotDocumentName, value: string) => void;
@@ -664,7 +569,7 @@ function SoulSection(props: {
   return (
     <div className="flex flex-col gap-5">
       <BotFolderPath path={props.folderPath} />
-      {DOCUMENTS.filter((document) => props.isPrimary || !document.primaryOnly).map((document) => {
+      {botDocumentFields(props.isPrimary).map((document) => {
         const value = props.drafts[document.id] ?? props.saved?.[document.id] ?? "";
         const bytes = new TextEncoder().encode(value).length;
         return (
@@ -1005,7 +910,7 @@ function CapabilitiesSection(props: {
   readonly entry: ScopedBotEntry;
   readonly shown: BotRecord;
   readonly editable: boolean;
-  readonly set: (patch: BotRecordPatch) => void;
+  readonly set: (patch: BotSettingsPatch) => void;
 }) {
   const { shown, editable, set } = props;
   const { environmentId } = props.entry;

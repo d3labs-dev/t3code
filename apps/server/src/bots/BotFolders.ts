@@ -1,4 +1,5 @@
 import {
+  BOT_DOCUMENTS,
   type BotAvailableMcpServer,
   type BotDocuments,
   type BotHarnessProfile,
@@ -67,13 +68,6 @@ export class BotFolders extends Context.Service<
   }
 >()("t3/bots/BotFolders") {}
 
-const DOCUMENT_FILES: Readonly<Record<DocumentName, string>> = {
-  soul: "SOUL.md",
-  now: "NOW.md",
-  memory: "MEMORY.md",
-  heartbeat: "HEARTBEAT.md",
-};
-
 const agentsFileContents = (bot: Pick<BotRecord, "name" | "role">) =>
   [
     `# ${bot.name}`,
@@ -115,7 +109,7 @@ const make = Effect.gen(function* () {
   const sharedDir = path.join(root, "_shared");
   const folderFor = (botId: BotId) => path.join(root, botId);
   const documentPath = (folderPath: string, name: DocumentName) =>
-    path.join(folderPath, DOCUMENT_FILES[name]);
+    path.join(folderPath, BOT_DOCUMENTS[name].file);
   const claudeConfigPath = path.join(homeDirectory, ".claude.json");
   const claudeSettingsPath = path.join(homeDirectory, ".claude", "settings.json");
 

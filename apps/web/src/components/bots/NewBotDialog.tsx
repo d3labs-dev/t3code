@@ -1,9 +1,5 @@
-import {
-  BOT_AVATAR_COLORS,
-  BOT_AVATAR_SHAPES,
-  BOT_THEME_COLOR,
-  DEFAULT_BOT_AVATAR_SHAPE,
-} from "@t3tools/client-runtime/bot-avatar";
+import { BOT_THEME_COLOR, DEFAULT_BOT_AVATAR_SHAPE } from "@t3tools/client-runtime/bot-avatar";
+import { botGroupSuggestions, shuffleBotIdentity } from "@t3tools/client-runtime/bot-form";
 import {
   AuthOrchestrationOperateScope,
   type BotCreateInput,
@@ -41,9 +37,6 @@ import {
 import { BotIdentityPicker } from "./BotIdentityPicker";
 import { useBotsUiStore } from "./botsUiStore";
 
-const SUGGESTED_GROUPS = ["Engineering", "Operations", "Creative"] as const;
-const RANDOM_COLORS = BOT_AVATAR_COLORS.filter((option) => option.value !== BOT_THEME_COLOR);
-
 interface NewBotDraft {
   readonly name: string;
   readonly role: string;
@@ -65,11 +58,6 @@ const EMPTY_DRAFT: NewBotDraft = {
   mcpServerNames: [],
   soul: "",
 };
-
-function pickOther(options: ReadonlyArray<string>, current: string): string {
-  const others = options.filter((option) => option !== current);
-  return others[Math.floor(Math.random() * others.length)] ?? current;
-}
 
 export function NewBotDialog() {
   const open = useBotsUiStore((state) => state.newBotDialogOpen);
@@ -120,16 +108,7 @@ function NewBotForm(props: {
   });
   const model = useBotModelChoice(environmentId, draft.model);
   const availableMcpServers = index.availableMcpServersByEnvironment.get(environmentId) ?? [];
-  const existingGroups = [
-    ...new Set(
-      index.bots.flatMap(({ environmentId: botEnvironmentId, bot }) =>
-        botEnvironmentId === environmentId && bot.groupName !== null && bot.archivedAt === null
-          ? [bot.groupName]
-          : [],
-      ),
-    ),
-  ].sort((left, right) => left.localeCompare(right));
-  const groupSuggestions = existingGroups.length > 0 ? existingGroups : SUGGESTED_GROUPS;
+  const groupSuggestions = botGroupSuggestions(index.bots, environmentId);
   const name = draft.name.trim();
   const update = (patch: Partial<NewBotDraft>) => setDraft((current) => ({ ...current, ...patch }));
   const mcpCount = draft.mcpServerNames.length;
@@ -140,17 +119,7 @@ function NewBotForm(props: {
     .filter((part) => part !== null)
     .join(" · ");
 
-  const randomize = () =>
-    update({
-      icon: pickOther(
-        BOT_AVATAR_SHAPES.map((shape) => shape.id),
-        draft.icon,
-      ),
-      color: pickOther(
-        RANDOM_COLORS.map((option) => option.value),
-        draft.color,
-      ),
-    });
+  const randomize = () => update(shuffleBotIdentity(draft, Math.random));
 
   const submit = async () => {
     if (

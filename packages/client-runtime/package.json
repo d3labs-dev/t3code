@@ -83,6 +83,10 @@
       "types": "./src/botBackgroundRuns.ts",
       "default": "./src/botBackgroundRuns.ts"
     },
+    "./bot-form": {
+      "types": "./src/botForm.ts",
+      "default": "./src/botForm.ts"
+    },
     "./bot-handoff-message": {
       "types": "./src/botHandoffMessage.ts",
       "default": "./src/botHandoffMessage.ts"

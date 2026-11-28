@@ -1,10 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import {
-  BOT_AVATAR_COLORS,
-  BOT_AVATAR_SHAPES,
-  BOT_THEME_COLOR,
-  DEFAULT_BOT_AVATAR_SHAPE,
-} from "@t3tools/client-runtime/bot-avatar";
+import { BOT_THEME_COLOR, DEFAULT_BOT_AVATAR_SHAPE } from "@t3tools/client-runtime/bot-avatar";
+import { botGroupSuggestions, shuffleBotIdentity } from "@t3tools/client-runtime/bot-form";
 import {
   AuthOrchestrationOperateScope,
   type BotCreateInput,
@@ -34,20 +30,12 @@ import { readEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { BotAvatar } from "./BotAvatar";
 import {
-  SUGGESTED_BOT_GROUPS,
   reportBotCommandFailure,
   useBotModelChoice,
   useBotVisualStyle,
   useSetBotVisualStyle,
 } from "./botFormHelpers";
 import { BotIdentityPicker } from "./BotIdentityPicker";
-
-const RANDOM_COLORS = BOT_AVATAR_COLORS.filter((option) => option.value !== BOT_THEME_COLOR);
-
-function pickOther(options: ReadonlyArray<string>, current: string): string {
-  const others = options.filter((option) => option !== current);
-  return others[Math.floor(Math.random() * others.length)] ?? current;
-}
 
 export function NewBotSheet(
   props: StaticScreenProps<{ readonly environmentId?: string } | undefined>,
@@ -103,31 +91,13 @@ export function NewBotSheet(
     trimmedName.length > 0 &&
     model.selection !== null;
 
-  const existingGroups = [
-    ...new Set(
-      index.bots.flatMap(({ environmentId: botEnvId, bot }) =>
-        botEnvId === environmentId && bot.groupName !== null && bot.archivedAt === null
-          ? [bot.groupName]
-          : [],
-      ),
-    ),
-  ].sort((left, right) => left.localeCompare(right));
-  const groupSuggestions = existingGroups.length > 0 ? existingGroups : SUGGESTED_BOT_GROUPS;
+  const groupSuggestions = botGroupSuggestions(index.bots, environmentId);
 
   const handleRandomize = () => {
     void Haptics.selectionAsync();
-    setIcon(
-      pickOther(
-        BOT_AVATAR_SHAPES.map((shape) => shape.id),
-        icon,
-      ),
-    );
-    setColor(
-      pickOther(
-        RANDOM_COLORS.map((option) => option.value),
-        color,
-      ),
-    );
+    const next = shuffleBotIdentity({ icon, color }, Math.random);
+    setIcon(next.icon);
+    setColor(next.color);
   };
 
   const handleSubmit = async () => {

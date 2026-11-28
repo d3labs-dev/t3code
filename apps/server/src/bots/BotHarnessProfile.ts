@@ -1,8 +1,6 @@
 import {
-  BOT_HEARTBEAT_SOFT_CAP_BYTES,
+  BOT_DOCUMENTS,
   BOT_MAX_HOPS,
-  BOT_MEMORY_SOFT_CAP_BYTES,
-  BOT_NOW_SOFT_CAP_BYTES,
   type BotDocuments,
   BotError,
   type BotHarnessProfile,
@@ -15,6 +13,7 @@ import { BOT_NO_REPLY_TOKEN } from "@t3tools/shared/botProactive";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Record from "effect/Record";
 
 import * as BotHarnessResolver from "../orchestration-v2/Adapters/BotHarnessResolver.ts";
 import * as BotFolders from "./BotFolders.ts";
@@ -67,26 +66,14 @@ const tableCell = (value: string) => value.replaceAll("|", "\\|").replace(/\s+/g
 const documentSection = (title: string, contents: string) =>
   [`## ${title}`, contents.trim() === "" ? "(empty)" : contents.trim()].join("\n\n");
 
-const SOFT_CAPPED_DOCUMENTS = [
-  { name: "now", file: "NOW.md", capBytes: BOT_NOW_SOFT_CAP_BYTES },
-  { name: "memory", file: "MEMORY.md", capBytes: BOT_MEMORY_SOFT_CAP_BYTES },
-] as const;
-const HEARTBEAT_DOCUMENT = {
-  name: "heartbeat",
-  file: "HEARTBEAT.md",
-  capBytes: BOT_HEARTBEAT_SOFT_CAP_BYTES,
-} as const;
-
 const housekeepingSection = (bot: BotRecord, documents: BotDocuments) => {
-  const cappedDocuments = bot.isPrimary
-    ? [...SOFT_CAPPED_DOCUMENTS, HEARTBEAT_DOCUMENT]
-    : SOFT_CAPPED_DOCUMENTS;
-  const overCap = cappedDocuments
-    .map((document) => ({
-      ...document,
-      bytes: Buffer.byteLength(documents[document.name], "utf8"),
-    }))
-    .filter(({ bytes, capBytes }) => bytes > capBytes);
+  const overCap = Record.toEntries(BOT_DOCUMENTS).flatMap(
+    ([name, { file, softCapBytes, primaryOnly }]) => {
+      if (softCapBytes === null || (primaryOnly && !bot.isPrimary)) return [];
+      const bytes = Buffer.byteLength(documents[name], "utf8");
+      return bytes > softCapBytes ? [{ file, bytes, capBytes: softCapBytes }] : [];
+    },
+  );
   if (overCap.length === 0) return [];
   return [
     [

@@ -1,4 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
+import {
+  type BotDocumentDrafts,
+  type BotSettingsPatch,
+  botDocumentFields,
+  botGroupSuggestions,
+  botSettingsForm,
+} from "@t3tools/client-runtime/bot-form";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   type ScopedBotEntry,
@@ -6,20 +13,14 @@ import {
   botKey,
 } from "@t3tools/client-runtime/state/bots";
 import {
-  BOT_HEARTBEAT_SOFT_CAP_BYTES,
-  BOT_MEMORY_SOFT_CAP_BYTES,
-  BOT_NOW_SOFT_CAP_BYTES,
+  BOT_CLOCK_TIME,
   BotId,
-  type BotDocuments,
   type BotExchange,
   type BotProactiveConfig,
-  type BotRecord,
-  type BotUpdateInput,
   EnvironmentId,
   type ModelSelection,
 } from "@t3tools/contracts";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import * as Equal from "effect/Equal";
 import * as Haptics from "expo-haptics";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -43,7 +44,6 @@ import { useQuietThreadShell } from "../../state/entities";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { BotAvatar } from "./BotAvatar";
 import {
-  SUGGESTED_BOT_GROUPS,
   reportBotCommandFailure,
   useBotModelChoice,
   useBotVisualStyle,
@@ -53,58 +53,6 @@ import { BotIdentityPicker } from "./BotIdentityPicker";
 
 type BotSettingsTab = "profile" | "soul" | "activity";
 
-type EditableBotField =
-  | "name"
-  | "role"
-  | "groupName"
-  | "icon"
-  | "color"
-  | "isPrimary"
-  | "muted"
-  | "modelSelection"
-  | "proactive";
-
-type BotRecordPatch = Partial<Pick<BotRecord, EditableBotField>>;
-type BotDocumentName = keyof BotDocuments;
-type DocumentDrafts = Partial<Record<BotDocumentName, string>>;
-
-const DOCUMENTS = [
-  {
-    id: "soul",
-    file: "SOUL.md",
-    placeholder: "Who is this Bot? How should it think, talk and decide?",
-    softCapBytes: null,
-    primaryOnly: false,
-  },
-  {
-    id: "now",
-    file: "NOW.md",
-    placeholder: "Active threads, open commitments, and next actions (kept concise).",
-    softCapBytes: BOT_NOW_SOFT_CAP_BYTES,
-    primaryOnly: false,
-  },
-  {
-    id: "memory",
-    file: "MEMORY.md",
-    placeholder: "What should this Bot remember between conversations?",
-    softCapBytes: BOT_MEMORY_SOFT_CAP_BYTES,
-    primaryOnly: false,
-  },
-  {
-    id: "heartbeat",
-    file: "HEARTBEAT.md",
-    placeholder: "What should this Bot keep an eye on during proactive check-ins?",
-    softCapBytes: BOT_HEARTBEAT_SOFT_CAP_BYTES,
-    primaryOnly: true,
-  },
-] as const satisfies ReadonlyArray<{
-  id: BotDocumentName;
-  file: string;
-  placeholder: string;
-  softCapBytes: number | null;
-  primaryOnly: boolean;
-}>;
-
 const PROACTIVE_INTERVALS = [
   { value: 15, label: "15m" },
   { value: 30, label: "30m" },
@@ -112,21 +60,9 @@ const PROACTIVE_INTERVALS = [
   { value: 120, label: "2h" },
 ] as const;
 
-const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-
 const localTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 const formatKilobytes = (bytes: number) => String(Math.ceil((bytes * 10) / 1024) / 10);
-
-function changedFields(bot: BotRecord, patch: BotRecordPatch): BotRecordPatch {
-  const changes: Record<string, unknown> = {};
-  for (const [field, value] of Object.entries(patch)) {
-    if (value !== undefined && !Equal.equals(value, bot[field as EditableBotField])) {
-      changes[field] = value;
-    }
-  }
-  return changes as BotRecordPatch;
-}
 
 export function BotSettingsSheet(
   props: StaticScreenProps<{
@@ -198,49 +134,22 @@ function BotSettingsSheetBody(props: {
   const exchanges = useBotExchanges(environmentId, bot.id);
 
   const [tab, setTab] = useState<BotSettingsTab>(props.initialTab);
-  const [patch, setPatch] = useState<BotRecordPatch>({});
-  const [documentDrafts, setDocumentDrafts] = useState<DocumentDrafts>({});
+  const [patch, setPatch] = useState<BotSettingsPatch>({});
+  const [documentDrafts, setDocumentDrafts] = useState<BotDocumentDrafts>({});
   const [showModelList, setShowModelList] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const savedDocuments = detail.data?.documents ?? null;
-  const settled = DOCUMENTS.filter(
-    ({ id }) =>
-      documentDrafts[id] !== undefined &&
-      savedDocuments !== null &&
-      savedDocuments[id] === documentDrafts[id],
-  );
-  if (settled.length > 0) {
-    setDocumentDrafts((current) => {
-      const next = { ...current };
-      for (const { id } of settled) delete next[id];
-      return next;
-    });
-  }
-
-  const dirtyDocuments = DOCUMENTS.filter(
-    ({ id }) => documentDrafts[id] !== undefined && documentDrafts[id] !== savedDocuments?.[id],
-  );
-  const changes = changedFields(bot, patch);
-  const changeCount = Object.keys(changes).length + dirtyDocuments.length;
-  const shown = { ...bot, ...patch };
-  const nameMissing = shown.name.trim() === "";
+  const { shown, nameMissing, changeCount, dirtyDocuments, pendingDrafts, saveInput } =
+    botSettingsForm(bot, patch, savedDocuments, documentDrafts);
+  if (pendingDrafts !== documentDrafts) setDocumentDrafts(pendingDrafts);
   const editable = canUpdate && !busy;
 
   const model = useBotModelChoice(environmentId, shown.modelSelection);
 
-  const existingGroups = [
-    ...new Set(
-      index.bots.flatMap(({ environmentId: botEnvId, bot: candidate }) =>
-        botEnvId === environmentId && candidate.groupName !== null && candidate.archivedAt === null
-          ? [candidate.groupName]
-          : [],
-      ),
-    ),
-  ].sort((left, right) => left.localeCompare(right));
-  const groupSuggestions = existingGroups.length > 0 ? existingGroups : SUGGESTED_BOT_GROUPS;
+  const groupSuggestions = botGroupSuggestions(index.bots, environmentId);
 
-  const setField = (next: BotRecordPatch) => setPatch((current) => ({ ...current, ...next }));
+  const setField = (next: BotSettingsPatch) => setPatch((current) => ({ ...current, ...next }));
 
   const handleRequestClose = () => {
     if (changeCount === 0) {
@@ -257,20 +166,9 @@ function BotSettingsSheetBody(props: {
   };
 
   const handleSave = async () => {
-    if (changeCount === 0 || nameMissing || busy || !canUpdate) return;
-    const groupName =
-      changes.groupName === undefined ? undefined : changes.groupName?.trim() || null;
-    const documents: DocumentDrafts = {};
-    for (const { id } of dirtyDocuments) documents[id] = documentDrafts[id] ?? "";
-    const input: BotUpdateInput = {
-      botId: bot.id,
-      ...changes,
-      ...(changes.name === undefined ? {} : { name: changes.name.trim() }),
-      ...(groupName === undefined ? {} : { groupName }),
-      ...(dirtyDocuments.length === 0 ? {} : { documents }),
-    };
+    if (saveInput === null || busy || !canUpdate) return;
     setBusy(true);
-    const result = await updateBot({ environmentId, input });
+    const result = await updateBot({ environmentId, input: saveInput });
     setBusy(false);
     if (result._tag === "Failure") {
       reportBotCommandFailure("Could not save Bot settings", result);
@@ -602,9 +500,9 @@ function BotSettingsSheetBody(props: {
                   </View>
                 )
               ) : (
-                DOCUMENTS.filter((doc) => shown.isPrimary || !doc.primaryOnly).map((doc) => {
+                botDocumentFields(shown.isPrimary).map((doc) => {
                   const value = documentDrafts[doc.id] ?? savedDocuments[doc.id];
-                  const isDirty = dirtyDocuments.some((item) => item.id === doc.id);
+                  const isDirty = dirtyDocuments.includes(doc.id);
                   const bytes = new TextEncoder().encode(value).length;
                   return (
                     <View key={doc.id} className="gap-2">
@@ -778,7 +676,7 @@ function ClockTimeInput(props: {
       keyboardType="numbers-and-punctuation"
       maxLength={5}
       onChangeText={(next) => {
-        if (CLOCK_TIME.test(next)) {
+        if (BOT_CLOCK_TIME.test(next)) {
           setDraft(null);
           props.onChange(next);
         } else {

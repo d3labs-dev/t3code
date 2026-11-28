@@ -106,7 +106,7 @@ const BotEditableFields = {
   systemPromptMode: BotSystemPromptMode,
 };
 
-const BOT_CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+export const BOT_CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const BotProactiveConfig = Schema.Struct({
   enabled: Schema.Boolean,
@@ -176,10 +176,6 @@ export const BotHarnessProfile = Schema.Struct({
 });
 export type BotHarnessProfile = typeof BotHarnessProfile.Type;
 
-export const BOT_NOW_SOFT_CAP_BYTES = 2_048;
-export const BOT_MEMORY_SOFT_CAP_BYTES = 4_096;
-export const BOT_HEARTBEAT_SOFT_CAP_BYTES = 2_048;
-
 export const BotDocuments = Schema.Struct({
   soul: Schema.String,
   now: Schema.String,
@@ -187,6 +183,20 @@ export const BotDocuments = Schema.Struct({
   heartbeat: Schema.String,
 });
 export type BotDocuments = typeof BotDocuments.Type;
+
+/** Where each document lives in a Bot's folder, and the size past which the Bot is asked to prune it. */
+export const BOT_DOCUMENTS = {
+  soul: { file: "SOUL.md", softCapBytes: null, primaryOnly: false },
+  now: { file: "NOW.md", softCapBytes: 2_048, primaryOnly: false },
+  memory: { file: "MEMORY.md", softCapBytes: 4_096, primaryOnly: false },
+  heartbeat: { file: "HEARTBEAT.md", softCapBytes: 2_048, primaryOnly: true },
+} as const satisfies {
+  readonly [Name in keyof BotDocuments]: {
+    readonly file: string;
+    readonly softCapBytes: number | null;
+    readonly primaryOnly: boolean;
+  };
+};
 
 export const BotAvailableMcpServer = Schema.Struct({
   name: TrimmedNonEmptyString,
