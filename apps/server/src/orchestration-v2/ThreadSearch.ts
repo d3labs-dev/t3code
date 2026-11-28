@@ -366,7 +366,7 @@ const scopedThreads = (sql: SqlClient.SqlClient, threadIds: string) => sql`
   )
 `;
 
-// A Bot recalls neither its own compaction nor the server's memory consolidation prompts.
+// A Bot recalls neither its own compaction nor the server's own Bot prompts.
 const recalledMessageCondition = (
   sql: SqlClient.SqlClient,
   tokens: Pick<typeof MessageMatchRequest.Encoded, "substrings" | "shortSpellings">,
@@ -377,11 +377,15 @@ const recalledMessageCondition = (
     messages.role = 'user'
     AND json_extract(messages.payload_json, '$.createdBy') IS 'agent'
     AND json_extract(messages.payload_json, '$.creationSource') IS 'server'
-    AND substr(
-      ltrim(json_extract(messages.payload_json, '$.text'), char(9, 10, 11, 12, 13, 32)),
-      1,
-      ${SERVER_BOT_PROMPT_PREFIXES.dreaming.length}
-    ) IS ${SERVER_BOT_PROMPT_PREFIXES.dreaming}
+    AND ${sql.or(
+      Object.values(SERVER_BOT_PROMPT_PREFIXES).map(
+        (prefix) => sql`substr(
+          ltrim(json_extract(messages.payload_json, '$.text'), char(9, 10, 11, 12, 13, 32)),
+          1,
+          ${prefix.length}
+        ) IS ${prefix}`,
+      ),
+    )}
   )
   AND ${shownMessageCondition(sql, tokens)}
 `;

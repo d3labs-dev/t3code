@@ -23,6 +23,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as SqlClient from "effect/sql/SqlClient";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
+import { buildBotCheckInHandoffPrompt } from "@t3tools/shared/botProactive";
 import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "@t3tools/shared/composerContextReferences";
 
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
@@ -1570,6 +1571,13 @@ it.effect.each([true, false])(
           message(bot, "typed-consolidation", "user", "[Bot memory consolidation] by hand", {
             minute: 12,
           }),
+          message(
+            bot,
+            "check-in-13",
+            "user",
+            buildBotCheckInHandoffPrompt("The lighthouse deploy is failing."),
+            { minute: 13, createdBy: "agent", creationSource: "server" },
+          ),
           message(bot, "streaming-8", "assistant", "lighthouse still typing", {
             minute: 8,
             streaming: true,
