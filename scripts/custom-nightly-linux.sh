@@ -1,7 +1,8 @@
 #!/bin/bash
 # Publishes the fork's custom nightly from this machine: builds the Linux x64
 # CLI archive of the customization branch, which Chamaquita keeps merged with
-# upstream's nightlies, and attaches it to a new release.
+# upstream's nightlies, attaches it to a new release, and installs that build
+# on this machine's T3 Code server.
 # Runs from a dedicated worktree, which it resets on every run, so never point
 # it at a checkout you work in. Install the timer with `--install`; remove it
 # with `--uninstall`.
@@ -28,22 +29,21 @@ install_timer() {
   mkdir -p "$unit_dir"
   cat > "$unit_dir/$unit_name.service" <<EOF
 [Unit]
-Description=Publish the D3 Code custom nightly
+Description=Publish and install the D3 Code custom nightly
 
 [Service]
 Type=oneshot
 Nice=10
 ExecStart=/bin/bash $repo_root/scripts/custom-nightly-linux.sh
 EOF
-  # One build a day takes the newest upstream nightly. Persistent catches up
-  # at boot when the machine was off at 9:00.
+  # A push to the branch reaches this machine within minutes. A run that finds
+  # it already published costs one fetch and one API call.
   cat > "$unit_dir/$unit_name.timer" <<EOF
 [Unit]
-Description=Publish the D3 Code custom nightly daily at 9:00 Peru time
+Description=Check for a new D3 Code custom nightly every 5 minutes
 
 [Timer]
-OnCalendar=*-*-* 09:00:00 America/Lima
-Persistent=true
+OnCalendar=*:0/5
 
 [Install]
 WantedBy=timers.target
@@ -81,13 +81,12 @@ merged_upstream_nightly() {
   done
 }
 
-report_build_failure() {
-  local commit="$1" log_file="$2"
-  local title="Custom nightly build of ${commit:0:10} failed"
+report_failure() {
+  local title="$1" summary="$2" log_file="$3"
   if gh issue list --repo "$repository" --state open --search "\"$title\" in:title" --json title --jq '.[].title' | grep -xF "$title" >/dev/null; then
     return
   fi
-  gh issue create --repo "$repository" --assignee @me --title "$title" --body "$(printf 'The Linux builder could not build `%s` on `%s`, so no release was published. It retries once `%s` moves.\n\n```text\n%s\n```\n' "$commit" "$branch" "$branch" "$(tail -n 60 "$log_file" | tail -c 6000)")"
+  gh issue create --repo "$repository" --assignee @me --title "$title" --body "$(printf '%s\n\n```text\n%s\n```\n' "$summary" "$(tail -n 60 "$log_file" | tail -c 6000)")"
 }
 
 latest_published_body() {
@@ -179,10 +178,21 @@ EOF
   gh release edit "v$version" --repo "$repository" --draft=false
 }
 
+# Called as an `if` condition, where bash ignores `set -e`, so `t3 update` must stay last.
+install_build() {
+  local version="$1"
+  local t3_home="${T3CODE_HOME:-$HOME/.t3}"
+  local t3="t3"
+  local service_state="$t3_home/runtime/service-state.json"
+  if [[ -f "$service_state" ]]; then
+    t3="$t3_home/runtime/versions/$(jq -r .activeVersion "$service_state")/t3"
+  fi
+  "$t3" update "$version" --yes
+}
+
 publish_nightly() {
   mkdir -p "$state_dir"
   local log_file="$state_dir/last-run.log"
-  exec > >(tee "$log_file") 2>&1
 
   cd "$repo_root"
   GH_TOKEN="$(gh auth token --user "$github_account")"
@@ -193,6 +203,15 @@ publish_nightly() {
   git reset --quiet --hard
   git clean --quiet -fd
 
+  local commit published_body published_upstream_tag
+  commit="$(git rev-parse HEAD)"
+  published_body="$(latest_published_body)"
+  published_upstream_tag="$(marker upstream-release "$published_body")"
+  if [[ "$(marker custom-commit "$published_body")" == "$commit" ]]; then
+    log "${commit:0:10} is already published."
+    return
+  fi
+
   local upstream_tag
   upstream_tag="$(merged_upstream_nightly)"
   if [[ -z "$upstream_tag" ]]; then
@@ -200,17 +219,6 @@ publish_nightly() {
     return 1
   fi
 
-  local published_body published_upstream_tag published_commit
-  published_body="$(latest_published_body)"
-  published_upstream_tag="$(marker upstream-release "$published_body")"
-  published_commit="$(marker custom-commit "$published_body")"
-  if [[ "$published_commit" == "$(git rev-parse HEAD)" ]]; then
-    log "$(git rev-parse --short HEAD) is already published."
-    return
-  fi
-
-  local commit
-  commit="$(git rev-parse HEAD)"
   # A build that failed retries only once the branch moves.
   local failed_marker="$state_dir/failed-build"
   if [[ "$(cat "$failed_marker" 2>/dev/null)" == "$upstream_tag $commit" ]]; then
@@ -231,13 +239,16 @@ publish_nightly() {
     upstream_changes="$(git log --reverse --first-parent --format='- %s' "${published_upstream_tag}..${upstream_tag}" | tail -n 500)"
   fi
 
+  exec > >(tee "$log_file") 2>&1
   log "Building ${version} from ${upstream_tag} on ${commit}."
   local assets_dir="$state_dir/release"
   rm -rf "$assets_dir"
   # A separate process, because bash ignores `set -e` inside an `if` condition.
   if ! bash "$repo_root/scripts/custom-nightly-linux.sh" --build-in-container "$version" "$assets_dir"; then
     echo "$upstream_tag $commit" > "$failed_marker"
-    report_build_failure "$commit" "$log_file"
+    report_failure "Custom nightly build of ${commit:0:10} failed" \
+      "The Linux builder could not build \`$commit\` on \`$branch\`, so no release was published. It retries once \`$branch\` moves." \
+      "$log_file"
     git reset --quiet --hard
     return 1
   fi
@@ -246,6 +257,14 @@ publish_nightly() {
   publish_release "$version" "$upstream_tag" "$commit" "$upstream_changes" "$assets_dir"
   rm -f "$failed_marker"
   log "Published v${version}."
+
+  if ! install_build "$version"; then
+    report_failure "Custom nightly install of v${version} failed" \
+      "The Linux builder published \`v$version\` but could not install it on this machine. The update button or \`t3 update $version\` can install it." \
+      "$log_file"
+    return 1
+  fi
+  log "Installed v${version} on this machine."
 }
 
 main() {
