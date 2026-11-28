@@ -1,3 +1,4 @@
+import { BOT_THEME_COLOR, DEFAULT_BOT_AVATAR_SHAPE } from "@t3tools/client-runtime/bot-avatar";
 import {
   type BotHandoffMessage,
   botHandoffPreviewLine,
@@ -18,7 +19,6 @@ import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BotAvatar } from "./BotAvatar";
 import { useOpenThreadInMode } from "./botActions";
-import { BOT_THEME_COLOR, DEFAULT_BOT_AVATAR_SHAPE } from "./botAvatars";
 
 const STATUS_BADGE_VARIANT: Readonly<
   Record<string, "success" | "warning" | "error" | "secondary">

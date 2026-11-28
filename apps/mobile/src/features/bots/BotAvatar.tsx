@@ -1,3 +1,11 @@
+import {
+  type BotAvatarExpression,
+  type BotAvatarEyes,
+  type BotAvatarShape,
+  type BotVisualStyle,
+  botAvatarExpression,
+  resolveBotAvatarGlyph,
+} from "@t3tools/client-runtime/bot-avatar";
 import type { BotStatus } from "@t3tools/contracts";
 import { Image } from "expo-image";
 import { View } from "react-native";
@@ -5,15 +13,7 @@ import Svg, { G, Path, Rect } from "react-native-svg";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { useControlTheme } from "../../components/ui/useControlTheme";
-import {
-  type BotAvatarExpression,
-  type BotAvatarEyes,
-  type BotAvatarShape,
-  type BotVisualStyle,
-  botAvatarExpression,
-  botAvatarPaint,
-  resolveBotAvatarGlyph,
-} from "./botAvatars";
+import { botAvatarPaint } from "./botAvatarPaint";
 import { useBotVisualStyle } from "./botFormHelpers";
 
 export type BotAvatarSize = "xs" | "sm" | "md" | "lg" | "xl";

@@ -1,12 +1,6 @@
-import { BOT_DEFAULT_COLOR, BOT_DEFAULT_ICON, type BotStatus } from "@t3tools/contracts";
+import { BOT_DEFAULT_ICON, type BotStatus } from "@t3tools/contracts";
 
 export type BotVisualStyle = "flat" | "glass" | "minimal";
-
-export const BOT_VISUAL_STYLES = [
-  { id: "flat", label: "Flat" },
-  { id: "glass", label: "Glass" },
-  { id: "minimal", label: "Outline" },
-] as const satisfies ReadonlyArray<{ id: BotVisualStyle; label: string }>;
 
 export const DEFAULT_BOT_VISUAL_STYLE: BotVisualStyle = "flat";
 
@@ -128,22 +122,16 @@ export function isBotImageIcon(icon: string): boolean {
   return BOT_IMAGE_ICON.test(icon.trim());
 }
 
+// Hermes has no Intl.Segmenter. This keeps its grapheme clusters for the text an icon holds:
+// flags, emoji with ZWJ, tag, modifier and variation sequences, and combining marks.
+const GRAPHEME =
+  /\p{Regional_Indicator}{2}|\p{Extended_Pictographic}(?:\u200D\p{Extended_Pictographic}|[\p{M}\p{Emoji_Modifier}\u200D\u{E0020}-\u{E007F}])*|[\s\S][\p{M}\p{Emoji_Modifier}\u200D\u{E0020}-\u{E007F}]*/gu;
 const MAX_CUSTOM_ICON_GRAPHEMES = 2;
 
-// Hermes lacks Intl.Segmenter; collapse ZWJ sequences, variation selectors, and skin-tone modifiers.
-const GRAPHEME_APPROX_RE =
-  /(?:\p{Regional_Indicator}{2}|(?:\p{Extended_Pictographic}|\P{M})(?:[\uFE0E\uFE0F\u200D\p{Emoji_Modifier}\p{M}]*(?:\p{Extended_Pictographic})?)*)/gu;
-
-function countGraphemes(text: string): number {
-  const matches = text.match(GRAPHEME_APPROX_RE);
-  return matches ? matches.length : Array.from(text).length;
-}
-
-/** One or two graphemes that aren't a shape id, so "🦊", "猫" and "AI" render as text. */
+/** One or two graphemes, so "🦊", "猫" and "AI" render as text. */
 export function isCustomBotEmoji(icon: string): boolean {
   const trimmed = icon.trim();
-  if (trimmed === "" || findBotAvatarShape(trimmed) !== null) return false;
-  return countGraphemes(trimmed) <= MAX_CUSTOM_ICON_GRAPHEMES;
+  return trimmed !== "" && (trimmed.match(GRAPHEME)?.length ?? 0) <= MAX_CUSTOM_ICON_GRAPHEMES;
 }
 
 export type BotAvatarGlyph =
@@ -198,155 +186,4 @@ const HEX_COLOR = /^#(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i;
 
 export function isBotHexColor(color: string): boolean {
   return HEX_COLOR.test(color.trim());
-}
-
-type Rgb = readonly [number, number, number];
-
-function parseHexRgb(hex: string): Rgb | null {
-  const trimmed = hex.trim();
-  if (!HEX_COLOR.test(trimmed)) return null;
-  const digits = trimmed.slice(1);
-  const full =
-    digits.length <= 4
-      ? Array.from(digits.slice(0, 3), (digit) => digit + digit).join("")
-      : digits.slice(0, 6);
-  return [
-    Number.parseInt(full.slice(0, 2), 16),
-    Number.parseInt(full.slice(2, 4), 16),
-    Number.parseInt(full.slice(4, 6), 16),
-  ];
-}
-
-function rgbaString(rgb: Rgb, alpha: number): string {
-  return `rgba(${Math.round(rgb[0])}, ${Math.round(rgb[1])}, ${Math.round(rgb[2])}, ${alpha})`;
-}
-
-function mixHex(left: string, right: string, leftWeight: number, alpha = 1): string {
-  const a = parseHexRgb(left);
-  const b = parseHexRgb(right);
-  if (a === null) return left;
-  if (b === null) return rgbaString(a, alpha);
-  const rightWeight = 1 - leftWeight;
-  return rgbaString(
-    [
-      a[0] * leftWeight + b[0] * rightWeight,
-      a[1] * leftWeight + b[1] * rightWeight,
-      a[2] * leftWeight + b[2] * rightWeight,
-    ],
-    alpha,
-  );
-}
-
-function withAlpha(color: string, alpha: number): string {
-  const rgb = parseHexRgb(color);
-  return rgb === null ? color : rgbaString(rgb, alpha);
-}
-
-function relativeLuminance(hex: string): number | null {
-  const rgb = parseHexRgb(hex);
-  if (rgb === null) return null;
-  const [red, green, blue] = rgb.map((channel) => {
-    const normalized = channel / 255;
-    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-  }) as [number, number, number];
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-}
-
-const EYE_INK = "#18181b";
-const EYE_PAPER = "#fafafa";
-const EYE_INK_LUMINANCE = 0.0093;
-const EYE_PAPER_LUMINANCE = 0.955;
-
-function contrastRatio(lighter: number, darker: number): number {
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function eyeColorOn(luminance: number | null): string {
-  if (luminance === null) return EYE_INK;
-  return contrastRatio(luminance, EYE_INK_LUMINANCE) >=
-    contrastRatio(EYE_PAPER_LUMINANCE, luminance)
-    ? EYE_INK
-    : EYE_PAPER;
-}
-
-const DARK_BODY_LUMINANCE = 0.05;
-const LIGHT_BODY_LUMINANCE = 0.65;
-
-function flatEdge(luminance: number | null): string | null {
-  if (luminance === null) return null;
-  if (luminance < DARK_BODY_LUMINANCE) return "rgba(255, 255, 255, 0.16)";
-  if (luminance > LIGHT_BODY_LUMINANCE) return "rgba(0, 0, 0, 0.12)";
-  return null;
-}
-
-export interface BotAvatarThemeColors {
-  readonly primary: string;
-  readonly primaryForeground: string;
-  readonly foreground: string;
-  readonly surface: string;
-}
-
-export interface BotAvatarPaint {
-  readonly fill: string;
-  readonly stroke: string | undefined;
-  readonly strokeWidth: number;
-  readonly eyes: string;
-  readonly discBackground: string;
-  readonly discBorderColor: string | undefined;
-  readonly discBorderWidth: number;
-}
-
-export function resolveBotAccentColor(color: string, themePrimary: string): string {
-  const trimmed = color.trim();
-  if (trimmed.toLowerCase() === BOT_THEME_COLOR) return themePrimary;
-  if (HEX_COLOR.test(trimmed)) return trimmed.toLowerCase();
-  return BOT_DEFAULT_COLOR;
-}
-
-export function botAvatarPaint(
-  color: string,
-  visualStyle: BotVisualStyle,
-  theme: BotAvatarThemeColors,
-): BotAvatarPaint {
-  const isThemeColor = color.trim().toLowerCase() === BOT_THEME_COLOR;
-  const accent = resolveBotAccentColor(color, theme.primary);
-  switch (visualStyle) {
-    case "flat": {
-      const luminance = relativeLuminance(accent);
-      const edge = flatEdge(luminance);
-      return {
-        fill: accent,
-        stroke: edge ?? undefined,
-        strokeWidth: edge === null ? 0 : 1,
-        eyes: isThemeColor ? theme.primaryForeground : eyeColorOn(luminance),
-        discBackground: withAlpha(accent, 0.18),
-        discBorderColor: undefined,
-        discBorderWidth: 0,
-      };
-    }
-    case "glass": {
-      const edge = mixHex(accent, theme.foreground, 0.65, 0.9);
-      return {
-        fill: mixHex(accent, theme.surface, 0.52, 0.82),
-        stroke: edge,
-        strokeWidth: 1,
-        eyes: theme.foreground,
-        discBackground: mixHex(accent, theme.surface, 0.3, 0.72),
-        discBorderColor: edge,
-        discBorderWidth: 1,
-      };
-    }
-    case "minimal": {
-      const line = mixHex(accent, theme.foreground, 0.65, 1);
-      return {
-        fill: withAlpha(accent, 0.12),
-        stroke: line,
-        strokeWidth: 1.5,
-        eyes: line,
-        discBackground: withAlpha(accent, 0.12),
-        discBorderColor: line,
-        discBorderWidth: 1.5,
-      };
-    }
-  }
 }

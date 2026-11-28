@@ -1,3 +1,14 @@
+import {
+  BOT_AVATAR_COLORS,
+  BOT_AVATAR_SHAPES,
+  BOT_THEME_COLOR,
+  type BotVisualStyle,
+  DEFAULT_BOT_AVATAR_SHAPE,
+  findBotAvatarShape,
+  isBotHexColor,
+  isBotImageIcon,
+  isCustomBotEmoji,
+} from "@t3tools/client-runtime/bot-avatar";
 import { ImageUpIcon, PlusIcon, WallpaperIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -11,18 +22,7 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BotAvatar, BotShapeSilhouette } from "./BotAvatar";
-import {
-  BOT_AVATAR_COLORS,
-  BOT_AVATAR_SHAPES,
-  BOT_THEME_COLOR,
-  BOT_VISUAL_STYLES,
-  type BotVisualStyle,
-  DEFAULT_BOT_AVATAR_SHAPE,
-  findBotAvatarShape,
-  isBotHexColor,
-  isBotImageIcon,
-  isCustomBotEmoji,
-} from "./botAvatars";
+import { BOT_VISUAL_STYLES } from "./botAvatarPaint";
 
 const SOURCES = [
   { id: "shape", label: "Shape" },
@@ -133,6 +133,7 @@ function ColorRow(props: {
     <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Bot color">
       {BOT_AVATAR_COLORS.map((option) => {
         const theme = option.value === BOT_THEME_COLOR;
+        const label = theme ? "Match wallpaper" : option.label;
         return (
           <Tooltip key={option.id}>
             <TooltipTrigger
@@ -141,7 +142,7 @@ function ColorRow(props: {
                   type="button"
                   className={cn(SWATCH_CLASS, theme && "bg-primary text-primary-foreground")}
                   style={theme ? undefined : { backgroundColor: option.value }}
-                  aria-label={option.label}
+                  aria-label={label}
                   aria-pressed={normalized === option.value}
                   disabled={props.disabled}
                   onClick={() => props.onColorChange(option.value)}
@@ -150,7 +151,7 @@ function ColorRow(props: {
             >
               {theme ? <WallpaperIcon className="size-3" aria-hidden /> : null}
             </TooltipTrigger>
-            <TooltipPopup>{theme ? "Match wallpaper" : option.label}</TooltipPopup>
+            <TooltipPopup>{label}</TooltipPopup>
           </Tooltip>
         );
       })}

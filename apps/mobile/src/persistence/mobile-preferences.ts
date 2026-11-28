@@ -20,7 +20,8 @@ import {
   type SidebarProjectGroupingMode,
 } from "@t3tools/contracts";
 import { ToolCallVisibility } from "@t3tools/contracts/settings";
-import { BOT_VISUAL_STYLES, type BotVisualStyle } from "../features/bots/botAvatars";
+import type { BotVisualStyle } from "@t3tools/client-runtime/bot-avatar";
+import { BOT_VISUAL_STYLES } from "../features/bots/botAvatarPaint";
 import type { AndroidNavigationStyle } from "../lib/androidNavigationStyle";
 import type { ComposerEnterBehavior } from "../lib/composerEnterBehavior";
 import type { FollowUpBehavior } from "../lib/followUpBehavior";

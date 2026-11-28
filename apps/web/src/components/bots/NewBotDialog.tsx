@@ -1,4 +1,10 @@
 import {
+  BOT_AVATAR_COLORS,
+  BOT_AVATAR_SHAPES,
+  BOT_THEME_COLOR,
+  DEFAULT_BOT_AVATAR_SHAPE,
+} from "@t3tools/client-runtime/bot-avatar";
+import {
   AuthOrchestrationOperateScope,
   type BotCreateInput,
   type EnvironmentId,
@@ -20,12 +26,6 @@ import { Textarea } from "../ui/textarea";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { WizardFooter, WizardHeader, WizardPanel, WizardPopup } from "../ui/wizard";
 import { BotAvatar } from "./BotAvatar";
-import {
-  BOT_AVATAR_COLORS,
-  BOT_AVATAR_SHAPES,
-  BOT_THEME_COLOR,
-  DEFAULT_BOT_AVATAR_SHAPE,
-} from "./botAvatars";
 import {
   reportBotFailure,
   useCanCreateBot,

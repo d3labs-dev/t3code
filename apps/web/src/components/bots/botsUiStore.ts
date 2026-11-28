@@ -1,9 +1,9 @@
+import { type BotVisualStyle, DEFAULT_BOT_VISUAL_STYLE } from "@t3tools/client-runtime/bot-avatar";
 import type { BotId, EnvironmentId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "../../lib/storage";
-import { type BotVisualStyle, DEFAULT_BOT_VISUAL_STYLE } from "./botAvatars";
 
 export type BotsSidebarMode = "threads" | "bots";
 

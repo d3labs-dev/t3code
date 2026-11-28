@@ -1,15 +1,15 @@
-import type { BotStatus } from "@t3tools/contracts";
-
-import { cn } from "../../lib/utils";
 import {
   type BotAvatarExpression,
   type BotAvatarEyes,
   type BotAvatarShape,
   type BotVisualStyle,
   botAvatarExpression,
-  botAvatarPaint,
   resolveBotAvatarGlyph,
-} from "./botAvatars";
+} from "@t3tools/client-runtime/bot-avatar";
+import type { BotStatus } from "@t3tools/contracts";
+
+import { cn } from "../../lib/utils";
+import { botAvatarPaint } from "./botAvatarPaint";
 import { useBotsUiStore } from "./botsUiStore";
 
 export type BotAvatarSize = "xs" | "sm" | "md" | "lg" | "xl";

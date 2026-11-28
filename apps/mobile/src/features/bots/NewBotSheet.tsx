@@ -1,5 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
+  BOT_AVATAR_COLORS,
+  BOT_AVATAR_SHAPES,
+  BOT_THEME_COLOR,
+  DEFAULT_BOT_AVATAR_SHAPE,
+} from "@t3tools/client-runtime/bot-avatar";
+import {
   AuthOrchestrationOperateScope,
   type BotCreateInput,
   EnvironmentId,
@@ -26,12 +32,6 @@ import { useEnvironments } from "../../state/environments";
 import { connectedEnvironmentIdsAtom } from "../../state/presentation";
 import { readEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
-import {
-  BOT_AVATAR_COLORS,
-  BOT_AVATAR_SHAPES,
-  BOT_THEME_COLOR,
-  DEFAULT_BOT_AVATAR_SHAPE,
-} from "./botAvatars";
 import { BotAvatar } from "./BotAvatar";
 import {
   SUGGESTED_BOT_GROUPS,

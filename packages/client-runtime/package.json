@@ -75,6 +75,10 @@
       "types": "./src/projectFaviconCache.ts",
       "default": "./src/projectFaviconCache.ts"
     },
+    "./bot-avatar": {
+      "types": "./src/botAvatar.ts",
+      "default": "./src/botAvatar.ts"
+    },
     "./bot-background-runs": {
       "types": "./src/botBackgroundRuns.ts",
       "default": "./src/botBackgroundRuns.ts"

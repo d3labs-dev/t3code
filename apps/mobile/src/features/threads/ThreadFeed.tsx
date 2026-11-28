@@ -320,7 +320,7 @@ import { fileChipClipboardPath, fileChipMenu, resolveFileChipTarget } from "./fi
 import { useFileChipShare } from "./useFileChipShare";
 import { useOpenLinkedThread } from "./useOpenLinkedThread";
 import { BotAvatar } from "../bots/BotAvatar";
-import { BOT_THEME_COLOR, DEFAULT_BOT_AVATAR_SHAPE } from "../bots/botAvatars";
+import { BOT_THEME_COLOR, DEFAULT_BOT_AVATAR_SHAPE } from "@t3tools/client-runtime/bot-avatar";
 import { useBotForThread, useBotsIndex } from "../../state/bots";
 import {
   MarkdownImageAvailableWidthContext,

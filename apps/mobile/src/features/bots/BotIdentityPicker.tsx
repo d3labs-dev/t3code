@@ -1,3 +1,11 @@
+import {
+  BOT_AVATAR_COLORS,
+  BOT_AVATAR_SHAPES,
+  BOT_THEME_COLOR,
+  type BotVisualStyle,
+  findBotAvatarShape,
+  isCustomBotEmoji,
+} from "@t3tools/client-runtime/bot-avatar";
 import * as Haptics from "expo-haptics";
 import { Pressable, View } from "react-native";
 
@@ -6,15 +14,7 @@ import { AppText as Text, AppTextInput as TextInput } from "../../components/ui/
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { useControlTheme } from "../../components/ui/useControlTheme";
 import { cn } from "../../lib/cn";
-import {
-  BOT_AVATAR_COLORS,
-  BOT_AVATAR_SHAPES,
-  BOT_THEME_COLOR,
-  BOT_VISUAL_STYLES,
-  type BotVisualStyle,
-  findBotAvatarShape,
-  isCustomBotEmoji,
-} from "./botAvatars";
+import { BOT_VISUAL_STYLES } from "./botAvatarPaint";
 import { BotShapeSilhouette } from "./BotAvatar";
 
 export function BotIdentityPicker(props: {

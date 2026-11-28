@@ -4,6 +4,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { type BotVisualStyle, DEFAULT_BOT_VISUAL_STYLE } from "@t3tools/client-runtime/bot-avatar";
 import type { EnvironmentId, ModelSelection } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 
@@ -11,7 +12,6 @@ import * as Dialog from "../../components/ui/Dialog";
 import { buildModelOptions, type ModelOption } from "../../lib/modelOptions";
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { type BotVisualStyle, DEFAULT_BOT_VISUAL_STYLE } from "./botAvatars";
 
 export const SUGGESTED_BOT_GROUPS = ["Engineering", "Operations", "Creative"] as const;
 
