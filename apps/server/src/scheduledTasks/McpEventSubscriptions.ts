@@ -106,6 +106,15 @@ export const make = Effect.fnUntraced(function* (input: {
       Effect.flatMap(Fiber.join),
     );
 
+  // A subscription may exist only while this succeeds: the Bot exists and is not archived, still
+  // lists the server, and the server is HTTP.
+  const resolve = (task: Pick<McpEventDesired["task"], "threadId" | "schedule">) =>
+    task.threadId === null
+      ? Effect.fail("An MCP event task needs a Bot's thread.")
+      : publisher
+          .resolve({ threadId: task.threadId, server: task.schedule.server })
+          .pipe(Effect.mapError((error) => error.message));
+
   const end = (entry: Entry) =>
     entry.server === null || entry.target === null
       ? Effect.void
@@ -135,13 +144,8 @@ export const make = Effect.fnUntraced(function* (input: {
       yield* end(previous);
       yield* setEntry(task.id, undefined);
     }
-    const resolved =
-      task.threadId === null
-        ? Result.fail("An MCP event task needs a Bot's thread.")
-        : yield* publisher.resolve({ threadId: task.threadId, server: task.schedule.server }).pipe(
-            Effect.mapError((error) => error.message),
-            Effect.result,
-          );
+    const resolved = yield* Effect.result(resolve(task));
+    if (Result.isFailure(resolved) && same) yield* end(previous);
     const subscribed: Result.Result<
       { readonly id: string; readonly refreshBefore: string | null },
       string
@@ -160,7 +164,7 @@ export const make = Effect.fnUntraced(function* (input: {
     const base = {
       createdAt: task.createdAt,
       serverName: task.schedule.server,
-      server: Result.isSuccess(resolved) ? resolved.success : same ? previous.server : null,
+      server: Result.isSuccess(resolved) ? resolved.success : null,
       target,
     };
     if (Result.isSuccess(subscribed)) {
@@ -179,7 +183,7 @@ export const make = Effect.fnUntraced(function* (input: {
     const failures = (same ? previous.failures : 0) + 1;
     yield* setEntry(task.id, {
       ...base,
-      subscriptionId: same ? previous.subscriptionId : null,
+      subscriptionId: same && Result.isSuccess(resolved) ? previous.subscriptionId : null,
       state: {
         status: "failed",
         refreshBefore: same ? previous.state.refreshBefore : null,
@@ -231,6 +235,9 @@ export const make = Effect.fnUntraced(function* (input: {
   return {
     sync,
     terminated,
+    /** Why the task's Bot can no longer hold its subscription, or null while it can. */
+    unavailable: (task: Pick<McpEventDesired["task"], "threadId" | "schedule">) =>
+      resolve(task).pipe(Effect.match({ onFailure: (reason) => reason, onSuccess: () => null })),
     /** Tasks whose refresh or retry is due. */
     due: (now: number) =>
       Ref.get(entries).pipe(

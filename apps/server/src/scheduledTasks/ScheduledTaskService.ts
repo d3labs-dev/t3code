@@ -1120,7 +1120,12 @@ export const layer = Layer.effect(
                   ? webhookPolicyBlock
                   : !active.enabled
                     ? "The task was paused before this delivery ran."
-                    : null;
+                    : active.schedule.type === "mcp_event"
+                      ? yield* mcpEvents.unavailable({
+                          threadId: active.threadId,
+                          schedule: active.schedule,
+                        })
+                      : null;
           if (reason !== null) return yield* new WebhookDeliverySkipped({ reason });
         }
 

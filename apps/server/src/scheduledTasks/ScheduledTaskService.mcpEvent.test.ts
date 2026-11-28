@@ -6,6 +6,7 @@ import { assert, it } from "@effect/vitest";
 import { ScheduledTaskUpsertInput, type ThreadId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
@@ -13,6 +14,7 @@ import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as TestClock from "effect/testing/TestClock";
+import * as Tracer from "effect/Tracer";
 
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
@@ -72,6 +74,8 @@ const makeFakeServer = () => {
   const state = {
     service: undefined as Service | undefined,
     subscribeError: null as { code: number; message: string } | null,
+    /** Why the Bot can no longer hold the subscription, while it cannot. */
+    resolveError: null as string | null,
     secret: "",
     deliveries: 0,
   };
@@ -210,6 +214,26 @@ const makeFakeServer = () => {
   return { calls, state, client, deliver, notify, subscriptionId };
 };
 
+/** Runs `work`, then waits for a span named `name` that it started, even in a forked fiber, to end. */
+const awaitingSpan = <A, E, R>(name: string, work: Effect.Effect<A, E, R>) =>
+  Effect.gen(function* () {
+    const ended = yield* Deferred.make<void>();
+    const tracer = Tracer.make({
+      span: (options) => {
+        const span = new Tracer.NativeSpan(options);
+        const end = span.end.bind(span);
+        span.end = (...args) => {
+          end(...args);
+          if (span.name === name) Deferred.doneUnsafe(ended, Effect.void);
+        };
+        return span;
+      },
+    });
+    const result = yield* work.pipe(Effect.withTracer(tracer));
+    yield* Deferred.await(ended);
+    return result;
+  });
+
 const withService = <A, E>(
   body: (input: {
     readonly service: Service;
@@ -225,11 +249,15 @@ const withService = <A, E>(
     const layerPublisher = Layer.effect(
       ScheduledTaskService.ScheduledTaskMcpEventPublisher,
       McpEventClient.make(({ threadId, server: name }) =>
-        threadId === ("thread-bot" as ThreadId) && name === "events"
-          ? Effect.succeed({ url: SERVER_URL, headers: { authorization: "Bearer server-token" } })
-          : Effect.fail(
-              new McpEventClient.McpEventRequestError({ message: `No MCP server ${name}.` }),
-            ),
+        server.state.resolveError !== null
+          ? Effect.fail(
+              new McpEventClient.McpEventRequestError({ message: server.state.resolveError }),
+            )
+          : threadId === ("thread-bot" as ThreadId) && name === "events"
+            ? Effect.succeed({ url: SERVER_URL, headers: { authorization: "Bearer server-token" } })
+            : Effect.fail(
+                new McpEventClient.McpEventRequestError({ message: `No MCP server ${name}.` }),
+              ),
       ),
     ).pipe(Layer.provide(Layer.succeed(HttpClient.HttpClient, server.client)));
     const layerDependencies = Layer.mergeAll(
@@ -417,4 +445,50 @@ it.effect(
         assert.equal(server.calls.length, callsBeforeDelete + 1);
       }),
     ),
+);
+
+it.effect(
+  "ends the subscription once its Bot can no longer hold it, and subscribes again when it can",
+  () =>
+    withService(({ service, server, refresh }) =>
+      Effect.gen(function* () {
+        yield* service.upsert(yield* eventTaskInput());
+        const subscribed = server.calls.at(-1)!;
+        server.state.resolveError = "An MCP event task runs in a Bot's thread.";
+        yield* refresh;
+        const ended = server.calls.at(-1)!;
+        assert.equal(ended.method, "events/unsubscribe");
+        assert.equal(ended.headers["authorization"], "Bearer server-token");
+        assert.deepEqual(ended.params.arguments, subscribed.params.arguments);
+        assert.equal(ended.params.delivery.url, subscribed.params.delivery.url);
+        const failed = (yield* service.list()).tasks[0]!.subscription;
+        assert.equal(failed?.status, "failed");
+        assert.equal(failed?.lastError, "An MCP event task runs in a Bot's thread.");
+
+        server.state.resolveError = null;
+        yield* TestClock.adjust("31 seconds");
+        yield* refresh;
+        assert.equal(server.calls.at(-1)?.method, "events/subscribe");
+        assert.equal((yield* service.list()).tasks[0]!.subscription?.status, "active");
+      }),
+    ),
+);
+
+it.effect("skips a queued event whose Bot can no longer hold the subscription", () =>
+  withService(({ service, server, sends }) =>
+    Effect.gen(function* () {
+      const { task } = yield* service.upsert(yield* eventTaskInput());
+      server.state.resolveError =
+        'MCP server "events" uses stdio; events need a streamable HTTP server.';
+      const accepted = yield* awaitingSpan(
+        "ScheduledTaskService.runWebhookDelivery",
+        server.deliver("after the server changed"),
+      );
+      assert.equal(accepted._tag === "accepted" && accepted.outcome, "accepted");
+      assert.equal(yield* Queue.size(sends), 0);
+      const [delivery] = (yield* service.listWebhookDeliveries({ id: task.id })).deliveries;
+      assert.equal(delivery?.outcome, "dispatch_failed");
+      assert.equal(delivery?.error, server.state.resolveError);
+    }),
+  ),
 );
