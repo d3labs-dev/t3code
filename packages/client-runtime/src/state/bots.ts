@@ -1,6 +1,8 @@
 import {
   type BotAvailableMcpServer,
   type BotCodingThreadLink,
+  type BotExchangeKind,
+  type BotExchangeStatus,
   type BotId,
   type BotListResult,
   type BotRecord,
@@ -73,6 +75,24 @@ export type ScopedCodingThreadLink = {
 export type ScopedCodingThreadSupervisor = {
   readonly botEntry: ScopedBotEntry;
   readonly link: BotCodingThreadLink;
+};
+
+/** A coding-thread exchange is the link through which a Bot watches a thread it messaged. */
+export const BOT_EXCHANGE_STATUS_LABEL: {
+  readonly [Kind in BotExchangeKind]: { readonly [Status in BotExchangeStatus]: string };
+} = {
+  coding_thread: {
+    pending: "Watching",
+    woken: "Update sent",
+    replied: "Replied",
+    cancelled: "Stopped watching",
+  },
+  bot_message: {
+    pending: "Pending",
+    woken: "Delivered",
+    replied: "Replied",
+    cancelled: "Cancelled",
+  },
 };
 
 export interface BotsIndex {

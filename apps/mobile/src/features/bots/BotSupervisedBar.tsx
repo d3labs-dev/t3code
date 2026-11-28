@@ -1,5 +1,7 @@
-import type { ScopedCodingThreadSupervisor } from "@t3tools/client-runtime/state/bots";
-import type { BotExchangeStatus } from "@t3tools/contracts";
+import {
+  BOT_EXCHANGE_STATUS_LABEL,
+  type ScopedCodingThreadSupervisor,
+} from "@t3tools/client-runtime/state/bots";
 import * as Haptics from "expo-haptics";
 import { Pressable, View } from "react-native";
 
@@ -7,13 +9,6 @@ import { SymbolView } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
 import { cn } from "../../lib/cn";
 import { BotAvatar } from "./BotAvatar";
-
-const BOT_LINK_STATUS_LABEL: Record<BotExchangeStatus, string> = {
-  pending: "Watching",
-  woken: "Updated",
-  replied: "Replied",
-  cancelled: "Paused",
-};
 
 export function BotSupervisedBar(props: {
   readonly supervisor: ScopedCodingThreadSupervisor;
@@ -56,7 +51,7 @@ export function BotSupervisedBar(props: {
               watching ? "text-primary-text" : "text-foreground-muted",
             )}
           >
-            {BOT_LINK_STATUS_LABEL[link.status]}
+            {BOT_EXCHANGE_STATUS_LABEL.coding_thread[link.status]}
           </Text>
         </View>
         <SymbolView name="arrow.up.right" size={12} tintColorClassName="accent-foreground-muted" />

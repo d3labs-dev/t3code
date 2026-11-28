@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
+  BOT_EXCHANGE_STATUS_LABEL,
   type ScopedBotEntry,
   type ScopedCodingThreadLink,
   botKey,
@@ -55,20 +56,6 @@ const STATUS_DOT_CLASS: Record<Exclude<BotStatus, "idle">, string> = {
   working: "bg-info",
   waiting: "bg-warning",
   error: "bg-destructive",
-};
-
-const LINK_STATUS_LABEL: Record<BotExchangeStatus, string> = {
-  pending: "Watching",
-  woken: "Notified",
-  replied: "Replied",
-  cancelled: "Stopped",
-};
-
-const MESSAGE_STATUS_LABEL: Record<BotExchangeStatus, string> = {
-  pending: "Pending",
-  woken: "Delivered",
-  replied: "Replied",
-  cancelled: "Cancelled",
 };
 
 const EXCHANGE_STATUS_VARIANT: Record<BotExchangeStatus, "info" | "success" | "secondary"> = {
@@ -243,7 +230,7 @@ function CodingThreadLinkRow({ scoped }: { readonly scoped: ScopedCodingThreadLi
       <CornerDownRightIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} aria-hidden />
       <span className="min-w-0 flex-1 truncate">{shell?.title ?? "Thread not loaded"}</span>
       <Badge size="sm" variant={EXCHANGE_STATUS_VARIANT[link.status]}>
-        {LINK_STATUS_LABEL[link.status]}
+        {BOT_EXCHANGE_STATUS_LABEL.coding_thread[link.status]}
       </Badge>
     </ThreadDetailsControl>
   );
@@ -319,9 +306,7 @@ function BotExchangesSection({ entry }: { readonly entry: ScopedBotEntry }) {
                       {title}
                     </span>
                     <Badge size="sm" variant={EXCHANGE_STATUS_VARIANT[exchange.status]}>
-                      {exchange.kind === "coding_thread"
-                        ? LINK_STATUS_LABEL[exchange.status]
-                        : MESSAGE_STATUS_LABEL[exchange.status]}
+                      {BOT_EXCHANGE_STATUS_LABEL[exchange.kind][exchange.status]}
                     </Badge>
                   </span>
                   {exchange.summary ? (

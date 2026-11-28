@@ -8,6 +8,7 @@ import {
 } from "@t3tools/client-runtime/bot-form";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
+  BOT_EXCHANGE_STATUS_LABEL,
   type ScopedBotEntry,
   type ScopedCodingThreadLink,
   botKey,
@@ -709,7 +710,7 @@ function ActivityCodingThreadRow(props: {
           {shell?.title ?? "Thread not loaded"}
         </Text>
         <Text className="text-xs text-foreground-muted" numberOfLines={1}>
-          {link.status}
+          {BOT_EXCHANGE_STATUS_LABEL.coding_thread[link.status]}
           {shell?.branch ? ` · ${shell.branch}` : ""}
         </Text>
       </View>
@@ -738,7 +739,9 @@ function BotExchangeRow(props: {
         <View className="flex-row items-center gap-2">
           <Text className="text-sm font-t3-medium text-foreground">{kindLabel}</Text>
           <View className="rounded-full bg-subtle px-2 py-0.5">
-            <Text className="text-2xs font-t3-medium text-foreground-muted">{exchange.status}</Text>
+            <Text className="text-2xs font-t3-medium text-foreground-muted">
+              {BOT_EXCHANGE_STATUS_LABEL[exchange.kind][exchange.status]}
+            </Text>
           </View>
         </View>
         {exchange.summary ? (

@@ -1,17 +1,12 @@
-import type { ScopedCodingThreadSupervisor } from "@t3tools/client-runtime/state/bots";
-import type { BotExchangeStatus } from "@t3tools/contracts";
+import {
+  BOT_EXCHANGE_STATUS_LABEL,
+  type ScopedCodingThreadSupervisor,
+} from "@t3tools/client-runtime/state/bots";
 import { ArrowUpRightIcon } from "lucide-react";
 
 import { Button } from "../ui/button";
 import { BotAvatar } from "./BotAvatar";
 import { useOpenThreadInMode } from "./botActions";
-
-const BOT_LINK_STATUS_LABEL: Record<BotExchangeStatus, string> = {
-  pending: "Watching",
-  woken: "Last update sent",
-  replied: "Replied",
-  cancelled: "Stopped watching",
-};
 
 export function BotSupervisedBanner({
   supervisor,
@@ -47,7 +42,7 @@ export function BotSupervisedBanner({
             }
             aria-hidden
           />
-          {BOT_LINK_STATUS_LABEL[link.status]}
+          {BOT_EXCHANGE_STATUS_LABEL.coding_thread[link.status]}
         </span>
         <Button
           size="xs"
