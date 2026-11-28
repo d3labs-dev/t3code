@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 
@@ -130,9 +129,7 @@ export const BotRecord = Schema.Struct({
   id: BotId,
   slug: BotSlug,
   ...BotEditableFields,
-  proactive: BotProactiveConfig.pipe(
-    Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_BOT_PROACTIVE_CONFIG)),
-  ),
+  proactive: BotProactiveConfig,
   muted: Schema.Boolean,
   threadId: ThreadId,
   folderPath: TrimmedNonEmptyString,
@@ -185,9 +182,9 @@ export const BOT_HEARTBEAT_SOFT_CAP_BYTES = 2_048;
 
 export const BotDocuments = Schema.Struct({
   soul: Schema.String,
-  now: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(""))),
+  now: Schema.String,
   memory: Schema.String,
-  heartbeat: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(""))),
+  heartbeat: Schema.String,
 });
 export type BotDocuments = typeof BotDocuments.Type;
 

@@ -21,7 +21,6 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -30,7 +29,6 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import type * as Scope from "effect/Scope";
-import * as SqlClient from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
 
 import * as ServerConfig from "../config.ts";
@@ -779,65 +777,30 @@ it.effect(
     ),
 );
 
-it.effect("migrates an older bots table and keeps the heartbeat thread across Bot edits", () =>
-  Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-bot-store-" });
-    const configLayer = ServerConfig.layerTest(baseDir, baseDir);
-    const { stateDir } = yield* ServerConfig.ServerConfig.pipe(Effect.provide(configLayer));
-    yield* fileSystem.makeDirectory(stateDir, { recursive: true });
-    yield* Effect.gen(function* () {
-      const sql = yield* SqlClient.SqlClient;
-      yield* sql`
-        CREATE TABLE bots (
-          bot_id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL,
-          group_name TEXT, icon TEXT NOT NULL, color TEXT NOT NULL,
-          is_primary INTEGER NOT NULL DEFAULT 0, model_selection_json TEXT NOT NULL,
-          runtime_mode TEXT NOT NULL, tools_json TEXT NOT NULL,
-          mcp_server_names_json TEXT NOT NULL, custom_mcp_servers_json TEXT NOT NULL,
-          skills_json TEXT NOT NULL, system_prompt_mode TEXT NOT NULL,
-          muted INTEGER NOT NULL DEFAULT 0, thread_id TEXT NOT NULL, folder_path TEXT NOT NULL,
-          hop_count INTEGER NOT NULL DEFAULT 0, archived_at TEXT,
-          created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-        )
-      `;
-      yield* sql`
-        INSERT INTO bots VALUES (
-          'bot-1', 'matcha', 'Matcha', '', NULL, 'bot', '#6366f1', 1,
-          ${JSON.stringify(modelSelection)}, 'full-access', '["Read"]', '[]', '{}', '[]',
-          'custom', 0, 'thread-1', '/bots/bot-1', 0, NULL,
-          '2026-11-26T00:00:00.000Z', '2026-11-26T00:00:00.000Z'
-        )
-      `;
-    }).pipe(
-      Effect.provide(NodeSqliteClient.layer({ filename: path.join(stateDir, "bots.sqlite") })),
-    );
-
-    yield* Effect.gen(function* () {
-      const store = yield* BotStore.BotStore;
-      const migrated = Option.getOrThrow(yield* store.findByThreadId(ThreadId.make("thread-1")));
-      assert.deepStrictEqual(migrated.proactive, DEFAULT_BOT_PROACTIVE_CONFIG);
+it.effect("keeps the heartbeat thread across Bot edits", () =>
+  withBots((_harness, bots, store) =>
+    Effect.gen(function* () {
+      const bot = (yield* bots.create({ name: "Matcha", modelSelection })).bot;
       const heartbeatThreadId = ThreadId.make("thread-heartbeat");
-      yield* store.setHeartbeatThreadId({ botId: migrated.id, threadId: heartbeatThreadId });
+      yield* store.setHeartbeatThreadId({ botId: bot.id, threadId: heartbeatThreadId });
       const proactive = {
         ...DEFAULT_BOT_PROACTIVE_CONFIG,
         enabled: true,
         intervalMinutes: 60,
         timezone: "Europe/Madrid",
       };
-      yield* store.update({ ...migrated, name: "Renamed", proactive });
+      yield* store.update({ ...bot, name: "Renamed", proactive });
 
-      assert.deepStrictEqual((yield* readBot(store, migrated)).proactive, proactive);
+      assert.deepStrictEqual((yield* readBot(store, bot)).proactive, proactive);
       assert.deepStrictEqual(
-        yield* store.getHeartbeatThreadId(migrated.id),
+        yield* store.getHeartbeatThreadId(bot.id),
         Option.some(heartbeatThreadId),
       );
       const scouting = Option.getOrThrow(yield* store.findByHeartbeatThreadId(heartbeatThreadId));
       assert.strictEqual(scouting.name, "Renamed");
-      assert.isTrue(Option.isNone(yield* store.findByHeartbeatThreadId(migrated.threadId)));
-    }).pipe(Effect.provide(BotStore.layer.pipe(Layer.provide(configLayer))));
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+      assert.isTrue(Option.isNone(yield* store.findByHeartbeatThreadId(bot.threadId)));
+    }),
+  ),
 );
 
 it.effect("wakes the sender once when the peer's run ends", () =>

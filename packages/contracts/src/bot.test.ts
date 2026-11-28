@@ -3,14 +3,12 @@ import * as Schema from "effect/Schema";
 
 import {
   BotCodingThreadLink,
-  BotDocuments,
   BotError,
   BotListResult,
   BotMcpServerConfig,
   BotRecord,
   BotSlug,
   BotUpdateInput,
-  DEFAULT_BOT_PROACTIVE_CONFIG,
   slugifyBotName,
 } from "./bot.ts";
 
@@ -22,7 +20,6 @@ const decodeLink = Schema.decodeUnknownSync(BotCodingThreadLink);
 const encodeLink = Schema.encodeSync(BotCodingThreadLink);
 const decodeListResult = Schema.decodeUnknownSync(BotListResult);
 const encodeListResult = Schema.encodeSync(BotListResult);
-const decodeDocuments = Schema.decodeUnknownSync(BotDocuments);
 const decodeUpdateInput = Schema.decodeUnknownSync(BotUpdateInput);
 const decodeError = Schema.decodeSync(BotError);
 const decodeUnknownError = Schema.decodeUnknownSync(BotError);
@@ -123,12 +120,6 @@ describe("BotRecord", () => {
   it("survives a persistence round trip", () => {
     expect(encodeRecord(decodeRecord(encodedRecord))).toEqual(encodedRecord);
   });
-
-  it("decodes an older server's record without proactive settings as opted out", () => {
-    const { proactive: _proactive, ...olderRecord } = encodedRecord;
-    expect(decodeRecord(olderRecord).proactive).toEqual(DEFAULT_BOT_PROACTIVE_CONFIG);
-    expect(DEFAULT_BOT_PROACTIVE_CONFIG.enabled).toBe(false);
-  });
 });
 
 describe("BotCodingThreadLink", () => {
@@ -180,15 +171,6 @@ describe("BotListResult", () => {
 });
 
 describe("BotDocuments", () => {
-  it("decodes an older server's documents without NOW.md or HEARTBEAT.md as empty", () => {
-    expect(decodeDocuments({ soul: "a", memory: "b" })).toEqual({
-      soul: "a",
-      now: "",
-      memory: "b",
-      heartbeat: "",
-    });
-  });
-
   it("leaves unpatched documents and proactive settings out of an update", () => {
     const update = decodeUpdateInput({ botId: "bot-1", documents: { soul: "a" } });
     expect(update.documents).toEqual({ soul: "a" });

@@ -8,7 +8,6 @@ import {
   BotProactiveConfig,
   BotRecord,
   BotSlug,
-  DEFAULT_BOT_PROACTIVE_CONFIG,
   IsoDateTime,
   ModelSelection,
   RunId,
@@ -73,7 +72,7 @@ const BOT_COLUMNS = `
   custom_mcp_servers_json AS "customMcpServers",
   skills_json AS "skills",
   system_prompt_mode AS "systemPromptMode",
-  COALESCE(proactive_json, '${JSON.stringify(DEFAULT_BOT_PROACTIVE_CONFIG)}') AS "proactive",
+  proactive_json AS "proactive",
   muted,
   thread_id AS "threadId",
   folder_path AS "folderPath",
@@ -182,7 +181,7 @@ const setup = Effect.fn("BotStore.setup")(function* () {
       custom_mcp_servers_json TEXT NOT NULL,
       skills_json TEXT NOT NULL,
       system_prompt_mode TEXT NOT NULL,
-      proactive_json TEXT,
+      proactive_json TEXT NOT NULL,
       heartbeat_thread_id TEXT,
       muted INTEGER NOT NULL DEFAULT 0,
       thread_id TEXT NOT NULL,
@@ -194,15 +193,6 @@ const setup = Effect.fn("BotStore.setup")(function* () {
     )
   `;
   yield* sql`CREATE UNIQUE INDEX IF NOT EXISTS bots_slug ON bots (slug)`;
-  const botColumnNames = new Set(
-    (yield* sql<{ readonly name: string }>`PRAGMA table_info(bots)`).map(({ name }) => name),
-  );
-  if (!botColumnNames.has("proactive_json")) {
-    yield* sql`ALTER TABLE bots ADD COLUMN proactive_json TEXT`;
-  }
-  if (!botColumnNames.has("heartbeat_thread_id")) {
-    yield* sql`ALTER TABLE bots ADD COLUMN heartbeat_thread_id TEXT`;
-  }
   yield* sql`CREATE UNIQUE INDEX IF NOT EXISTS bots_thread_id ON bots (thread_id)`;
   yield* sql`
     CREATE UNIQUE INDEX IF NOT EXISTS bots_heartbeat_thread_id
