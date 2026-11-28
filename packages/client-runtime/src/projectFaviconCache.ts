@@ -6,8 +6,9 @@ import {
   isProjectFaviconFallbackUrl,
 } from "@t3tools/shared/projectFavicon";
 import * as Base64 from "effect/encoding/Base64";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+
+import { createImageCache, type ImageCacheStorage } from "./imageCache.ts";
 
 export const PROJECT_FAVICON_THUMBNAIL_SIZE = 96;
 export const PROJECT_FAVICON_MAX_DATA_URL_LENGTH = 32 * 1024;
@@ -35,18 +36,9 @@ const Entry = Schema.Struct({
   dataUrl: ImageDataUrl,
 });
 export type ProjectFaviconEntry = typeof Entry.Type;
-const decodeEntry = Schema.decodeUnknownOption(Entry);
 const isImageDataUrl = Schema.is(ImageDataUrl);
 
-function keyFor(target: ProjectFaviconTarget) {
-  return getProjectFaviconResourceKey(target.environmentId, target.cwd, target.faviconPath);
-}
-
-export interface ProjectFaviconStorage {
-  readonly list: () => Promise<ReadonlyArray<unknown>>;
-  readonly put: (key: string, entry: ProjectFaviconEntry) => Promise<void>;
-  readonly remove: (key: string, entry: ProjectFaviconEntry) => Promise<void>;
-}
+export type ProjectFaviconStorage = ImageCacheStorage<ProjectFaviconEntry>;
 
 async function readBounded(response: Response, maxBytes: number) {
   const declared = Number(response.headers.get("content-length"));
@@ -117,139 +109,30 @@ export function createProjectFaviconImageLoader(input: {
   };
 }
 
+const revisionOf = (target: ProjectFaviconTarget, url: string) =>
+  getProjectFaviconCacheKey(target.environmentId, target.cwd, url);
+
 export function createProjectFaviconCache(input: {
   readonly storage: ProjectFaviconStorage;
   readonly load: (url: string, signal: AbortSignal) => Promise<string>;
 }) {
-  const entries = new Map<string, ProjectFaviconEntry>();
-  const environmentRevisions = new Map<EnvironmentId, number>();
-  let generation = 0;
-  let hydration: Promise<void> | undefined;
-  let clearing: Promise<void> | undefined;
-  const pending = new Set<Promise<void>>();
-
-  const persist = (operation: () => Promise<void>) => {
-    const task: Promise<void> = operation()
-      .catch(() => {})
-      .finally(() => pending.delete(task));
-    pending.add(task);
-  };
-
-  const remove = (key: string) => {
-    const entry = entries.get(key);
-    if (!entry) return;
-    entries.delete(key);
-    persist(() => input.storage.remove(key, entry));
-  };
-
-  const trim = () => {
-    let bytes = 0;
-    for (const entry of entries.values()) bytes += entry.dataUrl.length;
-    while (
-      entries.size > PROJECT_FAVICON_CACHE_MAX_ENTRIES ||
-      bytes > PROJECT_FAVICON_CACHE_MAX_BYTES
-    ) {
-      const oldest = entries.entries().next().value;
-      if (!oldest) break;
-      bytes -= oldest[1].dataUrl.length;
-      remove(oldest[0]);
-    }
-  };
-
-  const hydrate = () =>
-    (hydration ??= (async () => {
-      try {
-        for (const record of await input.storage.list()) {
-          const entry = decodeEntry(record);
-          if (Option.isSome(entry)) entries.set(keyFor(entry.value), entry.value);
-        }
-        trim();
-      } catch {}
-    })());
-
-  const peek = (target: ProjectFaviconTarget) => entries.get(keyFor(target))?.dataUrl ?? null;
-
-  const resolve = async (
-    target: ProjectFaviconTarget,
-    url: string | null,
-    signal: AbortSignal,
-  ): Promise<string | null> => {
-    await clearing;
-    const startGeneration = generation;
-    const startRevision = environmentRevisions.get(target.environmentId) ?? 0;
-    await hydrate();
-    if (signal.aborted || url === null) return peek(target);
-    const key = keyFor(target);
-    if (isProjectFaviconFallbackUrl(url)) {
-      remove(key);
-      return null;
-    }
-    const revision = getProjectFaviconCacheKey(target.environmentId, target.cwd, url);
-    const cached = entries.get(key);
-    if (cached) {
-      entries.delete(key);
-      entries.set(key, cached);
-      if (cached.revision === revision) return cached.dataUrl;
-    }
-    try {
-      const dataUrl = await input.load(url, signal);
-      if (
-        signal.aborted ||
-        startGeneration !== generation ||
-        startRevision !== (environmentRevisions.get(target.environmentId) ?? 0)
-      ) {
-        return peek(target);
-      }
-      if (isImageDataUrl(dataUrl)) {
-        const entry = {
-          environmentId: target.environmentId,
-          cwd: target.cwd,
-          faviconPath: target.faviconPath || null,
-          revision,
-          dataUrl,
-        };
-        entries.set(key, entry);
-        persist(() => input.storage.put(key, entry));
-        trim();
-        return dataUrl;
-      }
-    } catch {}
-    return peek(target) ?? url;
-  };
-
-  const flush = async () => {
-    await Promise.all(pending);
-  };
-
-  // A download that started before the clear sees the revision change and is discarded;
-  // one that starts during the clear waits for it, so it cannot repopulate storage.
-  const clear = async (environmentId?: EnvironmentId) => {
-    if (environmentId === undefined) generation += 1;
-    else
-      environmentRevisions.set(environmentId, (environmentRevisions.get(environmentId) ?? 0) + 1);
-    const previous = clearing;
-    const task = (async () => {
-      await previous;
-      await hydrate();
-      for (const [key, entry] of entries) {
-        if (environmentId === undefined || entry.environmentId === environmentId) remove(key);
-      }
-      await flush();
-    })().finally(() => {
-      if (clearing === task) clearing = undefined;
-    });
-    clearing = task;
-    await task;
-  };
-
-  return {
-    hydrate,
-    peek,
-    resolve,
-    clearEnvironment: (environmentId: EnvironmentId) => clear(environmentId),
-    clearAll: () => clear(),
-    flush,
-  };
+  return createImageCache({
+    ...input,
+    decodeEntry: Schema.decodeUnknownOption(Entry),
+    keyFor: (target: ProjectFaviconTarget) =>
+      getProjectFaviconResourceKey(target.environmentId, target.cwd, target.faviconPath),
+    entryFor: (target, url, dataUrl) => ({
+      environmentId: target.environmentId,
+      cwd: target.cwd,
+      faviconPath: target.faviconPath || null,
+      revision: revisionOf(target, url),
+      dataUrl,
+    }),
+    isCurrent: (cached, target, url) => cached.revision === revisionOf(target, url),
+    isMissingImageUrl: isProjectFaviconFallbackUrl,
+    maxEntries: PROJECT_FAVICON_CACHE_MAX_ENTRIES,
+    maxBytes: PROJECT_FAVICON_CACHE_MAX_BYTES,
+  });
 }
 
 export type ProjectFaviconCache = ReturnType<typeof createProjectFaviconCache>;
