@@ -45,6 +45,7 @@ import type {
 import type { WsRpcProtocolClient } from "@t3tools/client-runtime/rpc";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { APP_VERSION } from "~/branding";
+import { useBotsUiStore } from "~/components/bots/botsUiStore";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -636,6 +637,9 @@ export function installFakeEnvironment(
     })),
   ];
   holdCommand = options?.holdCommand ?? (() => false);
+  // The app opens on the Bots sidebar, and these fixtures are threads.
+  const sidebarMode = useBotsUiStore.getState().sidebarMode;
+  useBotsUiStore.setState({ sidebarMode: "threads" });
   globalThis.fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
     if (url.origin !== window.location.origin) return realFetch(input, init);
@@ -664,6 +668,7 @@ export function installFakeEnvironment(
       holdCommand = () => false;
       pendingDispatches = [];
       pendingAssetUrls = [];
+      useBotsUiStore.setState({ sidebarMode });
     },
   };
 }
