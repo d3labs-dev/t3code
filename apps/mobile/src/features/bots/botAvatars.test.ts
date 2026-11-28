@@ -10,7 +10,6 @@ import {
   findBotAvatarShape,
   isBotImageIcon,
   isCustomBotEmoji,
-  parseBotVisualStyle,
   resolveBotAccentColor,
   resolveBotAvatarGlyph,
 } from "./botAvatars";
@@ -23,12 +22,9 @@ const THEME = {
 } as const;
 
 describe("mobile botAvatars", () => {
-  it("exposes all 14 sculpted shapes and maps legacy icon ids", () => {
+  it("exposes all 14 sculpted shapes", () => {
     expect(BOT_AVATAR_SHAPES).toHaveLength(14);
     expect(BOT_AVATAR_COLORS).toHaveLength(13);
-    expect(findBotAvatarShape("bot")?.id).toBe("squircle");
-    expect(findBotAvatarShape("chief")?.id).toBe("crown");
-    expect(findBotAvatarShape("fox")?.id).toBe("cat");
     expect(findBotAvatarShape("unknown-shape")).toBeNull();
   });
 
@@ -60,8 +56,6 @@ describe("mobile botAvatars", () => {
   });
 
   it("computes native flat, glass, and minimal avatar paint with contrast-safe eyes", () => {
-    expect(parseBotVisualStyle("playful")).toBe("flat");
-    expect(parseBotVisualStyle("glass")).toBe("glass");
     expect(resolveBotAccentColor(BOT_THEME_COLOR, THEME.primary)).toBe(THEME.primary);
 
     const themeFlat = botAvatarPaint(BOT_THEME_COLOR, "flat", THEME);

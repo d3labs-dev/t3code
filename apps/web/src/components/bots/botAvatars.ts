@@ -9,12 +9,7 @@ export const BOT_VISUAL_STYLES = [
   { id: "minimal", label: "Outline" },
 ] as const satisfies ReadonlyArray<{ id: BotVisualStyle; label: string }>;
 
-const DEFAULT_VISUAL_STYLE: BotVisualStyle = "flat";
-
-/** Reads a stored finish; earlier builds saved "playful", which is now the flat finish. */
-export function parseBotVisualStyle(value: unknown): BotVisualStyle {
-  return BOT_VISUAL_STYLES.find((style) => style.id === value)?.id ?? DEFAULT_VISUAL_STYLE;
-}
+export const DEFAULT_BOT_VISUAL_STYLE: BotVisualStyle = "flat";
 
 export interface BotAvatarEyes {
   readonly x: number;
@@ -118,28 +113,9 @@ export const BOT_AVATAR_SHAPES = [
 }>;
 
 export type BotAvatarShape = (typeof BOT_AVATAR_SHAPES)[number];
-export type BotAvatarShapeId = BotAvatarShape["id"];
-
-// Bots saved before the sculpted set keep their look through the closest shape.
-const LEGACY_SHAPE_IDS: Record<string, BotAvatarShapeId> = {
-  bot: "squircle",
-  chief: "crown",
-  mochi: "droplet",
-  sprout: "clover",
-  prism: "diamond",
-  inbox: "capsule",
-  fox: "cat",
-  ghost: "arch",
-  orb: "circle",
-  bolt: "star",
-  quill: "pebble",
-  vault: "hexagon",
-  terminal: "squircle",
-};
 
 export function findBotAvatarShape(icon: string): BotAvatarShape | null {
-  const key = icon.trim().toLowerCase();
-  const id = LEGACY_SHAPE_IDS[key] ?? key;
+  const id = icon.trim().toLowerCase();
   return BOT_AVATAR_SHAPES.find((shape) => shape.id === id) ?? null;
 }
 

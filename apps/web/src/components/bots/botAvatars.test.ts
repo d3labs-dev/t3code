@@ -7,7 +7,6 @@ import {
   botAvatarPaint,
   findBotAvatarShape,
   isCustomBotEmoji,
-  parseBotVisualStyle,
   resolveBotAccentColor,
   resolveBotAvatarGlyph,
 } from "./botAvatars";
@@ -50,27 +49,10 @@ describe("botAvatarPaint", () => {
   });
 });
 
-describe("parseBotVisualStyle", () => {
-  it("reads earlier playful finishes as flat and unknown values as the default", () => {
-    expect(parseBotVisualStyle("playful")).toBe("flat");
-    expect(parseBotVisualStyle("glass")).toBe("glass");
-    expect(parseBotVisualStyle("minimal")).toBe("minimal");
-    expect(parseBotVisualStyle(undefined)).toBe("flat");
-    expect(parseBotVisualStyle(42)).toBe("flat");
-  });
-});
-
 describe("findBotAvatarShape", () => {
   it("finds shapes by id regardless of case and padding", () => {
     expect(findBotAvatarShape("cat")?.id).toBe("cat");
     expect(findBotAvatarShape(" Cloud ")?.id).toBe("cloud");
-  });
-
-  it("maps icons saved before the sculpted set to their closest shape", () => {
-    expect(findBotAvatarShape("bot")?.id).toBe("squircle");
-    expect(findBotAvatarShape("fox")?.id).toBe("cat");
-    expect(findBotAvatarShape(" Ghost ")?.id).toBe("arch");
-    expect(findBotAvatarShape("terminal")?.id).toBe("squircle");
   });
 
   it("returns null for unknown icons", () => {
@@ -94,7 +76,7 @@ describe("isCustomBotEmoji", () => {
   });
 
   it("rejects shape ids, empty text, and longer strings", () => {
-    expect(isCustomBotEmoji("bot")).toBe(false);
+    expect(isCustomBotEmoji("cat")).toBe(false);
     expect(isCustomBotEmoji("  ")).toBe(false);
     expect(isCustomBotEmoji("rocket")).toBe(false);
     expect(isCustomBotEmoji("🦊🦊🦊")).toBe(false);

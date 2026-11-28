@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "../../lib/storage";
-import { type BotVisualStyle, parseBotVisualStyle } from "./botAvatars";
+import { type BotVisualStyle, DEFAULT_BOT_VISUAL_STYLE } from "./botAvatars";
 
 export type BotsSidebarMode = "threads" | "bots";
 
@@ -50,7 +50,7 @@ export const useBotsUiStore = create<BotsUiState>()(
   persist(
     (set) => ({
       sidebarMode: "bots",
-      visualStyle: parseBotVisualStyle(undefined),
+      visualStyle: DEFAULT_BOT_VISUAL_STYLE,
       collapsedGroups: {},
       expandedBotThreads: {},
       newBotDialogOpen: false,
@@ -83,10 +83,6 @@ export const useBotsUiStore = create<BotsUiState>()(
         collapsedGroups: state.collapsedGroups,
         expandedBotThreads: state.expandedBotThreads,
       }),
-      merge: (persisted, current) => {
-        const stored = (persisted ?? {}) as Partial<BotsUiState>;
-        return { ...current, ...stored, visualStyle: parseBotVisualStyle(stored.visualStyle) };
-      },
     },
   ),
 );

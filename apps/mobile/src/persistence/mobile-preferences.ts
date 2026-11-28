@@ -20,7 +20,7 @@ import {
   type SidebarProjectGroupingMode,
 } from "@t3tools/contracts";
 import { ToolCallVisibility } from "@t3tools/contracts/settings";
-import { type BotVisualStyle, parseBotVisualStyle } from "../features/bots/botAvatars";
+import { BOT_VISUAL_STYLES, type BotVisualStyle } from "../features/bots/botAvatars";
 import type { AndroidNavigationStyle } from "../lib/androidNavigationStyle";
 import type { ComposerEnterBehavior } from "../lib/composerEnterBehavior";
 import type { FollowUpBehavior } from "../lib/followUpBehavior";
@@ -362,9 +362,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   if (parsed.androidNavigationStyle === "one-ui" || parsed.androidNavigationStyle === "material") {
     preferences.androidNavigationStyle = parsed.androidNavigationStyle;
   }
-  if (parsed.botVisualStyle !== undefined) {
-    preferences.botVisualStyle = parseBotVisualStyle(parsed.botVisualStyle);
-  }
+  const botVisualStyle = BOT_VISUAL_STYLES.find((style) => style.id === parsed.botVisualStyle);
+  if (botVisualStyle) preferences.botVisualStyle = botVisualStyle.id;
   if (typeof parsed.baseFontSize === "number") preferences.baseFontSize = parsed.baseFontSize;
   if (typeof parsed.terminalFontSize === "number" || parsed.terminalFontSize === null) {
     preferences.terminalFontSize = parsed.terminalFontSize;

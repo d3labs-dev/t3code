@@ -50,7 +50,7 @@ export const BOT_DEFAULT_TOOLS = [
   "WebSearch",
   "WebFetch",
 ] as const;
-export const BOT_DEFAULT_ICON = "bot";
+export const BOT_DEFAULT_ICON = "squircle";
 export const BOT_DEFAULT_COLOR = "#6366f1";
 
 const BotStringMap = Schema.Record(Schema.String, Schema.String);

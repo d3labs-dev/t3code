@@ -11,15 +11,16 @@ import * as Dialog from "../../components/ui/Dialog";
 import { buildModelOptions, type ModelOption } from "../../lib/modelOptions";
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { type BotVisualStyle, parseBotVisualStyle } from "./botAvatars";
+import { type BotVisualStyle, DEFAULT_BOT_VISUAL_STYLE } from "./botAvatars";
 
 export const SUGGESTED_BOT_GROUPS = ["Engineering", "Operations", "Creative"] as const;
 
 export function useBotVisualStyle(): BotVisualStyle {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
-  return parseBotVisualStyle(
-    AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value.botVisualStyle : undefined,
-  );
+  const stored = AsyncResult.isSuccess(preferencesResult)
+    ? preferencesResult.value.botVisualStyle
+    : undefined;
+  return stored ?? DEFAULT_BOT_VISUAL_STYLE;
 }
 
 export function useSetBotVisualStyle(): (style: BotVisualStyle) => void {
