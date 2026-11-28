@@ -69,13 +69,15 @@ interface ServerCall {
 }
 
 /** An MCP server with the Events extension: it verifies the hook before it subscribes. */
-const makeFakeServer = () => {
+const makeFakeServer = (unsubscribes: Queue.Queue<ServerCall>) => {
   const calls: Array<ServerCall> = [];
   const state = {
     service: undefined as Service | undefined,
     subscribeError: null as { code: number; message: string } | null,
     /** Why the Bot can no longer hold the subscription, while it cannot. */
     resolveError: null as string | null,
+    /** Holds every unsubscribe until it completes. */
+    unsubscribeGate: null as Deferred.Deferred<void> | null,
     secret: "",
     deliveries: 0,
   };
@@ -142,7 +144,11 @@ const makeFakeServer = () => {
         params: message.params,
       };
       calls.push(call);
-      if (call.method === "events/unsubscribe") return respond(request, { result: {} });
+      if (call.method === "events/unsubscribe") {
+        yield* Queue.offer(unsubscribes, call);
+        if (state.unsubscribeGate !== null) yield* Deferred.await(state.unsubscribeGate);
+        return respond(request, { result: {} });
+      }
       if (state.subscribeError !== null) {
         const error = state.subscribeError;
         state.subscribeError = null;
@@ -211,7 +217,7 @@ const makeFakeServer = () => {
     );
   };
 
-  return { calls, state, client, deliver, notify, subscriptionId };
+  return { calls, unsubscribes, state, client, deliver, notify, subscriptionId };
 };
 
 /** Runs `work`, then waits for a span named `name` that it started, even in a forked fiber, to end. */
@@ -243,7 +249,7 @@ const withService = <A, E>(
   }) => Effect.Effect<A, E, never>,
 ) =>
   Effect.gen(function* () {
-    const server = makeFakeServer();
+    const server = makeFakeServer(yield* Queue.unbounded<ServerCall>());
     const sends = yield* Queue.unbounded<SendInput>();
     const workers = new Map<string, Effect.Effect<void>>();
     const layerPublisher = Layer.effect(
@@ -418,6 +424,7 @@ it.effect(
         );
         const [unsubscribe, resubscribe] = server.calls.slice(callsBeforeEdit);
         assert.equal(unsubscribe?.method, "events/unsubscribe");
+        assert.equal(yield* Queue.take(server.unsubscribes), unsubscribe);
         assert.deepEqual(unsubscribe?.params.arguments, { chatType: "group" });
         assert.isUndefined(unsubscribe?.params.delivery.secret);
         assert.equal(resubscribe?.method, "events/subscribe");
@@ -428,14 +435,14 @@ it.effect(
         assert.equal(replaced._tag, "gone");
 
         yield* service.setEnabled({ id: task.id, enabled: false });
-        const paused = server.calls.at(-1)!;
-        assert.equal(paused.method, "events/unsubscribe");
+        const paused = yield* Queue.take(server.unsubscribes);
         assert.deepEqual(paused.params.arguments, { chatId: "team@g.us" });
         assert.isUndefined((yield* service.list()).tasks[0]!.subscription);
 
         yield* service.setEnabled({ id: task.id, enabled: true });
         const callsBeforeDelete = server.calls.length;
         yield* service.delete({ id: task.id });
+        yield* Queue.take(server.unsubscribes);
         assert.deepEqual(
           server.calls.slice(callsBeforeDelete).map((call) => call.method),
           ["events/unsubscribe"],
@@ -489,6 +496,21 @@ it.effect("skips a queued event whose Bot can no longer hold the subscription", 
       const [delivery] = (yield* service.listWebhookDeliveries({ id: task.id })).deliveries;
       assert.equal(delivery?.outcome, "dispatch_failed");
       assert.equal(delivery?.error, server.state.resolveError);
+    }),
+  ),
+);
+
+it.effect("deletes a task while its MCP server has not answered the unsubscribe", () =>
+  withService(({ service, server }) =>
+    Effect.gen(function* () {
+      const { task } = yield* service.upsert(yield* eventTaskInput());
+      const unsubscribeGate = yield* Deferred.make<void>();
+      server.state.unsubscribeGate = unsubscribeGate;
+      yield* service.delete({ id: task.id });
+      assert.deepEqual((yield* service.list()).tasks, []);
+      const ended = yield* Queue.take(server.unsubscribes);
+      assert.deepEqual(ended.params.arguments, { chatType: "group" });
+      yield* Deferred.succeed(unsubscribeGate, undefined);
     }),
   ),
 );

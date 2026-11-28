@@ -198,7 +198,8 @@ export const make = Effect.fnUntraced(function* (input: {
     const entry = (yield* Ref.get(entries)).get(id);
     if (entry === undefined) return;
     yield* setEntry(id, undefined);
-    yield* end(entry);
+    // Outside the task's lock, so a slow or unreachable server cannot hold up a delete.
+    yield* end(entry).pipe(Effect.forkIn(scope));
   });
 
   /**
