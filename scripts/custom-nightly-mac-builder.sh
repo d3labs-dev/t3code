@@ -78,12 +78,13 @@ uninstall_agent() {
   log "Removed $label. $builder_home, with this clone, its toolchains, and its config, remains."
 }
 
-# Node.js and Vite+ at the versions the checked-out commit pins, kept apart from
-# any Node.js manager so a release builds with what CI would have used.
+# Node.js, Vite+ and pnpm at the versions the checked-out commit pins, kept apart
+# from any Node.js manager so a release builds with what CI would have used.
 use_toolchain() {
-  local node_version vite_plus_version node_dir
+  local node_version vite_plus_version pnpm_version node_dir
   node_version="$(jq -r .engines.node "$repo_root/package.json")"
   vite_plus_version="$(sed -nE 's/^  vite-plus: ([0-9][^ ]*)$/\1/p' "$repo_root/pnpm-workspace.yaml")"
+  pnpm_version="$(jq -r '.packageManager | sub("^pnpm@"; "")' "$repo_root/package.json")"
   node_dir="$builder_home/node/$node_version"
   if [[ ! -x "$node_dir/bin/node" ]]; then
     local download="$builder_home/node-download"
@@ -99,6 +100,10 @@ use_toolchain() {
   export PATH="$node_dir/bin:$HOME/.cargo/bin:$PATH"
   if [[ "$(vp --version 2>/dev/null | sed -nE 's/^vp v([^ ]+).*/\1/p' | head -1)" != "$vite_plus_version" ]]; then
     npm install --global "vite-plus@$vite_plus_version"
+  fi
+  # vite-plus from npm does not fetch pnpm the way the standalone vp install does.
+  if [[ "$(pnpm --version 2>/dev/null)" != "$pnpm_version" ]]; then
+    npm install --global "pnpm@$pnpm_version"
   fi
   rustup toolchain install stable --profile minimal --target aarch64-apple-darwin
 }
