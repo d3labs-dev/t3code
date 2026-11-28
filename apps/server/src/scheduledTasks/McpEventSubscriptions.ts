@@ -84,13 +84,22 @@ export const make = Effect.fnUntraced(function* (input: {
   const entries = yield* Ref.make<ReadonlyMap<ScheduledTaskId, Entry>>(new Map());
   const locks = yield* Ref.make<ReadonlyMap<ScheduledTaskId, Semaphore.Semaphore>>(new Map());
 
+  // Clients see only `state`, so a retry that changes nothing else stays off the wire.
   const setEntry = (id: ScheduledTaskId, entry: Entry | undefined) =>
-    Ref.update(entries, (current) => {
+    Ref.modify(entries, (current) => {
+      const previous = current.get(id);
       const next = new Map(current);
       if (entry === undefined) next.delete(id);
       else next.set(id, entry);
-      return next;
-    }).pipe(Effect.andThen(notifyChanged));
+      const unchanged =
+        previous !== undefined &&
+        entry !== undefined &&
+        previous.createdAt === entry.createdAt &&
+        previous.state.status === entry.state.status &&
+        previous.state.refreshBefore === entry.state.refreshBefore &&
+        previous.state.lastError === entry.state.lastError;
+      return [unchanged, next] as const;
+    }).pipe(Effect.flatMap((unchanged) => (unchanged ? Effect.void : notifyChanged)));
 
   // One operation per task at a time. Forked into the service scope, so a caller that goes away
   // cannot stop a subscribe between the server's answer and the record of it.
@@ -190,7 +199,8 @@ export const make = Effect.fnUntraced(function* (input: {
         lastError: subscribed.failure,
       },
       failures,
-      nextAttemptAt: retryAt(now, failures),
+      // Resolve never reaches the MCP server, so it rechecks without backing off.
+      nextAttemptAt: Result.isFailure(resolved) ? now + MIN_REFRESH_MS : retryAt(now, failures),
     });
   });
 

@@ -20,8 +20,11 @@ export const layer = Layer.effect(
         const bot = yield* store
           .findByThreadId(threadId)
           .pipe(Effect.mapError(() => failed("Could not read the Bot for this thread.")));
-        if (Option.isNone(bot) || bot.value.archivedAt !== null) {
+        if (Option.isNone(bot)) {
           return yield* failed("An MCP event task runs in a Bot's thread.");
+        }
+        if (bot.value.archivedAt !== null) {
+          return yield* failed(`${bot.value.name} is archived.`);
         }
         const servers = yield* folders.resolveMcpServers(
           bot.value.mcpServerNames,

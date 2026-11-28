@@ -499,6 +499,12 @@ it.effect(
         assert.equal(failed?.status, "failed");
         assert.equal(failed?.lastError, "An MCP event task runs in a Bot's thread.");
 
+        for (let retry = 0; retry < 3; retry++) {
+          yield* TestClock.adjust("31 seconds");
+          yield* refresh;
+        }
+        assert.equal(server.calls.at(-1), ended);
+
         server.state.resolveError = null;
         yield* TestClock.adjust("31 seconds");
         yield* refresh;
