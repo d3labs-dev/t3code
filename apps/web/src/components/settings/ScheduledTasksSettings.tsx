@@ -36,6 +36,11 @@ import {
 } from "@t3tools/client-runtime/scheduled-task-webhook";
 import { scheduleTimeZoneLabel } from "@t3tools/client-runtime/scheduled-task-time-zone";
 import {
+  isFormScheduledTask,
+  mcpEventSubscriptionLabel,
+  type FormScheduledTask,
+} from "@t3tools/client-runtime/scheduled-task-mcp-event";
+import {
   MAX_WEBHOOK_DELIVERY_AGE_MINUTES,
   MAX_WEBHOOK_FILTERS,
   MIN_SCHEDULED_TASK_INTERVAL_MS,
@@ -376,10 +381,10 @@ export function ScheduledTasksSettings(target: {
   const { scope, environments, connectedEnvironments, environment } = useSettingsScope();
   const [editor, setEditor] = useState<{
     environmentId: EnvironmentId;
-    task: ScheduledTask | null;
+    task: FormScheduledTask | null;
   } | null>(null);
   const openForEdit = (environmentId: EnvironmentId, task: ScheduledTask) => {
-    setEditor({ environmentId, task });
+    if (isFormScheduledTask(task)) setEditor({ environmentId, task });
   };
   const defaultEnvironment = environment ?? connectedEnvironments[0];
   const linkedEnvironmentId = target.environmentId ?? defaultEnvironment?.environmentId;
@@ -409,7 +414,7 @@ export function ScheduledTasksSettings(target: {
   }
   if (linkedTask && linkedEnvironmentId !== undefined && openedLinkTaskId !== target.taskId) {
     setOpenedLinkTaskId(target.taskId);
-    if (editor === null) setEditor({ environmentId: linkedEnvironmentId, task: linkedTask });
+    if (editor === null) openForEdit(linkedEnvironmentId, linkedTask);
   }
   const navigate = useNavigate({ from: "/settings/scheduled-tasks" });
   const closeEditor = () => {
@@ -741,7 +746,7 @@ function ScheduledTaskRow({
   );
   const [busy, setBusy] = useState(false);
   const [deliveriesOpen, setDeliveriesOpen] = useState(false);
-  const isWebhook = task.schedule.type === "webhook";
+  const hasHook = task.schedule.type === "webhook" || task.schedule.type === "mcp_event";
   const toggle = useAtomCommand(serverEnvironment.setScheduledTaskEnabled, {
     label: "scheduled task enabled",
   });
@@ -790,7 +795,9 @@ function ScheduledTaskRow({
               task.blockedByPolicy
             ) : !task.enabled ? (
               "Paused"
-            ) : isWebhook ? (
+            ) : task.subscription !== undefined ? (
+              mcpEventSubscriptionLabel(task.subscription)
+            ) : hasHook ? (
               "Listening"
             ) : task.nextRunAt ? (
               <>
@@ -805,6 +812,9 @@ function ScheduledTaskRow({
           ) : null}
           {task.threadId !== null && scheduledTaskThreadMode(task) !== "new_thread" ? (
             <ScheduledTaskThreadLink environmentId={environmentId} threadId={task.threadId} />
+          ) : null}
+          {task.subscription?.lastError ? (
+            <span className="text-destructive">{task.subscription.lastError}</span>
           ) : null}
           {task.lastRunError ? <span className="text-destructive">{task.lastRunError}</span> : null}
         </div>
@@ -831,11 +841,13 @@ function ScheduledTaskRow({
               <MoreHorizontalIcon className="size-4" />
             </MenuTrigger>
             <MenuPopup align="end">
-              <MenuItem onClick={onEdit}>
-                <PencilIcon />
-                Edit
-              </MenuItem>
-              {isWebhook ? (
+              {isFormScheduledTask(task) ? (
+                <MenuItem onClick={onEdit}>
+                  <PencilIcon />
+                  Edit
+                </MenuItem>
+              ) : null}
+              {hasHook ? (
                 <MenuItem onClick={() => setDeliveriesOpen(true)}>
                   <InboxIcon />
                   Deliveries
@@ -926,7 +938,11 @@ function WebhookDeliveriesDialog({
       <DialogPopup className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Deliveries · {task.title}</DialogTitle>
-          <DialogDescription>Recent requests to this task's webhook URL.</DialogDescription>
+          <DialogDescription>
+            {task.schedule.type === "mcp_event"
+              ? "Recent events its MCP server delivered."
+              : "Recent requests to this task's webhook URL."}
+          </DialogDescription>
         </DialogHeader>
         <DialogPanel>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -1157,7 +1173,7 @@ function ScheduledTaskEditorDialog({
   onClose,
 }: {
   readonly initialEnvironmentId: EnvironmentId;
-  readonly task: ScheduledTask | null;
+  readonly task: FormScheduledTask | null;
   readonly onClose: () => void;
 }) {
   const [saving, setSaving] = useState(false);
@@ -1354,7 +1370,7 @@ function ScheduledTaskEditorForm({
   onClose,
 }: {
   readonly initialEnvironmentId: EnvironmentId;
-  readonly task: ScheduledTask | null;
+  readonly task: FormScheduledTask | null;
   readonly saving: boolean;
   readonly onSavingChange: (saving: boolean) => void;
   readonly onClose: () => void;

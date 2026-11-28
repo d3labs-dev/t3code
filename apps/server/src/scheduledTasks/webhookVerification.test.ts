@@ -5,7 +5,7 @@ import * as PlatformNodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
-import { verifyWebhookSignature } from "./webhookVerification.ts";
+import { verifyStandardWebhook, verifyWebhookSignature } from "./webhookVerification.ts";
 
 const body = new TextEncoder().encode('{"action":"opened"}');
 const secret = "shared-secret";
@@ -67,5 +67,39 @@ describe("verifyWebhookSignature", () => {
         }),
       );
     }).pipe(Effect.provide(PlatformNodeCrypto.layerMac)),
+  );
+});
+
+describe("verifyStandardWebhook", () => {
+  const key = Buffer.alloc(32, 1);
+  const secret = `whsec_${key.toString("base64")}`;
+  const sign = (signingKey: Buffer, id: string, timestamp: number) =>
+    `v1,${NodeCrypto.createHmac("sha256", signingKey).update(`${id}.${timestamp}.`).update(body).digest("base64")}`;
+  const headers = (signature: string, timestamp = 1_000) => ({
+    "webhook-id": "evt_1",
+    "webhook-timestamp": String(timestamp),
+    "webhook-signature": signature,
+  });
+  const verify = (requestHeaders: Record<string, string>, receivedAtSeconds = 1_000) =>
+    verifyStandardWebhook({ secret, headers: requestHeaders, body, receivedAtSeconds }).pipe(
+      Effect.provide(PlatformNodeCrypto.layerMac),
+    );
+
+  it.effect("accepts a signature from the secret, also among several", () =>
+    Effect.gen(function* () {
+      assert.equal(yield* verify(headers(sign(key, "evt_1", 1_000))), "verified");
+      const rotated = `${sign(Buffer.alloc(32, 2), "evt_1", 1_000)} ${sign(key, "evt_1", 1_000)}`;
+      assert.equal(yield* verify(headers(rotated)), "verified");
+    }),
+  );
+
+  it.effect("rejects another secret, another id, and a timestamp over five minutes off", () =>
+    Effect.gen(function* () {
+      assert.equal(yield* verify(headers(sign(Buffer.alloc(32, 2), "evt_1", 1_000))), "invalid");
+      assert.equal(yield* verify(headers(sign(key, "evt_2", 1_000))), "invalid");
+      assert.equal(yield* verify(headers(sign(key, "evt_1", 1_000)), 1_301), "stale");
+      assert.equal(yield* verify(headers(sign(key, "evt_1", 1_000)), 699), "stale");
+      assert.equal(yield* verify(headers(sign(key, "evt_1", 1_000)), 1_300), "verified");
+    }),
   );
 });

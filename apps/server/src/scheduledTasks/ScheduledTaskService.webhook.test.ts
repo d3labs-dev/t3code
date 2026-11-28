@@ -252,7 +252,7 @@ const withService = <A, E>(
       }),
       Layer.succeed(
         ScheduledTaskService.ScheduledTaskWebhookOrigin,
-        Effect.succeed({ relayHookBaseUrl: options.relayHookBaseUrl ?? null }),
+        Effect.succeed({ relayHookBaseUrl: options.relayHookBaseUrl ?? null, localOrigin: null }),
       ),
       ManagedPolicy.layerTest(options.policy),
     );

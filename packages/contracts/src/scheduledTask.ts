@@ -190,12 +190,43 @@ const ScheduledTaskUpsertWebhookSchedule = Schema.Struct({
     "Run per webhook request. Prompt can use {{body.path}}, {{headers.name}}, {{query.name}}, {{body}}, {{request}}.",
 });
 
+export const ScheduledTaskMcpEventArguments = Schema.Record(
+  Schema.String,
+  Schema.Union([Schema.String, Schema.Number, Schema.Boolean]),
+).annotate({ description: "The event's filter arguments, such as {chatType:'group'}." });
+export type ScheduledTaskMcpEventArguments = typeof ScheduledTaskMcpEventArguments.Type;
+
+const ScheduledTaskMcpEventFields = {
+  type: Schema.Literal("mcp_event"),
+  server: TrimmedNonEmptyString.annotate({
+    description: "One of the Bot's MCP servers, by name. Streamable HTTP only.",
+  }),
+  event: TrimmedNonEmptyString.annotate({ description: "Event name the server publishes." }),
+  filters: Schema.optional(ScheduledTaskWebhookFilters),
+};
+
+const ScheduledTaskMcpEventSchedule = Schema.Struct({
+  ...ScheduledTaskMcpEventFields,
+  arguments: ScheduledTaskMcpEventArguments,
+}).annotate({ description: "Run on each event the MCP server delivers." });
+
+const ScheduledTaskUpsertMcpEventSchedule = Schema.Struct({
+  ...ScheduledTaskMcpEventFields,
+  arguments: Schema.optional(ScheduledTaskMcpEventArguments).annotate({
+    description: "Default: none.",
+  }),
+}).annotate({
+  description:
+    "Bot thread only. Run per event from the Bot's MCP server. Prompt can use {{body.data.path}} and {{body}}.",
+});
+
 /** Accept legacy sub-minute schedules so users can still manage them. */
 export const ScheduledTaskSchedule = Schema.Union([
   ScheduledTaskIntervalSchedule,
   ScheduledTaskFixedTimeSchedule,
   ScheduledTaskOnceSchedule,
   ScheduledTaskWebhookSchedule,
+  ScheduledTaskMcpEventSchedule,
 ]);
 export type ScheduledTaskSchedule = typeof ScheduledTaskSchedule.Type;
 
@@ -211,6 +242,7 @@ export const ScheduledTaskUpsertSchedule = Schema.Union([
   ScheduledTaskFixedTimeSchedule,
   ScheduledTaskOnceSchedule,
   ScheduledTaskUpsertWebhookSchedule,
+  ScheduledTaskUpsertMcpEventSchedule,
 ]);
 export type ScheduledTaskUpsertSchedule = typeof ScheduledTaskUpsertSchedule.Type;
 
@@ -223,6 +255,14 @@ export const ScheduledTaskWebhookEndpoint = Schema.Struct({
   hasSecret: Schema.Boolean,
 });
 export type ScheduledTaskWebhookEndpoint = typeof ScheduledTaskWebhookEndpoint.Type;
+
+/** The server's subscription for an enabled `mcp_event` task. Pending until it first answers. */
+export const ScheduledTaskMcpEventSubscription = Schema.Struct({
+  status: Schema.Literals(["pending", "active", "failed"]),
+  refreshBefore: Schema.NullOr(IsoDateTime),
+  lastError: Schema.NullOr(Schema.String),
+});
+export type ScheduledTaskMcpEventSubscription = typeof ScheduledTaskMcpEventSubscription.Type;
 
 /**
  * Where runs go. One-thread modes launch their thread on the first run and keep it; `fresh_session`
@@ -261,6 +301,7 @@ export const ScheduledTask = Schema.Struct({
   lastRunError: Schema.NullOr(Schema.String),
   runCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   webhook: Schema.optional(ScheduledTaskWebhookEndpoint),
+  subscription: Schema.optional(ScheduledTaskMcpEventSubscription),
   /** Why the task cannot run regardless of `enabled`, such as a managed policy refusing webhooks. */
   blockedByPolicy: Schema.optionalKey(Schema.String),
 });

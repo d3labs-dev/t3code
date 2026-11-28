@@ -14,7 +14,7 @@ export function nextScheduledRunAt(
   schedule: ScheduledTaskSchedule,
   from: DateTime.DateTime,
 ): DateTime.DateTime | null {
-  if (schedule.type === "webhook") return null;
+  if (schedule.type === "webhook" || schedule.type === "mcp_event") return null;
   if (schedule.type === "once") {
     const runAt = DateTime.make(schedule.runAt);
     return Option.isSome(runAt) &&
@@ -55,7 +55,7 @@ export function isSameSchedule(a: ScheduledTaskSchedule, b: ScheduledTaskSchedul
   if (a.type === "interval") {
     return b.type === "interval" && a.everyMs === b.everyMs;
   }
-  if (a.type === "webhook") return b.type === "webhook";
+  if (a.type === "webhook" || a.type === "mcp_event") return b.type === a.type;
   if (a.type === "once") return b.type === "once" && Date.parse(a.runAt) === Date.parse(b.runAt);
   if (b.type !== "fixed_time") return false;
   // Compare parsed times so padded-hour edits do not reschedule pending runs.

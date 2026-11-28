@@ -12,6 +12,7 @@ import type {
 } from "@t3tools/contracts";
 
 import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
+import type { FormScheduledTask } from "@t3tools/client-runtime/scheduled-task-mcp-event";
 import {
   parseMaxDeliveryAge,
   parseWebhookFilterDrafts,
@@ -84,7 +85,7 @@ export const DEFAULT_SCHEDULE: ScheduleDraft = {
   savedFilters: [],
 };
 
-export function scheduleDraftForTask(task: Pick<ScheduledTask, "schedule">): ScheduleDraft {
+export function scheduleDraftForTask(task: Pick<FormScheduledTask, "schedule">): ScheduleDraft {
   switch (task.schedule.type) {
     case "fixed_time":
       return {
@@ -309,7 +310,7 @@ export function createDraft(
   };
 }
 
-export function editDraft(task: ScheduledTask): ScheduledTaskDraft {
+export function editDraft(task: FormScheduledTask): ScheduledTaskDraft {
   return {
     task,
     title: task.title,

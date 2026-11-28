@@ -18,6 +18,10 @@ import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { cn } from "../../lib/utils";
 import { ScheduledRelativeLabel } from "../settings/ScheduledTasksSettings";
 import { scheduleLabel } from "../settings/scheduledTasksSettings.logic";
+import {
+  isFormScheduledTask,
+  mcpEventSubscriptionLabel,
+} from "@t3tools/client-runtime/scheduled-task-mcp-event";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -44,6 +48,8 @@ function taskScheduleLine(task: ScheduledTask, timeZone: string | undefined) {
       {scheduleLabel(task.schedule, timeZone, task.nextRunAt)}
       {task.blockedByPolicy !== undefined ? (
         ` · ${task.blockedByPolicy}`
+      ) : task.enabled && task.subscription !== undefined ? (
+        ` · ${mcpEventSubscriptionLabel(task.subscription).toLowerCase()}`
       ) : task.enabled && task.nextRunAt !== null ? (
         <>
           {" · next "}
@@ -191,29 +197,31 @@ export function ThreadAutomationsPanel(props: {
                 </p>
               </TooltipPopup>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <ThreadDetailsControl
-                    size="icon-xs"
-                    variant="ghost"
-                    part="icon"
-                    aria-label={`Edit ${task.title}`}
-                    onClick={() =>
-                      void navigate({
-                        to: "/settings/scheduled-tasks",
-                        search: { environmentId: props.environmentId, taskId: task.id },
-                      })
-                    }
-                  >
-                    <PencilIcon className="size-3.5" />
-                  </ThreadDetailsControl>
-                }
-              />
-              <TooltipPopup>Edit automation</TooltipPopup>
-            </Tooltip>
-            {/* Webhook tasks need a request from their URL. */}
-            {task.schedule.type === "webhook" ? null : (
+            {isFormScheduledTask(task) ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <ThreadDetailsControl
+                      size="icon-xs"
+                      variant="ghost"
+                      part="icon"
+                      aria-label={`Edit ${task.title}`}
+                      onClick={() =>
+                        void navigate({
+                          to: "/settings/scheduled-tasks",
+                          search: { environmentId: props.environmentId, taskId: task.id },
+                        })
+                      }
+                    >
+                      <PencilIcon className="size-3.5" />
+                    </ThreadDetailsControl>
+                  }
+                />
+                <TooltipPopup>Edit automation</TooltipPopup>
+              </Tooltip>
+            ) : null}
+            {/* Webhook and event tasks need a request from their URL. */}
+            {task.schedule.type === "webhook" || task.schedule.type === "mcp_event" ? null : (
               <Tooltip>
                 <TooltipTrigger
                   render={

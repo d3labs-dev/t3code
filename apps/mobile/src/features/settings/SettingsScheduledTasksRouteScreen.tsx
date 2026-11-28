@@ -39,6 +39,11 @@ import {
   type WebhookFilterDraft,
 } from "@t3tools/client-runtime/scheduled-task-webhook";
 import { scheduleTimeZoneLabel } from "@t3tools/client-runtime/scheduled-task-time-zone";
+import {
+  isFormScheduledTask,
+  mcpEventScheduleLabel,
+  mcpEventSubscriptionLabel,
+} from "@t3tools/client-runtime/scheduled-task-mcp-event";
 import { useRef, useState, type ReactNode } from "react";
 import { useFocusEffect, useNavigation, usePreventRemove } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -123,6 +128,7 @@ const THREAD_MODE_LABELS: Record<ScheduledTaskThreadMode, string> = {
 
 function describeSchedule(task: ScheduledTask, timeZone?: string): string {
   if (task.schedule.type === "webhook") return "On webhook";
+  if (task.schedule.type === "mcp_event") return mcpEventScheduleLabel(task.schedule);
   if (task.schedule.type === "once") {
     const runAt = new Date(task.schedule.runAt);
     return `Once, ${formatRunAtDate(runAt)} at ${formatRunAtTime(runAt)}`;
@@ -467,6 +473,7 @@ export function SettingsScheduledTasksRouteScreen() {
                       .map((member) => member.project.id) ?? [])
               }
               onEdit={(task) => {
+                if (!isFormScheduledTask(task)) return;
                 startEditor({
                   environmentId: environment.environmentId,
                   environmentLabel: environment.label,
@@ -1555,6 +1562,7 @@ function EnvironmentTasks({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Edit ${task.title}`}
+              disabled={!isFormScheduledTask(task)}
               onPress={() => {
                 onEdit(task);
               }}
@@ -1567,10 +1575,17 @@ function EnvironmentTasks({
                 {describeSchedule(task, tasks.data?.timeZone)}
                 {!task.enabled
                   ? " · Paused"
-                  : task.nextRunAt
-                    ? ` · ${formatNextScheduledTaskRun(task.nextRunAt, now)}`
-                    : ""}
+                  : task.subscription
+                    ? ` · ${mcpEventSubscriptionLabel(task.subscription)}`
+                    : task.nextRunAt
+                      ? ` · ${formatNextScheduledTaskRun(task.nextRunAt, now)}`
+                      : ""}
               </Text>
+              {task.subscription?.lastError ? (
+                <Text className="text-sm text-danger-foreground" numberOfLines={2}>
+                  {task.subscription.lastError}
+                </Text>
+              ) : null}
               {task.blockedByPolicy ? (
                 <Text className="text-sm text-foreground-muted" numberOfLines={2}>
                   {task.blockedByPolicy}
@@ -1584,7 +1599,7 @@ function EnvironmentTasks({
             </Pressable>
             <Menu
               actions={[
-                { id: "edit", title: "Edit" },
+                ...(isFormScheduledTask(task) ? [{ id: "edit", title: "Edit" }] : []),
                 ...(task.threadId !== null && scheduledTaskThreadMode(task) !== "new_thread"
                   ? [{ id: "thread", title: "Open thread" }]
                   : []),
@@ -1593,7 +1608,7 @@ function EnvironmentTasks({
                   title: task.enabled ? "Pause" : "Resume",
                   attributes: { disabled: !canOperate },
                 },
-                ...(task.schedule.type === "webhook"
+                ...(task.schedule.type === "webhook" || task.schedule.type === "mcp_event"
                   ? []
                   : [{ id: "run", title: "Run now", attributes: { disabled: !canOperate } }]),
                 {

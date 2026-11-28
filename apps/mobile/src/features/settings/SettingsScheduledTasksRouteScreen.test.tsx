@@ -6,6 +6,7 @@ import {
   ScheduledTaskId,
   type ScheduledTask,
 } from "@t3tools/contracts";
+import type { FormScheduledTask } from "@t3tools/client-runtime/scheduled-task-mcp-event";
 import { Atom } from "effect/reactivity";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -150,7 +151,7 @@ beforeEach(() => {
   mocks.alert.mockReset();
   mocks.upsert.mockReset();
   mocks.upsert.mockResolvedValue({ _tag: "Success" });
-  const task: ScheduledTask = {
+  const task: FormScheduledTask = {
     id: ScheduledTaskId.make("task"),
     title: "Task",
     prompt: "Prompt",

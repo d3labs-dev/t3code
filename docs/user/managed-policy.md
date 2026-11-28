@@ -246,8 +246,9 @@ so restart T3 Code after that.
 
 ### Other capabilities
 
-- `webhookTasks: false`: scheduled tasks cannot use webhook triggers. Existing webhook tasks stay
-  but do not run, and cannot be turned back on. Users can still edit or delete them.
+- `webhookTasks: false`: scheduled tasks cannot use webhook or MCP event triggers. Existing tasks
+  of those kinds stay but do not run, and cannot be turned back on. Users can still edit or delete
+  them.
 - `browserCookieImport: false`: users cannot import cookies from another browser into T3 Code's
   browser.
 - `telemetry: false`: the server and desktop app send no [product usage data](./telemetry.md) or

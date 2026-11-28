@@ -111,6 +111,10 @@
       "types": "./src/scheduledTaskWebhook.ts",
       "default": "./src/scheduledTaskWebhook.ts"
     },
+    "./scheduled-task-mcp-event": {
+      "types": "./src/scheduledTaskMcpEvent.ts",
+      "default": "./src/scheduledTaskMcpEvent.ts"
+    },
     "./scheduled-task-time-zone": {
       "types": "./src/scheduledTaskTimeZone.ts",
       "default": "./src/scheduledTaskTimeZone.ts"

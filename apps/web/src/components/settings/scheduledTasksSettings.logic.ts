@@ -4,7 +4,6 @@ import {
   MAX_WEBHOOK_DELIVERY_AGE_MINUTES,
   type ProjectId,
   ScheduledTaskId,
-  type ScheduledTask,
   type ScheduledTaskSchedule,
   type ScheduledTaskThreadMode,
   type ScheduledTaskUpsertSchedule,
@@ -24,6 +23,10 @@ import {
   type WebhookFilterDraft,
 } from "@t3tools/client-runtime/scheduled-task-webhook";
 import { scheduleTimeZoneLabel } from "@t3tools/client-runtime/scheduled-task-time-zone";
+import {
+  mcpEventScheduleLabel,
+  type FormScheduledTask,
+} from "@t3tools/client-runtime/scheduled-task-mcp-event";
 
 import {
   resolveProjectSettings,
@@ -46,6 +49,7 @@ export function scheduleLabel(
   runAt?: string | null,
 ): string {
   if (schedule.type === "webhook") return "On webhook";
+  if (schedule.type === "mcp_event") return mcpEventScheduleLabel(schedule);
   if (schedule.type === "once") return `Once, ${ONCE_FORMATTER.format(new Date(schedule.runAt))}`;
   if (schedule.type === "interval") {
     const minutes = schedule.everyMs / 60_000;
@@ -273,7 +277,7 @@ export function scheduleFromDraft(draft: DraftState): ScheduledTaskUpsertSchedul
   };
 }
 
-export function taskToDraft(task: ScheduledTask): DraftState {
+export function taskToDraft(task: FormScheduledTask): DraftState {
   const schedule = task.schedule;
   const filters = webhookFilterDrafts(schedule.type === "webhook" ? schedule.filters : undefined);
   const weekdays =

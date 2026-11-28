@@ -40,6 +40,20 @@ describe("ScheduledTaskSchedule", () => {
   });
 });
 
+describe("MCP event schedules", () => {
+  const schedule = { type: "mcp_event", server: "executor", event: "whatsapp.message.received" };
+
+  it("takes scalar event arguments, and none when omitted on save", () => {
+    expect(decodeUpsertSchedule(schedule)).toEqual(schedule);
+    const filtered = { ...schedule, arguments: { chatType: "group", limit: 3, muted: false } };
+    expect(decodeUpsertSchedule(filtered)).toEqual(filtered);
+    expect(decodeSchedule(filtered)).toEqual(filtered);
+    expect(() => decodeSchedule(schedule)).toThrow();
+    expect(() => decodeUpsertSchedule({ ...schedule, arguments: { chat: { id: "x" } } })).toThrow();
+    expect(() => decodeUpsertSchedule({ ...schedule, server: " " })).toThrow();
+  });
+});
+
 it.each(["literal", " ", "\t\n", "{{body.bad", "{{unknown.field}}"])(
   "rejects invalid dedupe template %s",
   (replayKey) => {
