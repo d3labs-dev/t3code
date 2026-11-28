@@ -3,7 +3,6 @@ import {
   type BotListResult,
   type BotRecord,
   CommandId,
-  type OrchestrationV2Run,
   MessageId,
   type ProjectId,
   resolveProjectProviderInstanceEnabled,
@@ -33,20 +32,13 @@ import { forkParked } from "../serverActivation.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as BotFolders from "./BotFolders.ts";
 import {
+  ACTIVE_RUN_STATUSES,
   nextHeartbeatAtMs,
   scoutModelSelectionFor,
   shouldRunBotHeartbeatScout,
 } from "./BotHeartbeat.ts";
 import * as BotService from "./BotService.ts";
 import * as BotStore from "./BotStore.ts";
-
-const ACTIVE_RUN_STATUSES: ReadonlyArray<OrchestrationV2Run["status"]> = [
-  "queued",
-  "preparing",
-  "starting",
-  "running",
-  "waiting",
-];
 
 const isProactivePrimary = (bot: BotRecord) =>
   bot.isPrimary && bot.proactive.enabled && !bot.muted && bot.archivedAt === null;

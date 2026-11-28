@@ -3,9 +3,18 @@ import type {
   BotProactiveConfig,
   BotRecord,
   ModelSelection,
+  OrchestrationV2Run,
   OrchestrationV2ThreadProjection,
 } from "@t3tools/contracts";
 import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+
+export const ACTIVE_RUN_STATUSES: ReadonlyArray<OrchestrationV2Run["status"]> = [
+  "queued",
+  "preparing",
+  "starting",
+  "running",
+  "waiting",
+];
 
 const MINUTE_MS = 60_000;
 const MINUTES_PER_DAY = 24 * 60;
@@ -121,14 +130,7 @@ export function shouldRunBotHeartbeatScout(input: {
   if (records.thread.deletedAt !== null || records.thread.archivedAt !== null) return false;
   const latestRun = records.runs.toSorted((left, right) => right.ordinal - left.ordinal)[0];
   return !(
-    records.runs.some(
-      (run) =>
-        run.status === "queued" ||
-        run.status === "preparing" ||
-        run.status === "starting" ||
-        run.status === "running" ||
-        run.status === "waiting",
-    ) ||
+    records.runs.some((run) => ACTIVE_RUN_STATUSES.includes(run.status)) ||
     records.runtimeRequests.some((request) => request.status === "pending") ||
     records.contextTransfers.some(
       (transfer) => transfer.targetThreadId === records.thread.id && transfer.status === "pending",
