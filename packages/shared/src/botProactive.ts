@@ -22,13 +22,10 @@ export function isServerBotCheckInMessage(message: {
 }
 
 // ProjectionStore's shell SQL mirrors this; change both together.
-const OPENING_CODE_FENCE = /^```[A-Za-z0-9+ \t-]*\n/;
-
 export function isBotNoReplyMessage(text: string): boolean {
   return (
     text
       .trim()
-      .replace(OPENING_CODE_FENCE, "")
       .replace(/^[`*_"'\s]+|[`*_"'.!\s]+$/g, "")
       .toUpperCase() === BOT_NO_REPLY_TOKEN
   );

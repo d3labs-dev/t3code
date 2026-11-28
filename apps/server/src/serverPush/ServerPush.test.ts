@@ -448,9 +448,7 @@ describe("ServerPush", { concurrent: false }, () => {
             justNow,
           ),
         ]);
-        harness.messages.set(silent, [
-          assistantReply(silent, runId, "```text\nNO_REPLY\n```", justNow),
-        ]);
+        harness.messages.set(silent, [assistantReply(silent, runId, "NO_REPLY", justNow)]);
 
         yield* Effect.gen(function* () {
           const serverPush = yield* ServerPush.ServerPush;

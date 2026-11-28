@@ -7883,7 +7883,7 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
   it.effect.each([
     ["NO_REPLY", true],
     ["  **NO_REPLY.**  ", true],
-    ["```text\nNO_REPLY\n```", true],
+    ["```\nNO_REPLY\n```", true],
     ["", true],
     ["PR #286 is ready to merge", false],
   ] as const)(

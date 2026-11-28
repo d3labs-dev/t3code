@@ -7932,7 +7932,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       OR ${isServerPrefixedMessage(alias, BOT_DREAMING_MESSAGE_PREFIX)}
       OR ${isServerPrefixedMessage(alias, BOT_CHECKIN_MESSAGE_PREFIX)}
     )`;
-    // Mirrors isAnsweredCheckInRun; strips the same fence and marks as isBotNoReplyMessage.
+    // Mirrors isAnsweredCheckInRun; strips the same marks as isBotNoReplyMessage.
     const isAnsweredCheckInShellRun = (alias: string) => {
       const run = sql.literal(alias);
       return sql`(
@@ -7954,17 +7954,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           ) latest
           WHERE latest.text <> ''
             AND upper(rtrim(
-              ltrim(
-                CASE
-                  WHEN substr(latest.text, 1, 3) = ${"```"}
-                    AND instr(latest.text, char(10)) > 0
-                    AND substr(latest.text, 4, instr(latest.text, char(10)) - 4)
-                      NOT GLOB ${"*[^A-Za-z0-9+ \t-]*"}
-                  THEN substr(latest.text, instr(latest.text, char(10)) + 1)
-                  ELSE latest.text
-                END,
-                ${"`*_\"'"} || ${whitespace}
-              ),
+              ltrim(latest.text, ${"`*_\"'"} || ${whitespace}),
               ${"`*_\"'.!"} || ${whitespace}
             )) <> ${BOT_NO_REPLY_TOKEN}
         )
