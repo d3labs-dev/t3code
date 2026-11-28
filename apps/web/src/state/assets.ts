@@ -1,6 +1,7 @@
 import type { ProjectFaviconTarget } from "@t3tools/client-runtime/project-favicon-cache";
 import {
   createAssetEnvironmentAtoms,
+  createBotAvatarUrlAtomFamily,
   createProjectFaviconUrlAtomFamily,
   projectFaviconResource,
 } from "@t3tools/client-runtime/state/assets";
@@ -8,6 +9,7 @@ import { Atom } from "effect/reactivity";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { botAvatarCache } from "../assets/botAvatarCache";
 import { projectFaviconCache } from "../assets/projectFaviconCache";
 import { isElectron } from "../env";
 import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
@@ -35,6 +37,12 @@ export const projectFaviconUrlAtom = createProjectFaviconUrlAtomFamily({
   createUrl: assetEnvironment.createUrl,
   preparedConnection: environmentSession.preparedConnectionValueAtom,
   projectClones: environmentProjectClonesAtom,
+});
+
+export const botAvatarUrlAtom = createBotAvatarUrlAtomFamily({
+  imageCache: botAvatarCache,
+  createUrl: assetEnvironment.createUrl,
+  preparedConnection: environmentSession.preparedConnectionValueAtom,
 });
 
 /**

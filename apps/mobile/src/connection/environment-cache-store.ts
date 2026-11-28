@@ -14,10 +14,9 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as MobileDatabase from "../persistence/mobile-database";
-import {
-  attachProjectFaviconDatabase,
-  projectFaviconDatabaseCache,
-} from "../lib/projectFaviconDatabaseCache";
+import { botAvatarDatabaseCache } from "../lib/botAvatarDatabaseCache";
+import { attachImageCacheDatabase } from "../lib/imageCacheDatabase";
+import { projectFaviconDatabaseCache } from "../lib/projectFaviconDatabaseCache";
 import { decodeStoredShellSnapshot } from "./shell-cache-decoding";
 
 const SERVER_CONFIG_CACHE_SCHEMA_VERSION = 1;
@@ -95,7 +94,7 @@ function loadDecodedCache<A, B, E>(input: {
 
 export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
   const database = yield* MobileDatabase.MobileDatabase;
-  attachProjectFaviconDatabase(database);
+  attachImageCacheDatabase(database);
   const encodeStoredShellSnapshot = makeStoredShellSnapshotEncoder();
   const encodeStoredThreadSnapshot = makeStoredThreadSnapshotEncoder({ format: "compact" });
   const threadWriteOrder = makeThreadCacheWriteOrder();
@@ -118,7 +117,9 @@ export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
             : Option.none(),
       }).pipe(
         Effect.zipWith(
-          Effect.promise(() => projectFaviconDatabaseCache.hydrate()),
+          Effect.promise(() =>
+            Promise.all([projectFaviconDatabaseCache.hydrate(), botAvatarDatabaseCache.hydrate()]),
+          ),
           (snapshot) => snapshot,
           { concurrent: true },
         ),
@@ -254,7 +255,12 @@ export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
     ),
     clear: Effect.fn("MobileEnvironmentCache.clear")((environmentId) => {
       threadWriteOrder.clearEnvironment(environmentId);
-      return Effect.promise(() => projectFaviconDatabaseCache.clearEnvironment(environmentId)).pipe(
+      return Effect.promise(() =>
+        Promise.all([
+          projectFaviconDatabaseCache.clearEnvironment(environmentId),
+          botAvatarDatabaseCache.clearEnvironment(environmentId),
+        ]),
+      ).pipe(
         Effect.andThen(database.clearEnvironmentCache(environmentId)),
         Effect.mapError(mapDatabaseError("clear-environment")),
       );
